@@ -1,0 +1,1 @@
+export { CandidateDetailModal } from './CandidateDetailModal';
