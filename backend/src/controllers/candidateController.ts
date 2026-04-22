@@ -15,6 +15,7 @@ export const listCandidates = async (req: Request, res: Response) => {
     const limit  = Math.min(100, Number(req.query.limit) || 50);
     const skip   = (page - 1) * limit;
     const search = req.query.search as string;
+    const jobId  = req.query.jobId as string;
 
     const query: Record<string, unknown> = {};
     if (search) {
@@ -24,6 +25,9 @@ export const listCandidates = async (req: Request, res: Response) => {
         { email:     { $regex: search, $options: "i" } },
         { "skills.name": { $regex: search, $options: "i" } },
       ];
+    }
+    if (jobId) {
+      query.jobId = jobId;
     }
 
     const [candidates, total] = await Promise.all([

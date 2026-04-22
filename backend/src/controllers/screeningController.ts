@@ -25,8 +25,10 @@ export const runScreening = async (req: Request, res: Response) => {
     const jobDoc = await JobModel.findById(jobId).lean();
     if (!jobDoc) return res.status(404).json({ success: false, error: "Job not found" });
 
-    // Load candidates
-    const query = candidateIds?.length ? { _id: { $in: candidateIds } } : {};
+    // Load candidates - filter by jobId when no specific candidateIds provided
+    const query: Record<string, unknown> = candidateIds?.length
+      ? { _id: { $in: candidateIds } }
+      : { jobId };
     const candidateDocs = await Candidate.find(query).lean();
 
     if (candidateDocs.length === 0) {

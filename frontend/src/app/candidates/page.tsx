@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useSelector } from 'react-redux';
 import {
   Users, Search, Upload, Trash2, MapPin, Briefcase,
-  Mail, LayoutList, LayoutGrid, Eye, Table2,
+  Mail, LayoutList, LayoutGrid, Eye, Table2, Filter,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
@@ -32,8 +32,9 @@ const SKILL_LEVEL_VARIANTS: Record<string, 'success' | 'primary' | 'warning' | '
 
 export default function CandidatesPage() {
   const router = useRouter();
+  const [filterJobId, setFilterJobId] = useState<string>('');
   const { candidates, total, loading, page, totalPages, handleSearch, handlePageChange, handleDeleteCandidate, handleUpdateCandidate } =
-    useCandidates();
+    useCandidates(filterJobId || undefined);
   const { items: jobs } = useSelector((state: RootState) => state.jobs);
   const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'card' | 'table'>('card');
@@ -116,12 +117,26 @@ export default function CandidatesPage() {
 
       {/* Search and View Toggle */}
       <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
-        <Input
-          placeholder="Search by name, email, or skill..."
-          leftIcon={<Search className="w-3.5 h-3.5" />}
-          onChange={(e) => handleSearch(e.target.value)}
-          className="flex-1 max-w-lg text-xs"
-        />
+        <div className="flex flex-1 gap-2">
+          <Input
+            placeholder="Search by name, email, or skill..."
+            leftIcon={<Search className="w-3.5 h-3.5" />}
+            onChange={(e) => handleSearch(e.target.value)}
+            className="flex-1 max-w-lg text-xs"
+          />
+          <select
+            value={filterJobId}
+            onChange={(e) => setFilterJobId(e.target.value)}
+            className="px-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white"
+          >
+            <option value="">All Jobs</option>
+            {jobs.map((job) => (
+              <option key={job._id} value={job._id}>
+                {job.title}
+              </option>
+            ))}
+          </select>
+        </div>
         <div className="flex gap-1 bg-gray-100 p-0.5 rounded-lg w-fit">
           {([
             { mode: 'card',  Icon: LayoutGrid, title: 'Card View'  },
@@ -147,9 +162,9 @@ export default function CandidatesPage() {
         <Card>
           <EmptyState
             icon={Users}
-            title="No candidates yet"
-            description="Upload candidates from CSV, PDF, or JSON files to get started"
-            action={{ label: 'Upload Candidates', onClick: () => router.push('/candidates/upload') }}
+            title={filterJobId ? "No candidates for this job" : "No candidates yet"}
+            description={filterJobId ? "Try selecting a different job or assign candidates to this job" : "Upload candidates from CSV, PDF, or JSON files to get started"}
+            action={{ label: "Upload Candidates", onClick: () => router.push('/candidates/upload') }}
           />
         </Card>
       ) : viewMode === 'card' ? (

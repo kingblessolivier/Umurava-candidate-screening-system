@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useSelector } from 'react-redux';
+import { RootState } from '@/store';
 import { Candidate, Skill, WorkExperience, Education } from '@/types';
 import {
   X,
@@ -51,6 +53,7 @@ export function CandidateDetailModal({
   const [isEditing, setIsEditing] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [formData, setFormData] = useState<Partial<Candidate>>(candidate || {});
+  const { items: jobs } = useSelector((state: RootState) => state.jobs);
 
   React.useEffect(() => {
     if (candidate) {
@@ -224,6 +227,35 @@ export function CandidateDetailModal({
                     <MapPin className="w-4 h-4" />
                     {formData.location}
                   </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <span className="flex items-center gap-1.5">
+                    <Briefcase className="w-4 h-4 text-gray-400" />
+                    Job Position
+                  </span>
+                </label>
+                {isEditing ? (
+                  <select
+                    value={formData.jobId || ''}
+                    onChange={(e) => handleInputChange('jobId', e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  >
+                    <option value="">Select a job...</option>
+                    {jobs.map((job) => (
+                      <option key={job._id} value={job._id}>
+                        {job.title} — {job.experienceLevel}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <p className="text-gray-900">
+                    {formData.jobId && jobs.find(j => j._id === formData.jobId)
+                      ? `${jobs.find(j => j._id === formData.jobId)?.title} — ${jobs.find(j => j._id === formData.jobId)?.experienceLevel}`
+                      : 'No job assigned'}
+                  </p>
                 )}
               </div>
             </div>

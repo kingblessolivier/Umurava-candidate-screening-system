@@ -4,7 +4,7 @@ import React from 'react';
 import { cn } from '@/lib/utils';
 
 interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
-  variant?: 'default' | 'elevated' | 'outline';
+  variant?: 'default' | 'elevated' | 'outline' | 'dark';
   padding?: 'sm' | 'md' | 'lg';
   isHoverable?: boolean;
 }
@@ -13,6 +13,7 @@ const variantStyles = {
   default: 'bg-white border border-gray-200',
   elevated: 'bg-white border border-gray-200 shadow-md',
   outline: 'bg-white border border-gray-200',
+  dark: 'bg-gray-900 border border-gray-700',
 };
 
 const paddingStyles = {
@@ -32,7 +33,7 @@ export function Card({
   return (
     <div
       className={cn(
-        'rounded-xl transition-all duration-200',
+        'rounded-2xl transition-all duration-200',
         variantStyles[variant],
         paddingStyles[padding],
         isHoverable && 'hover:border-blue-300 hover:shadow-md cursor-pointer',

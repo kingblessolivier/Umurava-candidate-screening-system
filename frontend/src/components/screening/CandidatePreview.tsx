@@ -4,15 +4,15 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import {
   Users,
+  TrendingUp,
   Target,
   Briefcase,
   GraduationCap,
   FolderOpen,
   Clock,
-  TrendingUp,
   Award,
   Star,
-  CheckCircle,
+  CheckCircle2,
 } from 'lucide-react';
 
 interface CandidatePreviewProps {
@@ -32,88 +32,82 @@ const CHARACTERISTICS = [
     key: 'skills',
     label: 'Technical Skills',
     icon: Target,
-    color: '#60a5fa',
-    description: 'Matching required technologies and proficiency levels',
-    checks: ['Programming languages', 'Frameworks & libraries', 'Tools & platforms', 'Certifications'],
+    color: '#3b82f6',
+    checks: ['Programming languages', 'Frameworks', 'Tools', 'Certifications'],
   },
   {
     key: 'experience',
     label: 'Work Experience',
     icon: Briefcase,
-    color: '#a78bfa',
-    description: 'Career progression and role relevance',
+    color: '#8b5cf6',
     checks: ['Years of experience', 'Role similarity', 'Career growth', 'Company caliber'],
   },
   {
     key: 'education',
     label: 'Education',
     icon: GraduationCap,
-    color: '#34d399',
-    description: 'Academic background and continuous learning',
-    checks: ['Degree level', 'Field of study', 'University ranking', 'Recent courses'],
+    color: '#10b981',
+    checks: ['Degree level', 'Field of study', 'University ranking', 'Courses'],
   },
   {
     key: 'projects',
     label: 'Projects',
     icon: FolderOpen,
     color: '#f59e0b',
-    description: 'Portfolio quality and real-world impact',
-    checks: ['Project complexity', 'Personal initiatives', 'Open source', 'Impact metrics'],
+    checks: ['Project complexity', 'Personal work', 'Open source', 'Impact'],
   },
   {
     key: 'availability',
     label: 'Availability',
     icon: Clock,
     color: '#ec4899',
-    description: 'Start date and employment type match',
-    checks: ['Notice period', 'Employment type', 'Location preference', 'Schedule flexibility'],
+    checks: ['Notice period', 'Employment type', 'Location', 'Schedule'],
   },
 ];
 
 export function CandidatePreview({ totalCandidates, weights, jobRequirements = [] }: CandidatePreviewProps) {
   return (
-    <div className="space-y-6">
-      {/* Pool Stats */}
+    <div className="space-y-4">
+      {/* Stats Row */}
       <div className="grid grid-cols-2 gap-3">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="p-4 rounded-xl bg-gradient-to-br from-blue-500/10 to-purple-500/10 border border-blue-500/20"
-        >
-          <div className="flex items-center gap-2 mb-2">
-            <Users className="w-4 h-4 text-blue-400" />
-            <span className="text-xs font-medium text-gray-400">Candidate Pool</span>
+        <div className="p-4 rounded-lg bg-gradient-to-br from-blue-50 to-blue-100/30 border border-blue-200">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center">
+              <Users className="w-4 h-4 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-[10px] font-medium text-gray-500">Candidate Pool</p>
+              <p className="text-xl font-bold text-gray-900">{totalCandidates}</p>
+            </div>
           </div>
-          <p className="text-2xl font-bold text-white">{totalCandidates}</p>
-          <p className="text-[10px] text-gray-500 mt-0.5">profiles to evaluate</p>
-        </motion.div>
+        </div>
 
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.1 }}
-          className="p-4 rounded-xl bg-gradient-to-br from-green-500/10 to-emerald-500/10 border border-green-500/20"
-        >
-          <div className="flex items-center gap-2 mb-2">
-            <TrendingUp className="w-4 h-4 text-green-400" />
-            <span className="text-xs font-medium text-gray-400">Evaluation Rate</span>
+        <div className="p-4 rounded-lg bg-gradient-to-br from-green-50 to-green-100/30 border border-green-200">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-lg bg-green-100 flex items-center justify-center">
+              <TrendingUp className="w-4 h-4 text-green-600" />
+            </div>
+            <div>
+              <p className="text-[10px] font-medium text-gray-500">Evaluation Speed</p>
+              <p className="text-xl font-bold text-gray-900">~10/s</p>
+            </div>
           </div>
-          <p className="text-2xl font-bold text-white">~10/s</p>
-          <p className="text-[10px] text-gray-500 mt-0.5">candidates per second</p>
-        </motion.div>
+        </div>
       </div>
 
       {/* What We Evaluate */}
       <div>
-        <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
-          <Award className="w-4 h-4 text-yellow-400" />
-          Evaluation Characteristics
-        </h3>
-        <p className="text-xs text-gray-400 mb-4">
-          Each candidate is scored across 5 key dimensions based on job requirements
-        </p>
+        <div className="flex items-center gap-2 mb-3">
+          <div className="w-7 h-7 rounded-lg bg-amber-100 flex items-center justify-center">
+            <Award className="w-3.5 h-3.5 text-amber-600" />
+          </div>
+          <div>
+            <h3 className="text-xs font-bold text-gray-900">Evaluation Criteria</h3>
+            <p className="text-[10px] text-gray-500">How each candidate is scored</p>
+          </div>
+        </div>
 
-        <div className="space-y-3">
+        <div className="grid gap-2">
           {CHARACTERISTICS.map((char, index) => {
             const Icon = char.icon;
             const weight = weights[char.key as keyof typeof weights];
@@ -121,18 +115,18 @@ export function CandidatePreview({ totalCandidates, weights, jobRequirements = [
             return (
               <motion.div
                 key={char.key}
-                initial={{ opacity: 0, x: -12 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: index * 0.08 }}
-                className="group p-3 rounded-xl bg-white/5 border border-white/5 hover:border-white/10 transition-all"
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.05 }}
+                className="p-3 rounded-lg bg-gray-50 border border-gray-100 hover:border-gray-200 transition-all"
               >
-                <div className="flex items-start gap-3">
+                <div className="flex items-start gap-2.5">
                   {/* Icon */}
                   <div
-                    className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+                    className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
                     style={{
-                      background: `linear-gradient(135deg, ${char.color}25, ${char.color}10)`,
-                      border: `1px solid ${char.color}30`,
+                      background: `${char.color}15`,
+                      border: `1.5px solid ${char.color}30`,
                     }}
                   >
                     <Icon className="w-4 h-4" style={{ color: char.color }} />
@@ -140,28 +134,28 @@ export function CandidatePreview({ totalCandidates, weights, jobRequirements = [
 
                   {/* Content */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-semibold text-white">{char.label}</span>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-gray-900">{char.label}</span>
                       <span
-                        className="text-[10px] font-bold px-1.5 py-0.5 rounded"
+                        className="text-[10px] font-semibold px-2 py-0.5 rounded-md"
                         style={{
-                          background: `${char.color}20`,
+                          background: `${char.color}15`,
                           color: char.color,
+                          border: `1px solid ${char.color}30`,
                         }}
                       >
                         {weight}% weight
                       </span>
                     </div>
-                    <p className="text-[10px] text-gray-400 mb-2">{char.description}</p>
 
-                    {/* Check items */}
-                    <div className="flex flex-wrap gap-1.5">
-                      {char.checks.slice(0, 3).map((check) => (
+                    {/* Checks */}
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {char.checks.map((check) => (
                         <span
                           key={check}
-                          className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-md bg-white/5 text-gray-400"
+                          className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-white text-gray-600 border border-gray-200"
                         >
-                          <CheckCircle className="w-2.5 h-2.5" style={{ color: char.color }} />
+                          <CheckCircle2 className="w-2.5 h-2.5" style={{ color: char.color }} />
                           {check}
                         </span>
                       ))}
@@ -174,62 +168,63 @@ export function CandidatePreview({ totalCandidates, weights, jobRequirements = [
         </div>
       </div>
 
-      {/* Job Requirements Preview */}
+      {/* Key Requirements */}
       {jobRequirements.length > 0 && (
         <motion.div
-          initial={{ opacity: 0, y: 8 }}
+          initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
-          className="p-4 rounded-xl bg-gradient-to-br from-primary-500/10 to-secondary-500/10 border border-primary-500/20"
+          className="p-4 rounded-lg bg-gradient-to-br from-amber-50 to-amber-100/30 border border-amber-200"
         >
-          <div className="flex items-center gap-2 mb-3">
-            <Star className="w-4 h-4 text-yellow-400" />
-            <span className="text-xs font-semibold text-white">Key Requirements</span>
+          <div className="flex items-center gap-2 mb-2.5">
+            <Star className="w-3.5 h-3.5 text-amber-500" />
+            <span className="text-xs font-bold text-gray-900">Key Requirements</span>
           </div>
           <div className="flex flex-wrap gap-1.5">
             {jobRequirements.slice(0, 8).map((req, i) => (
               <span
                 key={i}
-                className="text-[10px] px-2.5 py-1 rounded-full bg-white/10 text-gray-300 border border-white/10"
+                className="text-[10px] px-2.5 py-1 rounded-full bg-white text-gray-700 border border-amber-200 font-medium"
               >
                 {req}
               </span>
             ))}
+            {jobRequirements.length > 8 && (
+              <span className="text-[10px] px-2.5 py-1 rounded-full bg-white/80 text-gray-500">
+                +{jobRequirements.length - 8} more
+              </span>
+            )}
           </div>
         </motion.div>
       )}
 
-      {/* Scoring Formula Preview */}
-      <div className="p-4 rounded-xl bg-white/5 border border-white/10">
-        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-3">
-          Scoring Formula
-        </p>
-        <div className="space-y-2">
+      {/* Scoring Summary */}
+      <div className="p-3.5 rounded-lg bg-gray-50 border border-gray-200">
+        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2.5">Score Formula</p>
+        <div className="space-y-1.5">
           {CHARACTERISTICS.map((char) => {
             const weight = weights[char.key as keyof typeof weights];
             return (
-              <div key={char.key} className="flex items-center gap-2">
-                <div className="w-20 text-[10px] text-gray-500">{char.label}</div>
-                <div className="flex-1 h-1.5 rounded-full bg-white/5 overflow-hidden">
-                  <div
+              <div key={char.key} className="flex items-center gap-2.5">
+                <div className="w-16 text-[10px] text-gray-600">{char.label}</div>
+                <div className="flex-1 h-1 rounded-full bg-gray-200 overflow-hidden">
+                  <motion.div
                     className="h-full rounded-full"
-                    style={{
-                      width: `${weight}%`,
-                      background: `linear-gradient(90deg, ${char.color}, ${char.color}80)`,
-                    }}
+                    style={{ backgroundColor: char.color }}
+                    initial={{ width: 0 }}
+                    animate={{ width: `${weight}%` }}
+                    transition={{ duration: 0.3, ease: 'easeOut' }}
                   />
                 </div>
-                <div className="w-10 text-right text-[10px] font-mono text-white">
-                  ×{(weight / 100).toFixed(2)}
+                <div className="w-8 text-[10px] font-mono text-gray-500 text-right">
+                  ×{(weight / 100).toFixed(1)}
                 </div>
               </div>
             );
           })}
         </div>
-        <div className="mt-3 pt-3 border-t border-white/10 flex items-center justify-between">
-          <span className="text-xs font-semibold text-white">Final Score</span>
-          <span className="text-xs font-mono text-green-400">
-            Σ (score × weight) = 100%
-          </span>
+        <div className="mt-2.5 pt-2.5 border-t border-gray-200 flex items-center justify-between">
+          <span className="text-[10px] font-bold text-gray-900">Final Score</span>
+          <span className="text-[10px] font-mono text-green-600 font-medium">Σ(s × w) = 100%</span>
         </div>
       </div>
     </div>

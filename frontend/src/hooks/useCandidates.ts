@@ -13,15 +13,15 @@ import {
 } from '@/store/candidatesSlice';
 import { Candidate } from '@/types';
 
-export function useCandidates() {
+export function useCandidates(jobId?: string) {
   const dispatch = useDispatch<AppDispatch>();
   const { items: candidates, total, loading, error, searchQuery, page, limit } = useSelector(
     (state: RootState) => state.candidates
   );
 
   useEffect(() => {
-    dispatch(fetchCandidates({ page, limit, search: searchQuery || undefined }));
-  }, [dispatch, searchQuery, page, limit]);
+    dispatch(fetchCandidates({ page, limit, search: searchQuery || undefined, jobId }));
+  }, [dispatch, searchQuery, page, limit, jobId]);
 
   const handleSearch = useCallback(
     (query: string) => {

@@ -60,6 +60,7 @@ router.post("/candidates/upload/csv", requireAuth, upload.single("file"), candid
 router.post("/candidates/upload/pdf", requireAuth, upload.array("files", 20), candidates.uploadPDFResumes);
 router.get("/candidates/:id", requireAuth, candidates.getCandidate);
 router.put("/candidates/:id", requireAuth, candidates.updateCandidate);
+router.patch("/candidates/:id", requireAuth, candidates.updateCandidate);
 router.delete("/candidates/:id", requireAuth, candidates.deleteCandidate);
 
 // ============================================

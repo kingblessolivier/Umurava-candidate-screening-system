@@ -24,14 +24,14 @@ const initialState: CandidatesState = {
 };
 
 export const fetchCandidates = createAsyncThunk("candidates/list",
-  async (params?: { page?: number; limit?: number; search?: string }) => {
+  async (params?: { page?: number; limit?: number; search?: string; jobId?: string }) => {
     const { data } = await api.get<{ data: Candidate[]; total: number }>("/candidates", { params });
     return data;
   }
 );
 
 export const updateCandidate = createAsyncThunk("candidates/update", async ({ id, updates }: { id: string; updates: Partial<Candidate> }) => {
-  const { data } = await api.patch<{ data: Candidate }>(`/candidates/${id}`, updates);
+  const { data } = await api.put<{ data: Candidate }>(`/candidates/${id}`, updates);
   return data.data;
 });
 

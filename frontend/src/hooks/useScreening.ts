@@ -6,7 +6,7 @@ import { AppDispatch, RootState } from '@/store';
 import {
   runScreening,
   fetchResults,
-  fetchResultById,
+  fetchResult,
   setTotalCandidates,
   addThought,
   addThoughts,
@@ -54,7 +54,7 @@ export function useScreening() {
 
   const fetchResult = useCallback(
     (id: string) => {
-      dispatch(fetchResultById(id));
+      dispatch(fetchResult(id));
     },
     [dispatch]
   );

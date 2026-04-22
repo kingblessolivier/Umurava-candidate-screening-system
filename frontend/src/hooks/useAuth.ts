@@ -4,7 +4,7 @@ import { useCallback, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useRouter } from 'next/navigation';
 import { AppDispatch, RootState } from '@/store';
-import { login, register, logout, fetchCurrentUser } from '@/store/authSlice';
+import { login, register, logout } from '@/store/authSlice';
 
 interface LoginCredentials {
   email: string;
@@ -23,13 +23,6 @@ export function useAuth() {
   const { user, isAuthenticated, loading, error } = useSelector(
     (state: RootState) => state.auth
   );
-
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token && !user) {
-      dispatch(fetchCurrentUser());
-    }
-  }, [dispatch, user]);
 
   const handleLogin = useCallback(
     async (credentials: LoginCredentials) => {

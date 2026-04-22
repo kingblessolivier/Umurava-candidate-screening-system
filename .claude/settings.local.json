@@ -4,7 +4,11 @@
       "Bash(npm run *)",
       "PowerShell(Invoke-Item *)",
       "Bash(rm -rf .next/trace)",
-      "Bash(npx next *)"
+      "Bash(npx next *)",
+      "Bash(npx tsc *)",
+      "Bash(taskkill /F /IM node.exe)",
+      "Bash(rm -rf frontend/.next-cache)",
+      "Bash(netstat -ano)"
     ]
   }
 }

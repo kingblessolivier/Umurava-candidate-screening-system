@@ -1057,7 +1057,7 @@ function JobModal({ job, onClose, onSave, onCreate, onUpdate }: any) {
       onClose={onClose}
       title={job ? 'Edit Job' : 'Create Job'}
       subtitle="Skill requirements use the Talent Profile Schema levels"
-      size="2xl"
+      size="xl"
       headerAccent="blue"
       showCloseButton={true}
       className="p-0"
@@ -1234,6 +1234,28 @@ function CandidateModal({ jobId, onClose, onSave }: any) {
   const [selectedCsv, setSelectedCsv] = useState<File | null>(null);
   const [csvPreview, setCsvPreview] = useState<any[]>([]);
 
+  const dedupeFiles = (files: File[]) => {
+    const seen = new Set<string>();
+    return files.filter((file) => {
+      const key = `${file.name}|${file.size}|${file.lastModified}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  };
+
+  const dedupeCandidatesByEmail = (candidates: any[]) => {
+    const seen = new Set<string>();
+    return candidates.filter((candidate) => {
+      const email = String(candidate?.email || '').trim().toLowerCase();
+      const key = email || `${candidate?.firstName || ''}|${candidate?.lastName || ''}`.toLowerCase();
+      if (!key) return true;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  };
+
   // ── Skills
   const addSkill    = () => setFd(p => ({ ...p, skills: [...p.skills, { name: '', level: 'Intermediate', yearsOfExperience: 1 }] }));
   const removeSkill = (i: number) => setFd(p => ({ ...p, skills: p.skills.filter((_, idx) => idx !== i) }));
@@ -1320,13 +1342,13 @@ function CandidateModal({ jobId, onClose, onSave }: any) {
   const handleResumeDrop = (e: React.DragEvent) => {
     e.preventDefault();
     const files = Array.from(e.dataTransfer.files).filter(f => f.type === 'application/pdf' || f.name.endsWith('.pdf'));
-    setSelectedResumes(prev => [...prev, ...files]);
+    setSelectedResumes(prev => dedupeFiles([...prev, ...files]));
   };
 
   const handleResumeSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const files = Array.from(e.target.files).filter(f => f.type === 'application/pdf' || f.name.endsWith('.pdf'));
-      setSelectedResumes(prev => [...prev, ...files]);
+      setSelectedResumes(prev => dedupeFiles([...prev, ...files]));
     }
   };
 
@@ -1347,7 +1369,7 @@ function CandidateModal({ jobId, onClose, onSave }: any) {
       const { data } = await api.post(`/candidates/upload/pdf?jobId=${jobId}`, form, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      setParsedCandidates(data.data.parsed || []);
+      setParsedCandidates(dedupeCandidatesByEmail(data.data.parsed || []));
       toast.success(`Parsed ${data.data.parsed?.length || 0} resumes`);
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Failed to parse resumes');
@@ -1361,7 +1383,8 @@ function CandidateModal({ jobId, onClose, onSave }: any) {
     try {
       await dispatch(createCandidate({ ...candidate, jobId }));
       await dispatch(fetchCandidates());
-      setParsedCandidates(prev => prev.filter(c => c !== candidate));
+      const candidateEmail = String(candidate?.email || '').trim().toLowerCase();
+      setParsedCandidates(prev => prev.filter(c => String(c?.email || '').trim().toLowerCase() !== candidateEmail));
       toast.success('Candidate added');
       if (parsedCandidates.length <= 1) onSave();
     } catch {
@@ -1440,7 +1463,7 @@ function CandidateModal({ jobId, onClose, onSave }: any) {
       onClose={onClose}
       title="Add Candidate"
       subtitle={jobId ? `Job ID: ${jobId.slice(-8)}` : "Choose how you want to add candidates"}
-      size="full"
+      size="xl"
       headerAccent="violet"
       showCloseButton={true}
       className="p-0"
@@ -1967,7 +1990,7 @@ function CandidateModal({ jobId, onClose, onSave }: any) {
                   </div>
                   <div className="divide-y divide-gray-100 max-h-64 overflow-y-auto">
                     {parsedCandidates.map((c, i) => (
-                      <div key={i} className="px-4 py-3 flex items-center justify-between hover:bg-gray-50">
+                      <div key={`${String(c?.email || '').toLowerCase()}-${i}`} className="px-4 py-3 flex items-center justify-between hover:bg-gray-50">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-xs">
                             {c.firstName?.[0]}{c.lastName?.[0]}

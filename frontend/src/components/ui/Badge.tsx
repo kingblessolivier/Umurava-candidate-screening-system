@@ -12,7 +12,11 @@ type BadgeVariant =
   | 'error'
   | 'info'
   | 'neutral'
-  | 'outline';
+  | 'outline'
+  | 'dark'
+  | 'dark-primary'
+  | 'dark-success'
+  | 'dark-warning';
 
 type BadgeSize = 'sm' | 'md';
 
@@ -34,6 +38,10 @@ const variantStyles: Record<BadgeVariant, string> = {
   info: 'bg-blue-50 text-blue-700 border-blue-200',
   neutral: 'bg-gray-100 text-gray-600 border-gray-200',
   outline: 'bg-transparent text-blue-600 border-blue-300',
+  dark: 'bg-white/10 text-white border-white/20',
+  'dark-primary': 'bg-primary-500/20 text-primary-400 border-primary-500/30',
+  'dark-success': 'bg-green-500/20 text-green-400 border-green-500/30',
+  'dark-warning': 'bg-amber-500/20 text-amber-400 border-amber-500/30',
 };
 
 const sizeStyles = {
