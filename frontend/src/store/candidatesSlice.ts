@@ -45,14 +45,20 @@ export const uploadCSV = createAsyncThunk("candidates/uploadCSV", async ({ file,
   return data.data;
 });
 
-export const uploadPDFs = createAsyncThunk("candidates/uploadPDFs", async (files: File[]) => {
-  const form = new FormData();
-  files.forEach(f => form.append("files", f));
-  const { data } = await api.post<{ data: { parsed: object[]; errors: string[] } }>(
-    "/candidates/upload/pdf", form, { headers: { "Content-Type": "multipart/form-data" } }
-  );
-  return data.data;
-});
+// Returns immediately with { jobId, status: 'pending' } — result arrives via SSE notification
+export const uploadPDFs = createAsyncThunk(
+  "candidates/uploadPDFs",
+  async ({ files, jobId }: { files: File[]; jobId: string }) => {
+    const form = new FormData();
+    files.forEach((f) => form.append("files", f));
+    const { data } = await api.post<{ data: { jobId: string; status: string; message: string } }>(
+      `/candidates/upload/pdf?jobId=${encodeURIComponent(jobId)}`,
+      form,
+      { headers: { "Content-Type": "multipart/form-data" } }
+    );
+    return data.data;
+  }
+);
 
 export const bulkImportJSON = createAsyncThunk("candidates/bulkJSON", async (profiles: Partial<Candidate>[]) => {
   const { data } = await api.post<{ data: { created: number; skipped: number; errors: string[] } }>(

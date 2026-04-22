@@ -1,17 +1,19 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useSelector } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import {
   Users, Search, Upload, Trash2, MapPin, Briefcase,
-  Mail, LayoutList, LayoutGrid, Eye, Table2, Filter,
+  Mail, LayoutList, LayoutGrid, Eye, Table2, UserPlus,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
-import { RootState } from '@/store';
+import { AppDispatch, RootState } from '@/store';
+import { fetchJobs } from '@/store/jobsSlice';
 import { useCandidates } from '@/hooks/useCandidates';
 import { CandidateDetailModal } from '@/components/candidates/CandidateDetailModal';
+import { CreateCandidateModal } from '@/components/candidates/CreateCandidateModal';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -20,6 +22,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Skeleton } from '@/components/ui/LoadingState';
 import { Pagination } from '@/components/ui/Pagination';
+import { ConfirmModal } from '@/components/ui/Modal';
 import { Candidate } from '@/types';
 import { cn } from '@/lib/utils';
 
@@ -32,6 +35,7 @@ const SKILL_LEVEL_VARIANTS: Record<string, 'success' | 'primary' | 'warning' | '
 
 export default function CandidatesPage() {
   const router = useRouter();
+  const dispatch = useDispatch<AppDispatch>();
   const [filterJobId, setFilterJobId] = useState<string>('');
   const { candidates, total, loading, page, totalPages, handleSearch, handlePageChange, handleDeleteCandidate, handleUpdateCandidate } =
     useCandidates(filterJobId || undefined);
@@ -40,6 +44,12 @@ export default function CandidatesPage() {
   const [viewMode, setViewMode] = useState<'list' | 'card' | 'table'>('card');
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string } | null>(null);
+
+  useEffect(() => {
+    if (jobs.length === 0) dispatch(fetchJobs());
+  }, [dispatch, jobs.length]);
 
   const jobMap = useMemo(() => {
     return jobs.reduce((acc, job) => {
@@ -48,14 +58,20 @@ export default function CandidatesPage() {
     }, {} as Record<string, string>);
   }, [jobs]);
 
-  const onDelete = async (id: string, name: string) => {
-    const confirmed = window.confirm(`Remove ${name}? This action cannot be undone.`);
-    if (!confirmed) return;
+  const onDeleteRequest = (id: string, name: string) => {
+    setConfirmDelete({ id, name });
+  };
+
+  const onDeleteConfirm = async () => {
+    if (!confirmDelete) return;
+    const { id, name } = confirmDelete;
     setDeleteLoading(id);
+    setConfirmDelete(null);
     try {
       const result = await handleDeleteCandidate(id);
       if (result.meta.requestStatus === 'fulfilled') {
-        toast.success('Candidate removed');
+        toast.success(`${name} removed`);
+        if (selectedCandidate?._id === id) setModalOpen(false);
       } else {
         toast.error('Failed to remove candidate');
       }
@@ -74,7 +90,7 @@ export default function CandidatesPage() {
   const handleUpdateModal = (id: string, updates: Partial<Candidate>) => {
     return handleUpdateCandidate(id, updates).then((result) => {
       if (result.meta?.requestStatus === 'fulfilled') {
-        setSelectedCandidate(result.payload);
+        setSelectedCandidate(result.payload as Candidate);
       }
       return result;
     });
@@ -110,9 +126,14 @@ export default function CandidatesPage() {
             {total} candidate{total !== 1 ? 's' : ''} in pool
           </p>
         </div>
-        <Button href="/candidates/upload" leftIcon={<Upload className="w-3.5 h-3.5" />} size="sm">
-          Upload Candidates
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="ghost" onClick={() => setShowCreateModal(true)} leftIcon={<UserPlus className="w-3.5 h-3.5" />} size="sm">
+            Add Candidate
+          </Button>
+          <Button href="/candidates/upload" leftIcon={<Upload className="w-3.5 h-3.5" />} size="sm">
+            Upload Candidates
+          </Button>
+        </div>
       </div>
 
       {/* Search and View Toggle */}
@@ -227,7 +248,7 @@ export default function CandidatesPage() {
                     <Button size="sm" variant="primary" onClick={() => handleViewDetails(candidate)} className="flex-1" leftIcon={<Eye className="w-3 h-3" />}>
                       View
                     </Button>
-                    <Button size="sm" variant="ghost" onClick={() => onDelete(candidate._id, `${candidate.firstName} ${candidate.lastName}`)} isLoading={deleteLoading === candidate._id} className="text-gray-400 hover:text-red-500">
+                    <Button size="sm" variant="ghost" onClick={() => onDeleteRequest(candidate._id, `${candidate.firstName} ${candidate.lastName}`)} isLoading={deleteLoading === candidate._id} className="text-gray-400 hover:text-red-500">
                       <Trash2 className="w-3.5 h-3.5" />
                     </Button>
                   </div>
@@ -269,7 +290,7 @@ export default function CandidatesPage() {
                       </div>
                       <div className="flex gap-1.5">
                         <Button size="sm" variant="primary" onClick={() => handleViewDetails(candidate)} leftIcon={<Eye className="w-3 h-3" />}>View</Button>
-                        <Button size="sm" variant="ghost" onClick={() => onDelete(candidate._id, `${candidate.firstName} ${candidate.lastName}`)} isLoading={deleteLoading === candidate._id} className="text-gray-400 hover:text-red-500">
+                        <Button size="sm" variant="ghost" onClick={() => onDeleteRequest(candidate._id, `${candidate.firstName} ${candidate.lastName}`)} isLoading={deleteLoading === candidate._id} className="text-gray-400 hover:text-red-500">
                           <Trash2 className="w-3.5 h-3.5" />
                         </Button>
                       </div>
@@ -323,7 +344,7 @@ export default function CandidatesPage() {
                       </div>
                     </td>
                     <td className="px-3 py-2">
-                      <Badge variant={candidate.availability.status === 'available' ? 'success' : 'warning'} size="sm">
+                      <Badge variant={candidate.availability.status === 'Available' ? 'success' : 'warning'} size="sm">
                         {candidate.availability.type}
                       </Badge>
                     </td>
@@ -332,7 +353,7 @@ export default function CandidatesPage() {
                         <button onClick={() => handleViewDetails(candidate)} className="p-1 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded transition" title="View">
                           <Eye className="w-3.5 h-3.5" />
                         </button>
-                        <button onClick={() => onDelete(candidate._id, `${candidate.firstName} ${candidate.lastName}`)} disabled={deleteLoading === candidate._id} className="p-1 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded transition disabled:opacity-50" title="Delete">
+                        <button onClick={() => onDeleteRequest(candidate._id, `${candidate.firstName} ${candidate.lastName}`)} disabled={deleteLoading === candidate._id} className="p-1 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded transition disabled:opacity-50" title="Delete">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
@@ -349,7 +370,20 @@ export default function CandidatesPage() {
         <Pagination currentPage={page} totalPages={totalPages} onPageChange={handlePageChange} isLoading={loading} itemsPerPage={50} totalItems={total} />
       )}
 
-      <CandidateDetailModal candidate={selectedCandidate} isOpen={modalOpen} onClose={() => setModalOpen(false)} onUpdate={handleUpdateModal} isLoading={loading} />
+      <CandidateDetailModal candidate={selectedCandidate} isOpen={modalOpen} onClose={() => setModalOpen(false)} onUpdate={handleUpdateModal} />
+
+      <CreateCandidateModal isOpen={showCreateModal} onClose={() => setShowCreateModal(false)} />
+
+      <ConfirmModal
+        isOpen={!!confirmDelete}
+        onClose={() => setConfirmDelete(null)}
+        onConfirm={onDeleteConfirm}
+        title="Remove Candidate"
+        message={`Remove ${confirmDelete?.name}? This action cannot be undone.`}
+        confirmLabel="Remove"
+        variant="danger"
+        isLoading={!!deleteLoading}
+      />
     </div>
   );
 }

@@ -249,14 +249,14 @@ export default function JobDetailPage() {
             )}
 
             {/* Nice to Have */}
-            {job.niceToHave?.length > 0 && (
+            {(job.niceToHave?.length ?? 0) > 0 && (
               <div className="bg-white border border-gray-200 rounded-xl">
                 <div className="px-5 py-4 border-b border-gray-100">
                   <h2 className="text-sm font-semibold text-gray-900">Nice to Have</h2>
                 </div>
                 <div className="p-5">
                   <div className="flex flex-wrap gap-2">
-                    {job.niceToHave.map((skill, i) => (
+                    {job.niceToHave!.map((skill, i) => (
                       <span key={i} className="px-3 py-1.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200">
                         {skill}
                       </span>

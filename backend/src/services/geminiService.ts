@@ -419,18 +419,79 @@ export async function parseResumeToProfile(rawText: string, email?: string): Pro
     availability: { status: "Available", type: "Full-time" },
   };
 
-  const prompt = `You are an expert resume parser. Extract all information from this resume and return structured JSON.
+  // Limit to 12 000 chars — covers most dense resumes without bloating the prompt
+  const resumeSnippet = rawText.substring(0, 12000);
 
-RESUME TEXT:
-${rawText.substring(0, 8000)}
+  const prompt = `You are an expert resume parser. Your job is to extract every piece of structured information from the resume text below and return it as a single JSON object.
 
-Extract EVERY detail available. For missing fields, use empty string or empty array — do NOT invent data.
+═══ RESUME TEXT ═══
+${resumeSnippet}
+═══ END RESUME ═══
 
-Return ONLY this JSON:
+${email ? `Known email from document metadata: ${email}` : ""}
+
+━━━ EXTRACTION RULES ━━━
+
+NAMES
+- Split the full name into firstName and lastName.
+- If only one name token exists, put it in firstName and leave lastName empty.
+
+EMAIL
+- Prefer the email found in the resume body over the metadata hint.
+- If none found in the body, use the metadata email: "${email || ""}".
+
+HEADLINE
+- Synthesize a 1-line professional headline (e.g. "Senior Backend Engineer · Node.js & AWS") from the candidate's most recent role and strongest skills.
+- If the resume already has a summary/headline line, use that verbatim (keep it under 120 chars).
+
+SKILLS — LEVEL INFERENCE RULES (apply consistently):
+- "Expert"       : 7+ years OR described as "expert / principal / architect" OR led teams with that skill
+- "Advanced"     : 4–6 years OR "senior / lead" context OR strong project evidence
+- "Intermediate" : 2–3 years OR mentioned as primary stack without explicit senior context
+- "Beginner"     : < 2 years OR listed as "familiar with / exposure to / learning"
+- Default to "Intermediate" when no evidence exists.
+- yearsOfExperience: best estimate from the work timeline; use 1 when uncertain.
+- Include ALL technologies, frameworks, languages, tools, platforms, methodologies mentioned anywhere in the resume.
+
+DATES — NORMALIZATION RULES:
+- Convert all dates to "YYYY-MM" format.
+  Examples: "January 2020" → "2020-01", "Jan 2020" → "2020-01", "Q1 2019" → "2019-01", "2019" → "2019-01".
+- For ongoing roles ("Present", "Current", "Now", "—"): set isCurrent=true and endDate="".
+- If only a year is given for education (e.g. "Graduated 2022"), use that year as endYear.
+
+EXPERIENCE
+- Extract every job entry, including internships, freelance, and volunteer work.
+- description: concise 1–3 sentence summary of what they did and achieved.
+- technologies: every tool/language/framework mentioned for that role.
+- achievements: specific measurable outcomes if stated (e.g. "Reduced latency by 40%").
+
+EDUCATION
+- Include all degrees, diplomas, bootcamps, online programs.
+- For ongoing programs, leave endYear as null or the expected graduation year.
+
+PROJECTS
+- Extract personal projects, open-source contributions, academic projects.
+- technologies: list all tech used.
+- link: GitHub URL, live URL, or portfolio link if mentioned.
+
+AVAILABILITY
+- status: "Available" unless the resume explicitly says they are employed with no intention to move — then use "Open to Opportunities".
+- type: infer from resume context. If contract/freelance history dominates, use "Contract". Default "Full-time".
+
+SOCIAL LINKS — extract any URLs mentioning:
+- linkedin.com → socialLinks.linkedin
+- github.com   → socialLinks.github
+- Any portfolio/personal site → socialLinks.portfolio
+
+IMPORTANT:
+- Return ONLY the JSON object below — no markdown fences, no extra commentary.
+- For any field where information is genuinely absent, use "" (string), [] (array), or null (number) — do NOT invent data.
+- Do NOT include empty objects in arrays (e.g. no \`{}\` entries in skills/experience/education).
+
 {
   "firstName": "",
   "lastName": "",
-  "email": "${email || ""}",
+  "email": "",
   "phone": "",
   "headline": "",
   "bio": "",
@@ -446,8 +507,8 @@ Return ONLY this JSON:
       "endDate": "YYYY-MM",
       "isCurrent": false,
       "description": "",
-      "technologies": [],
-      "achievements": []
+      "technologies": ["TypeScript", "Node.js"],
+      "achievements": ["Reduced API latency by 35%"]
     }
   ],
   "education": [
@@ -483,9 +544,11 @@ Return ONLY this JSON:
   }
 }`;
 
+  // Never cache resume parses — each upload is a fresh document.
+  // Use a random key to bypass rateLimitService cache.
   return generateWithRateLimit(
-    `resume-parse:${email || Date.now()}`,
-    { prompt, temperature: 0.1, maxOutputTokens: 4096, thinkingBudget: 0 },
+    `resume-parse:${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    { prompt, temperature: 0.1, maxOutputTokens: 6144, thinkingBudget: 512 },
     fallback
   );
 }

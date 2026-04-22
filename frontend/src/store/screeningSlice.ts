@@ -15,6 +15,7 @@ interface ScreeningState {
   results: ScreeningResult[];
   current: ScreeningResult | null;
   running: boolean;
+  pendingBgJobId: string | null; // background job id while screening is in progress
   loading: boolean;
   error: string | null;
   // Live screening state for "Thinking AI" UI
@@ -34,6 +35,7 @@ const initialState: ScreeningState = {
   results: [],
   current: null,
   running: false,
+  pendingBgJobId: null,
   loading: false,
   error: null,
   thoughts: [],
@@ -47,10 +49,14 @@ const initialState: ScreeningState = {
   searchQuery: "",
 };
 
+// Returns immediately with { jobId, status: 'pending' } — result arrives via SSE notification
 export const runScreening = createAsyncThunk(
   "screening/run",
   async (payload: { jobId: string; shortlistSize: number; candidateIds?: string[] }) => {
-    const { data } = await api.post<{ data: ScreeningResult }>("/screening/run", payload);
+    const { data } = await api.post<{ data: { jobId: string; status: string; message: string } }>(
+      "/screening/run",
+      payload
+    );
     return data.data;
   }
 );
@@ -116,6 +122,11 @@ const screeningSlice = createSlice({
       s.evaluatedCount = 0;
       s.totalCandidates = 0;
     },
+    // Called when the SSE notification arrives confirming the background job is done/failed
+    stopRunning: (s) => {
+      s.running = false;
+      s.pendingBgJobId = null;
+    },
     // Pagination reducers
     setSearchQuery: (state, action) => {
       state.searchQuery = action.payload;
@@ -133,19 +144,19 @@ const screeningSlice = createSlice({
     b
       .addCase(runScreening.pending, (s) => {
         s.running = true;
+        s.pendingBgJobId = null;
         s.error = null;
         s.thoughts = [];
         s.partialShortlist = [];
         s.evaluatedCount = 0;
       })
       .addCase(runScreening.fulfilled, (s, { payload }) => {
-        s.running = false;
-        s.current = payload;
-        s.results.unshift(payload);
-        s.evaluatedCount = payload.totalApplicants;
+        // Background job accepted — running stays true until SSE notification arrives
+        s.pendingBgJobId = payload.jobId;
       })
       .addCase(runScreening.rejected, (s, { error }) => {
         s.running = false;
+        s.pendingBgJobId = null;
         s.error = error.message || "Screening failed";
       })
       .addCase(fetchResults.pending, (s) => { s.loading = true; })
@@ -169,6 +180,7 @@ export const {
   updatePartialShortlist,
   incrementEvaluatedCount,
   resetLiveState,
+  stopRunning,
   setSearchQuery,
   setPage,
   setLimit,

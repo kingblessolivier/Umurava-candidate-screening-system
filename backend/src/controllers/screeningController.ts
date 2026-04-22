@@ -4,7 +4,14 @@ import { Candidate } from "../models/Candidate";
 import { ScreeningResultModel } from "../models/ScreeningResult";
 import { runScreeningPipeline } from "../services/geminiService";
 import { preprocessCandidates } from "../services/preprocessingService";
+import {
+  createJob,
+  updateJob,
+  sendNotificationToUser,
+} from "../services/backgroundJobService";
 import { Job, TalentProfile } from "../types";
+
+type AuthedRequest = Request & { user?: { _id: string } };
 
 export const runScreening = async (req: Request, res: Response) => {
   try {
@@ -21,11 +28,10 @@ export const runScreening = async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, error: "shortlistSize must be between 1 and 20" });
     }
 
-    // Load job
+    // Validate job + candidates before accepting the job so we can fail fast
     const jobDoc = await JobModel.findById(jobId).lean();
     if (!jobDoc) return res.status(404).json({ success: false, error: "Job not found" });
 
-    // Load candidates - filter by jobId when no specific candidateIds provided
     const query: Record<string, unknown> = candidateIds?.length
       ? { _id: { $in: candidateIds } }
       : { jobId };
@@ -41,29 +47,85 @@ export const runScreening = async (req: Request, res: Response) => {
       });
     }
 
-    const job = { ...jobDoc, _id: jobDoc._id.toString() } as unknown as Job;
-    const candidates = candidateDocs.map(c => ({
-      ...c,
-      _id: c._id.toString(),
-    })) as unknown as TalentProfile[];
+    const userId = (req as AuthedRequest).user!._id;
 
-    // ── Preprocessing: extract signals before AI evaluation ──────────────────
-    const preprocessed = preprocessCandidates(candidates, job);
-
-    // Sort by pre-computed score to help Gemini focus on real contenders
-    preprocessed.sort((a, b) => {
-      const scoreA = a.rawSkillScore * 0.35 + a.rawExperienceScore * 0.30 + a.rawEducationScore * 0.15 + a.rawProjectScore * 0.15 + a.availabilityScore * 0.05;
-      const scoreB = b.rawSkillScore * 0.35 + b.rawExperienceScore * 0.30 + b.rawEducationScore * 0.15 + b.rawProjectScore * 0.15 + b.availabilityScore * 0.05;
-      return scoreB - scoreA;
+    // Create a background job record and respond immediately (202 Accepted)
+    const bgJob = createJob("screening", userId, {
+      jobId,
+      jobTitle: jobDoc.title,
+      candidateCount: candidateDocs.length,
+      shortlistSize,
     });
 
-    // ── Run AI screening ─────────────────────────────────────────────────────
-    const screeningData = await runScreeningPipeline(job, preprocessed, shortlistSize);
+    res.status(202).json({
+      success: true,
+      data: {
+        jobId: bgJob.id,
+        status: "pending",
+        message: "Screening started in the background. You'll be notified when it's done.",
+      },
+    });
 
-    // ── Persist result ────────────────────────────────────────────────────────
-    const result = await ScreeningResultModel.create({ ...screeningData, jobId });
+    // ── Run the actual AI pipeline asynchronously ─────────────────────────────
+    setImmediate(async () => {
+      try {
+        updateJob(bgJob.id, "running");
 
-    res.status(201).json({ success: true, data: result });
+        const job = { ...jobDoc, _id: jobDoc._id.toString() } as unknown as Job;
+        const candidates = candidateDocs.map((c) => ({
+          ...c,
+          _id: c._id.toString(),
+        })) as unknown as TalentProfile[];
+
+        const preprocessed = preprocessCandidates(candidates, job);
+        preprocessed.sort((a, b) => {
+          const scoreA =
+            a.rawSkillScore * 0.35 +
+            a.rawExperienceScore * 0.30 +
+            a.rawEducationScore * 0.15 +
+            a.rawProjectScore * 0.15 +
+            a.availabilityScore * 0.05;
+          const scoreB =
+            b.rawSkillScore * 0.35 +
+            b.rawExperienceScore * 0.30 +
+            b.rawEducationScore * 0.15 +
+            b.rawProjectScore * 0.15 +
+            b.availabilityScore * 0.05;
+          return scoreB - scoreA;
+        });
+
+        const screeningData = await runScreeningPipeline(job, preprocessed, shortlistSize);
+        const result = await ScreeningResultModel.create({ ...screeningData, jobId });
+
+        updateJob(bgJob.id, "done", { screeningResultId: result._id.toString() });
+
+        sendNotificationToUser(userId, {
+          type: "job_update",
+          jobId: bgJob.id,
+          jobType: "screening",
+          status: "done",
+          title: "Screening Complete",
+          message: `"${jobDoc.title}" screening done — ${result.shortlist?.length ?? shortlistSize} candidates shortlisted.`,
+          metadata: bgJob.metadata,
+          result: { screeningResultId: result._id.toString() },
+          timestamp: new Date().toISOString(),
+        });
+      } catch (err) {
+        const error = err instanceof Error ? err.message : "Screening pipeline failed";
+        updateJob(bgJob.id, "failed", undefined, error);
+        sendNotificationToUser(userId, {
+          type: "job_update",
+          jobId: bgJob.id,
+          jobType: "screening",
+          status: "failed",
+          title: "Screening Failed",
+          message: `Screening for "${jobDoc.title}" failed: ${error}`,
+          metadata: bgJob.metadata,
+          error,
+          timestamp: new Date().toISOString(),
+        });
+      }
+    });
   } catch (err) {
     console.error("Screening error:", err);
     res.status(500).json({
@@ -80,7 +142,7 @@ export const listScreeningResults = async (req: Request, res: Response) => {
     const results = await ScreeningResultModel
       .find(query)
       .sort({ createdAt: -1 })
-      .select("-shortlist.reasoning -rejectedCandidates") // exclude heavy fields from list view
+      .select("-shortlist.reasoning -rejectedCandidates")
       .lean();
     res.json({ success: true, data: results, total: results.length });
   } catch (err) {
@@ -121,17 +183,19 @@ export const deleteScreeningResult = async (req: Request, res: Response) => {
   }
 };
 
-// Get rejected candidate explanation for a specific candidate in a result
 export const getWhyNotSelected = async (req: Request, res: Response) => {
   try {
     const { resultId, email } = req.params;
     const result = await ScreeningResultModel.findById(resultId).lean();
     if (!result) return res.status(404).json({ success: false, error: "Result not found" });
 
-    const rejected = result.rejectedCandidates?.find(r => r.email === decodeURIComponent(email));
+    const rejected = result.rejectedCandidates?.find(
+      (r) => r.email === decodeURIComponent(email)
+    );
     if (!rejected) {
-      // Check if they're in the shortlist
-      const shortlisted = result.shortlist?.find(s => s.email === decodeURIComponent(email));
+      const shortlisted = result.shortlist?.find(
+        (s) => s.email === decodeURIComponent(email)
+      );
       if (shortlisted) {
         return res.json({
           success: true,

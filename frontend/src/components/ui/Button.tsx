@@ -11,6 +11,7 @@ interface ButtonBaseProps {
   leftIcon?: React.ReactNode;
   rightIcon?: React.ReactNode;
   fullWidth?: boolean;
+  disabled?: boolean;
 }
 
 interface ButtonAsButton extends ButtonBaseProps, Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'prefix' | 'suffix'> {

@@ -4,11 +4,12 @@ import { requireAuth } from "../middleware/auth";
 import { rateLimitService } from "../services/rateLimitService";
 import { validate, CreateJobSchema, RegisterSchema, LoginSchema, RunScreeningSchema } from "../validators";
 
-import * as auth       from "../controllers/authController";
-import * as jobs       from "../controllers/jobController";
-import * as candidates from "../controllers/candidateController";
-import * as screening  from "../controllers/screeningController";
-import * as analytics  from "../controllers/analyticsController";
+import * as auth          from "../controllers/authController";
+import * as jobs          from "../controllers/jobController";
+import * as candidates    from "../controllers/candidateController";
+import * as screening     from "../controllers/screeningController";
+import * as analytics     from "../controllers/analyticsController";
+import * as notifications from "../controllers/notificationController";
 
 const router = Router();
 
@@ -78,6 +79,14 @@ router.get("/screening/:resultId/why/:email", requireAuth, screening.getWhyNotSe
 // ============================================
 router.get("/analytics/dashboard", requireAuth, analytics.getDashboardStats);
 router.get("/analytics/job/:jobId", requireAuth, analytics.getJobAnalytics);
+
+// ============================================
+// Notification / Background Job Routes
+// ============================================
+// SSE stream — auth via ?token= query param (EventSource doesn't support headers)
+router.get("/notifications/stream", notifications.streamNotifications);
+// Poll job status
+router.get("/background-jobs/:jobId", requireAuth, notifications.getJobStatus);
 
 // ============================================
 // System Monitoring

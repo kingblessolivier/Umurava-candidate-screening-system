@@ -12,14 +12,17 @@ import {
 } from 'lucide-react';
 import { AppDispatch, RootState } from '@/store';
 import { deleteJob } from '@/store/jobsSlice';
-import { fetchCandidates, createCandidate, uploadCSV } from '@/store/candidatesSlice';
+import { fetchCandidates, createCandidate, uploadCSV, updateCandidate } from '@/store/candidatesSlice';
 import { fetchResults } from '@/store/screeningSlice';
 import { useJobs } from '@/hooks/useJobs';
 import { Pagination } from '@/components/ui/Pagination';
 import { Badge } from '@/components/ui/Badge';
 import { Modal, ConfirmModal } from '@/components/ui/Modal';
+import { CandidateDetailModal } from '@/components/candidates/CandidateDetailModal';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
+import { Candidate } from '@/types';
+import { Bell } from 'lucide-react';
 
 export default function JobsPage() {
   const dispatch = useDispatch<AppDispatch>();
@@ -41,6 +44,24 @@ export default function JobsPage() {
   const [selectedCandidates, setSelectedCandidates] = useState<Set<string>>(new Set());
   const [bulkAction, setBulkAction] = useState<'screen' | 'reject' | 'shortlist' | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'pipeline'>('list');
+
+  // Candidate detail modal
+  const [viewingCandidate, setViewingCandidate] = useState<Candidate | null>(null);
+  const [viewModalOpen, setViewModalOpen] = useState(false);
+
+  const handleViewCandidate = (candidate: Candidate) => {
+    setViewingCandidate(candidate);
+    setViewModalOpen(true);
+  };
+
+  const handleUpdateViewCandidate = async (id: string, updates: Partial<Candidate>) => {
+    const result = await dispatch(updateCandidate({ id, updates }));
+    if (result.meta.requestStatus === 'fulfilled') {
+      setViewingCandidate(result.payload as Candidate);
+      await dispatch(fetchCandidates());
+    }
+    return result;
+  };
 
   useEffect(() => {
     dispatch(fetchCandidates());
@@ -273,8 +294,8 @@ export default function JobsPage() {
                 <CandidatesTab
                   candidates={candidates.filter(c => c.jobId === selectedJob._id)}
                   jobId={selectedJob._id}
-                  onEditCandidate={() => {}}
-                  onDeleteCandidate={() => {}}
+                  onViewCandidate={handleViewCandidate}
+                  onAddCandidate={() => setShowCandidateModal(true)}
                 />
               )}
               {detailTab === 'screening' && (
@@ -346,9 +367,18 @@ export default function JobsPage() {
           onSave={() => {
             setShowCandidateModal(false);
             toast.success('Candidate added');
+            dispatch(fetchCandidates());
           }}
         />
       )}
+
+      {/* Candidate Detail / Edit Modal */}
+      <CandidateDetailModal
+        candidate={viewingCandidate}
+        isOpen={viewModalOpen}
+        onClose={() => setViewModalOpen(false)}
+        onUpdate={handleUpdateViewCandidate}
+      />
     </div>
   );
 }
@@ -566,7 +596,7 @@ function OverviewTab({ job }: any) {
 }
 
 // Candidates Tab - Now with Pipeline View and Bulk Actions
-function CandidatesTab({ candidates, jobId, onEditCandidate, onDeleteCandidate }: any) {
+function CandidatesTab({ candidates, jobId, onViewCandidate, onAddCandidate }: any) {
   const [selectedCandidates, setSelectedCandidates] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<'list' | 'pipeline'>('list');
   const [sortBy, setSortBy] = useState<'date' | 'name' | 'score'>('date');
@@ -609,7 +639,7 @@ function CandidatesTab({ candidates, jobId, onEditCandidate, onDeleteCandidate }
         <h3 className="text-sm font-bold text-gray-900 mb-1">No candidates yet</h3>
         <p className="text-xs text-gray-500 mb-3">Start adding candidates to this position to begin the screening process</p>
         <button
-          onClick={() => {}}
+          onClick={() => onAddCandidate?.()}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-xs font-medium hover:from-blue-700 hover:to-indigo-700 transition-all shadow-sm shadow-blue-500/20"
         >
           <Plus className="w-3.5 h-3.5" />
@@ -761,14 +791,14 @@ function CandidatesTab({ candidates, jobId, onEditCandidate, onDeleteCandidate }
                       </td>
                       <td className="px-3 py-2">
                         <div className="flex items-center justify-end gap-1">
-                          <button onClick={() => {}} className="p-1.5 rounded hover:bg-blue-50 text-gray-500 hover:text-blue-600 transition-all" title="View Profile">
+                          <button onClick={() => onViewCandidate?.(candidate)} className="p-1.5 rounded hover:bg-blue-50 text-gray-500 hover:text-blue-600 transition-all" title="View Profile">
                             <Eye className="w-3 h-3" />
                           </button>
-                          <button onClick={() => onEditCandidate(candidate)} className="p-1.5 rounded hover:bg-blue-50 text-gray-500 hover:text-blue-600 transition-all" title="Edit">
+                          <button onClick={() => onViewCandidate?.(candidate)} className="p-1.5 rounded hover:bg-blue-50 text-gray-500 hover:text-blue-600 transition-all" title="Edit">
                             <Edit2 className="w-3 h-3" />
                           </button>
-                          <button onClick={() => {}} className="p-1.5 rounded hover:bg-green-50 text-gray-500 hover:text-green-600 transition-all" title="Run AI Screen">
-                            <Zap className="w-3 h-3" />
+                          <button onClick={() => onAddCandidate?.()} className="p-1.5 rounded hover:bg-green-50 text-gray-500 hover:text-green-600 transition-all" title="Add Candidate">
+                            <Plus className="w-3 h-3" />
                           </button>
                         </div>
                       </td>
@@ -1228,7 +1258,7 @@ function CandidateModal({ jobId, onClose, onSave }: any) {
   // Resume upload state
   const [selectedResumes, setSelectedResumes] = useState<File[]>([]);
   const [resumeParsing, setResumeParsing] = useState(false);
-  const [parsedCandidates, setParsedCandidates] = useState<any[]>([]);
+  const [resumeQueued, setResumeQueued] = useState(false);
 
   // CSV upload state
   const [selectedCsv, setSelectedCsv] = useState<File | null>(null);
@@ -1366,33 +1396,18 @@ function CandidateModal({ jobId, onClose, onSave }: any) {
     try {
       const form = new FormData();
       selectedResumes.forEach(f => form.append('files', f));
-      const { data } = await api.post(`/candidates/upload/pdf?jobId=${jobId}`, form, {
+      await api.post(`/candidates/upload/pdf?jobId=${jobId}`, form, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      setParsedCandidates(dedupeCandidatesByEmail(data.data.parsed || []));
-      toast.success(`Parsed ${data.data.parsed?.length || 0} resumes`);
+      setSelectedResumes([]);
+      setResumeQueued(true);
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Failed to parse resumes');
+      toast.error(err.response?.data?.error || 'Failed to queue resumes');
     } finally {
       setResumeParsing(false);
     }
   };
 
-  const handleParsedCandidateSave = async (candidate: any) => {
-    setSubmitting(true);
-    try {
-      await dispatch(createCandidate({ ...candidate, jobId }));
-      await dispatch(fetchCandidates());
-      const candidateEmail = String(candidate?.email || '').trim().toLowerCase();
-      setParsedCandidates(prev => prev.filter(c => String(c?.email || '').trim().toLowerCase() !== candidateEmail));
-      toast.success('Candidate added');
-      if (parsedCandidates.length <= 1) onSave();
-    } catch {
-      toast.error('Failed to save candidate');
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   // CSV upload handlers
   const handleCsvDrop = (e: React.DragEvent) => {
@@ -1979,37 +1994,22 @@ function CandidateModal({ jobId, onClose, onSave }: any) {
                 </button>
               )}
 
-              {/* Parsed Candidates Preview */}
-              {parsedCandidates.length > 0 && (
-                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                  <div className="px-4 py-3 border-b border-gray-100 bg-gradient-to-r from-green-50 to-white">
-                    <h4 className="text-xs font-semibold text-gray-900 flex items-center gap-2">
-                      <Check className="w-4 h-4 text-green-600" />
-                      Parsed Candidates ({parsedCandidates.length})
-                    </h4>
-                  </div>
-                  <div className="divide-y divide-gray-100 max-h-64 overflow-y-auto">
-                    {parsedCandidates.map((c, i) => (
-                      <div key={`${String(c?.email || '').toLowerCase()}-${i}`} className="px-4 py-3 flex items-center justify-between hover:bg-gray-50">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-xs">
-                            {c.firstName?.[0]}{c.lastName?.[0]}
-                          </div>
-                          <div>
-                            <p className="text-xs font-semibold text-gray-900">{c.firstName} {c.lastName}</p>
-                            <p className="text-[10px] text-gray-500">{c.email}</p>
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => handleParsedCandidateSave(c)}
-                          disabled={submitting}
-                          className="px-3 py-1.5 text-xs font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
-                        >
-                          Save
-                        </button>
-                      </div>
-                    ))}
+              {/* Background queued confirmation */}
+              {resumeQueued && (
+                <div className="flex items-start gap-3 p-4 rounded-xl bg-blue-50 border border-blue-200">
+                  <Bell className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs font-semibold text-blue-800">Processing in the background</p>
+                    <p className="text-[11px] text-blue-600 mt-0.5">
+                      AI is parsing your resumes. You'll get a notification in the bell icon when done.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={onClose}
+                      className="mt-2 text-xs font-medium text-blue-600 hover:text-blue-700"
+                    >
+                      Close this panel →
+                    </button>
                   </div>
                 </div>
               )}

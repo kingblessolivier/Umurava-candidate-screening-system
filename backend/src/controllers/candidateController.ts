@@ -1,11 +1,18 @@
 import { Request, Response } from "express";
 import { Candidate } from "../models/Candidate";
 import { parseResumeToProfile } from "../services/geminiService";
+import {
+  createJob,
+  updateJob,
+  sendNotificationToUser,
+} from "../services/backgroundJobService";
 import { TalentProfile } from "../types";
 import csv from "csv-parser";
 import { Readable } from "stream";
 import pdfParse from "pdf-parse";
 import * as XLSX from "xlsx";
+
+type AuthedRequest = Request & { user?: { _id: string } };
 
 // ─── CRUD ──────────────────────────────────────────────────────────────────────
 
@@ -223,7 +230,7 @@ export const uploadCSV = async (req: Request, res: Response) => {
   }
 };
 
-// ─── PDF Resume Upload ─────────────────────────────────────────────────────────
+// ─── PDF Resume Upload (background) ───────────────────────────────────────────
 
 export const uploadPDFResumes = async (req: Request, res: Response) => {
   try {
@@ -231,49 +238,127 @@ export const uploadPDFResumes = async (req: Request, res: Response) => {
     if (!files?.length) return res.status(400).json({ success: false, error: "No PDF files uploaded" });
     if (files.length > 20) return res.status(400).json({ success: false, error: "Maximum 20 PDFs per upload" });
 
-    const results = { parsed: [] as object[], errors: [] as string[] };
+    const jobId = (req.query.jobId as string) || (req.headers["x-job-id"] as string);
+    if (!jobId) {
+      return res.status(400).json({
+        success: false,
+        error: "jobId is required (pass as query parameter ?jobId=<id> or header X-Job-Id)",
+      });
+    }
 
-    await Promise.allSettled(
-      files.map(async (file) => {
-        try {
-          const pdfData = await pdfParse(file.buffer);
-          const rawText = pdfData.text;
-          const emailMatch = rawText.match(/[\w.-]+@[\w.-]+\.\w+/);
-          const email = emailMatch?.[0]?.toLowerCase();
+    const { Job } = await import("../models/Job");
+    const jobExists = await Job.findById(jobId).lean();
+    if (!jobExists) {
+      return res.status(404).json({ success: false, error: `Job ${jobId} not found` });
+    }
 
-          const profile = await parseResumeToProfile(rawText, email);
+    const userId = (req as AuthedRequest).user!._id;
+    const bgJob = createJob("pdf_upload", userId, {
+      jobId,
+      jobTitle: (jobExists as { title?: string }).title ?? jobId,
+      fileCount: files.length,
+    });
 
-          // jobId must be provided via query parameter or headers
-          const jobId = (req.query.jobId as string) || (req.headers["x-job-id"] as string);
-          if (!jobId) {
-            throw new Error("jobId is required (pass as query parameter ?jobId=<id> or header X-Job-Id)");
+    // Respond immediately so the user can navigate away
+    res.status(202).json({
+      success: true,
+      data: {
+        jobId: bgJob.id,
+        status: "pending",
+        message: `Parsing ${files.length} resume(s) in the background. You'll be notified when done.`,
+      },
+    });
+
+    // ── Process PDFs asynchronously ───────────────────────────────────────────
+    // Copy buffers now — multer recycles request memory after the response is sent
+    const fileSnapshots = files.map((f) => ({
+      originalname: f.originalname,
+      buffer: Buffer.from(f.buffer), // defensive copy
+    }));
+
+    setImmediate(async () => {
+      try {
+        updateJob(bgJob.id, "running");
+
+        const results = { parsed: [] as object[], errors: [] as string[] };
+
+        // Process sequentially — pdfjs-dist allocates a large WASM heap per parse;
+        // running them in parallel exhausts Node's addressable memory and throws
+        // RangeError: Array buffer allocation failed via a native EventEmitter,
+        // which escapes try/catch and becomes an uncaughtException.
+        for (const file of fileSnapshots) {
+          try {
+            const pdfData = await pdfParse(file.buffer);
+            const rawText = pdfData.text;
+
+            // Clean up noisy PDF extraction output before sending to AI
+            const cleanedText = rawText
+              .replace(/\r\n/g, "\n")
+              .replace(/\r/g, "\n")
+              .replace(/[ \t]+/g, " ")          // collapse horizontal whitespace
+              .replace(/\n{3,}/g, "\n\n")        // max two blank lines
+              .replace(/^\s*\d+\s*$/gm, "")      // remove lone page numbers
+              .replace(/[^\x00-\x7F]/g, " ")     // strip non-ASCII artifacts
+              .trim();
+
+            const emailMatch = cleanedText.match(/[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,}/);
+            const email = emailMatch?.[0]?.toLowerCase();
+
+            const profile = await parseResumeToProfile(cleanedText, email);
+
+            const candidate = await Candidate.findOneAndUpdate(
+              { email: profile.email || email },
+              { ...profile, jobId, source: "pdf", parsedResumeText: cleanedText.substring(0, 6000) },
+              { upsert: true, new: true, setDefaultsOnInsert: true }
+            );
+
+            results.parsed.push({
+              candidateId: candidate._id,
+              name: `${profile.firstName} ${profile.lastName}`,
+              email: profile.email || email,
+            });
+          } catch (err) {
+            results.errors.push(
+              `${file.originalname}: ${err instanceof Error ? err.message : "Parse failed"}`
+            );
           }
-
-          // Verify the job exists
-          const { Job } = await import("../models/Job");
-          const jobExists = await Job.findById(jobId);
-          if (!jobExists) {
-            throw new Error(`Job ${jobId} not found`);
-          }
-
-          const candidate = await Candidate.findOneAndUpdate(
-            { email: profile.email || email },
-            { ...profile, jobId, source: "pdf", parsedResumeText: rawText.substring(0, 5000) },
-            { upsert: true, new: true, setDefaultsOnInsert: true }
-          );
-
-          results.parsed.push({
-            candidateId: candidate._id,
-            name: `${profile.firstName} ${profile.lastName}`,
-            email: profile.email || email,
-          });
-        } catch (err) {
-          results.errors.push(`${file.originalname}: ${err instanceof Error ? err.message : "Parse failed"}`);
         }
-      })
-    );
 
-    res.json({ success: true, data: results });
+        updateJob(bgJob.id, "done", {
+          parsed: results.parsed.length,
+          errors: results.errors.length,
+        });
+
+        const jobTitle = (bgJob.metadata.jobTitle as string) ?? jobId;
+        sendNotificationToUser(userId, {
+          type: "job_update",
+          jobId: bgJob.id,
+          jobType: "pdf_upload",
+          status: "done",
+          title: "Resume Upload Complete",
+          message: `${results.parsed.length} of ${files.length} resume(s) parsed for "${jobTitle}".${
+            results.errors.length ? ` ${results.errors.length} failed.` : ""
+          }`,
+          metadata: bgJob.metadata,
+          result: { parsed: results.parsed.length, errors: results.errors.length },
+          timestamp: new Date().toISOString(),
+        });
+      } catch (err) {
+        const error = err instanceof Error ? err.message : "PDF parsing failed";
+        updateJob(bgJob.id, "failed", undefined, error);
+        sendNotificationToUser(userId, {
+          type: "job_update",
+          jobId: bgJob.id,
+          jobType: "pdf_upload",
+          status: "failed",
+          title: "Resume Upload Failed",
+          message: error,
+          metadata: bgJob.metadata,
+          error,
+          timestamp: new Date().toISOString(),
+        });
+      }
+    });
   } catch (err) {
     res.status(500).json({ success: false, error: "PDF upload failed" });
   }

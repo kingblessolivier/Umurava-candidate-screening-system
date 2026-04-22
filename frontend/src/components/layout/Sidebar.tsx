@@ -11,8 +11,6 @@ import {
   BarChart3,
   Trophy,
   LogOut,
-  ChevronLeft,
-  ChevronRight,
   Sparkles,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
@@ -29,10 +27,9 @@ const navItems = [
   { href: '/analytics', icon: BarChart3, label: 'Analytics' },
 ];
 
-export function Sidebar() {
+export function Sidebar({ isCollapsed }: { isCollapsed: boolean }) {
   const pathname = usePathname();
   const { user, handleLogout } = useAuth();
-  const [isCollapsed, setIsCollapsed] = useState(false);
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
 
   const onLogout = () => {
@@ -40,8 +37,7 @@ export function Sidebar() {
   };
 
   return (
-    <>
-      <motion.aside
+    <motion.aside
         initial={{ x: -20, opacity: 0 }}
         animate={{ x: 0, opacity: 1 }}
         transition={{ duration: 0.3, ease: 'easeOut' }}
@@ -132,27 +128,6 @@ export function Sidebar() {
           })}
         </nav>
 
-        {/* Collapse Toggle */}
-        <div className="px-3 py-3 border-t border-blue-500">
-          <button
-            onClick={() => setIsCollapsed(!isCollapsed)}
-            className={cn(
-              'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm',
-              'text-blue-100 hover:bg-blue-500 hover:text-white transition-all duration-200',
-              isCollapsed && 'justify-center px-2'
-            )}
-            aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          >
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-blue-500">
-              {isCollapsed ? (
-                <ChevronRight className="w-4 h-4" />
-              ) : (
-                <ChevronLeft className="w-4 h-4" />
-              )}
-            </div>
-            {!isCollapsed && <span className="text-xs">Collapse</span>}
-          </button>
-        </div>
 
         {/* User & Logout */}
         <div className="px-3 py-4 border-t border-blue-500">
@@ -192,13 +167,5 @@ export function Sidebar() {
           </button>
         </div>
       </motion.aside>
-
-      {/* Spacer for main content */}
-      <motion.div
-        animate={{ width: isCollapsed ? 72 : 240 }}
-        transition={{ duration: 0.3, ease: 'easeOut' }}
-        className="flex-shrink-0"
-      />
-    </>
   );
 }

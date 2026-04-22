@@ -4,9 +4,10 @@ import { useDispatch, useSelector }       from "react-redux";
 import { AppDispatch, RootState }         from "@/store";
 import { uploadCSV, uploadPDFs, bulkImportJSON, fetchCandidates } from "@/store/candidatesSlice";
 import { useRouter }                      from "next/navigation";
+import { useJobs }                        from "@/hooks/useJobs";
 import toast                              from "react-hot-toast";
 import { motion, AnimatePresence }        from "framer-motion";
-import { Upload, FileText, FileSpreadsheet, Code2, CheckCircle, XCircle, Loader2, ArrowLeft } from "lucide-react";
+import { Upload, FileText, FileSpreadsheet, Code2, CheckCircle, XCircle, Loader2, ArrowLeft, Bell } from "lucide-react";
 import Link from "next/link";
 
 type TabType = "csv" | "pdf" | "json";
@@ -28,12 +29,15 @@ export default function UploadCandidatesPage() {
   const dispatch    = useDispatch<AppDispatch>();
   const router      = useRouter();
   const { uploading } = useSelector((s: RootState) => s.candidates);
+  const { jobs } = useJobs();
 
-  const [tab, setTab]         = useState<TabType>("csv");
+  const [tab, setTab]           = useState<TabType>("csv");
   const [dragging, setDragging] = useState(false);
-  const [files, setFiles]     = useState<File[]>([]);
+  const [files, setFiles]       = useState<File[]>([]);
   const [jsonText, setJsonText] = useState(SAMPLE_JSON);
-  const [result, setResult]   = useState<{ created: number; skipped: number; errors: string[] } | null>(null);
+  const [pdfJobId, setPdfJobId] = useState("");
+  const [pdfQueued, setPdfQueued] = useState(false);
+  const [result, setResult]     = useState<{ created: number; skipped: number; errors: string[] } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const accept = tab === "pdf" ? ".pdf" : ".csv,.xlsx,.xls";
@@ -48,28 +52,29 @@ export default function UploadCandidatesPage() {
 
   const handleUpload = async () => {
     setResult(null);
+    setPdfQueued(false);
     try {
-      let res: { created: number; skipped: number; errors: string[] };
-
       if (tab === "json") {
         let parsed: unknown;
         try { parsed = JSON.parse(jsonText); } catch { return toast.error("Invalid JSON"); }
         if (!Array.isArray(parsed)) return toast.error("JSON must be an array of candidate objects");
-        res = await dispatch(bulkImportJSON(parsed)).unwrap() as { created: number; skipped: number; errors: string[] };
+        const res = await dispatch(bulkImportJSON(parsed)).unwrap() as { created: number; skipped: number; errors: string[] };
+        setResult(res);
+        await dispatch(fetchCandidates({}));
+        if (res.created > 0) toast.success(`${res.created} candidates imported!`);
       } else if (tab === "csv") {
         if (!files[0]) return toast.error("Select a CSV or Excel file first");
-        res = await dispatch(uploadCSV(files[0])).unwrap() as { created: number; skipped: number; errors: string[] };
+        const res = await dispatch(uploadCSV({ file: files[0] })).unwrap() as { created: number; skipped: number; errors: string[] };
+        setResult(res);
+        await dispatch(fetchCandidates({}));
+        if (res.created > 0) toast.success(`${res.created} candidates imported!`);
       } else {
+        // PDF — runs in background
         if (!files.length) return toast.error("Select PDF files first");
-        const pdfResult = await dispatch(uploadPDFs(files)).unwrap() as { parsed: object[]; errors: string[] };
-        res = { created: pdfResult.parsed.length, skipped: 0, errors: pdfResult.errors };
-      }
-
-      setResult(res);
-      await dispatch(fetchCandidates({}));
-
-      if (res.created > 0) {
-        toast.success(`${res.created} candidates imported successfully!`);
+        if (!pdfJobId) return toast.error("Select a job position for the PDF resumes");
+        await dispatch(uploadPDFs({ files, jobId: pdfJobId })).unwrap();
+        setPdfQueued(true);
+        setFiles([]);
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Upload failed");
@@ -98,7 +103,7 @@ export default function UploadCandidatesPage() {
         ] as { id: TabType; label: string; icon: React.ElementType }[]).map(({ id, label, icon: Icon }) => (
           <button
             key={id}
-            onClick={() => { setTab(id); setFiles([]); setResult(null); }}
+            onClick={() => { setTab(id); setFiles([]); setResult(null); setPdfQueued(false); }}
             className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all"
             style={{
               background: tab === id ? "rgba(59,130,246,0.15)" : "transparent",
@@ -110,6 +115,27 @@ export default function UploadCandidatesPage() {
           </button>
         ))}
       </div>
+
+      {/* Job selector — required for PDF uploads */}
+      {tab === "pdf" && (
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-gray-400">Job Position (required)</label>
+          <select
+            value={pdfJobId}
+            onChange={e => setPdfJobId(e.target.value)}
+            className="w-full px-3 py-2.5 rounded-xl text-sm text-white outline-none"
+            style={{ background: "var(--bg-surface)", border: "1px solid var(--border)" }}
+          >
+            <option value="">— Select a job —</option>
+            {jobs.map(j => (
+              <option key={j._id} value={j._id}>{j.title}</option>
+            ))}
+          </select>
+          <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+            Resumes will be parsed by AI and linked to the selected job.
+          </p>
+        </div>
+      )}
 
       {/* Drop zone */}
       {tab !== "json" && (
@@ -181,6 +207,33 @@ export default function UploadCandidatesPage() {
       >
         {uploading ? <><Loader2 className="w-4 h-4 animate-spin" /> Processing…</> : <><Upload className="w-4 h-4" /> Import Candidates</>}
       </button>
+
+      {/* PDF queued state */}
+      <AnimatePresence>
+        {pdfQueued && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className="rounded-2xl p-5 flex items-start gap-4"
+            style={{ background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.25)" }}
+          >
+            <Bell className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-blue-300">Processing in the background</p>
+              <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+                AI is parsing your resumes. You'll receive a notification in the bell icon when it's done — feel free to navigate anywhere.
+              </p>
+              <button
+                onClick={() => router.push("/candidates")}
+                className="mt-3 text-xs text-blue-400 hover:text-blue-300"
+              >
+                View candidates →
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Result */}
       <AnimatePresence>

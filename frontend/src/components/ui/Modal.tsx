@@ -10,7 +10,7 @@ interface ModalProps {
   onClose: () => void;
   title?: string;
   subtitle?: string;
-  size?: "sm" | "md" | "lg" | "xl";
+  size?: "sm" | "md" | "lg" | "xl" | "2xl";
   children: React.ReactNode;
   showCloseButton?: boolean;
   headerAccent?: "blue" | "violet" | "emerald" | "amber" | "rose";

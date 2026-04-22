@@ -125,11 +125,21 @@ startServer();
 // Handle unhandled promise rejections
 process.on("unhandledRejection", (err) => {
   console.error("Unhandled Rejection:", err);
+  // Don't exit for memory errors thrown by background PDF/AI workers —
+  // pdfjs-dist raises RangeError via internal EventEmitters that bypass try/catch.
+  if (err instanceof RangeError && err.message.includes("Array buffer allocation failed")) {
+    console.warn("[background-job] Array buffer allocation failed — skipping server exit");
+    return;
+  }
   process.exit(1);
 });
 
 // Handle uncaught exceptions
 process.on("uncaughtException", (err) => {
   console.error("Uncaught Exception:", err);
+  if (err instanceof RangeError && err.message.includes("Array buffer allocation failed")) {
+    console.warn("[background-job] Array buffer allocation failed — skipping server exit");
+    return;
+  }
   process.exit(1);
 });

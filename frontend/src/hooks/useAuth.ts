@@ -20,9 +20,10 @@ interface RegisterData {
 export function useAuth() {
   const dispatch = useDispatch<AppDispatch>();
   const router = useRouter();
-  const { user, isAuthenticated, loading, error } = useSelector(
+  const { user, token, loading, error } = useSelector(
     (state: RootState) => state.auth
   );
+  const isAuthenticated = !!token;
 
   const handleLogin = useCallback(
     async (credentials: LoginCredentials) => {

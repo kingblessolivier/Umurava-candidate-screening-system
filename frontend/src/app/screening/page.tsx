@@ -2,9 +2,13 @@
 
 import React, { useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
+import { useDispatch, useSelector } from 'react-redux';
+import { AppDispatch, RootState } from '@/store';
+import { stopRunning } from '@/store/screeningSlice';
 import { useJobs } from '@/hooks/useJobs';
 import { useJobCandidates } from '@/hooks/useJobCandidates';
 import { useScreening } from '@/hooks/useScreening';
+import { useNotifications } from '@/contexts/NotificationsContext';
 import {
   Zap,
   Loader2,
@@ -39,6 +43,7 @@ function formatTime(seconds: number): string {
 
 export default function ScreeningPage() {
   const router = useRouter();
+  const dispatch = useDispatch<AppDispatch>();
   const params = useSearchParams();
   const preJobId = params.get('jobId');
 
@@ -51,6 +56,8 @@ export default function ScreeningPage() {
   // Hooks after state
   const { jobs, loading: jobsLoading } = useJobs();
   const { total: candidateCount } = useJobCandidates(jobId || null);
+  const { notifications } = useNotifications();
+  const pendingBgJobId = useSelector((s: RootState) => s.screening.pendingBgJobId);
   const {
     handleRunScreening,
     running,
@@ -118,6 +125,19 @@ export default function ScreeningPage() {
 
   const totalWeight = Object.values(customWeights).reduce((a, b) => a + b, 0);
 
+  // When an SSE notification arrives for our pending background job, navigate to results
+  useEffect(() => {
+    if (!pendingBgJobId) return;
+    const completedNotif = notifications.find(
+      (n) => n.bgJobId === pendingBgJobId
+    );
+    if (!completedNotif) return;
+    dispatch(stopRunning());
+    if (completedNotif.link) {
+      router.push(completedNotif.link);
+    }
+  }, [notifications, pendingBgJobId, dispatch, router]);
+
   const handleRun = async () => {
     if (!jobId) {
       toast.error('Please select a job position');
@@ -140,9 +160,7 @@ export default function ScreeningPage() {
       clearScreeningThoughts();
       const result = await handleRunScreening({ jobId, shortlistSize });
       if (result.meta.requestStatus === 'fulfilled') {
-        const data = result.payload as { _id: string; shortlistSize: number; processingTimeMs: number };
-        toast.success(`${data.shortlistSize} candidates shortlisted in ${(data.processingTimeMs / 1000).toFixed(1)}s`);
-        router.push(`/results/${data._id}`);
+        toast.success("Screening started! We'll notify you when it's done — feel free to navigate away.");
       } else {
         toast.error((result.payload as string) || 'Screening failed');
       }
@@ -265,13 +283,21 @@ export default function ScreeningPage() {
 
             {/* Status Pill */}
             {running ? (
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-50 border border-blue-200">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
-                </span>
-                <span className="text-xs font-medium text-blue-700">Screening in progress</span>
-                <span className="text-xs text-blue-500 font-mono">{formatTime(elapsedTime)}</span>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-50 border border-blue-200">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                  </span>
+                  <span className="text-xs font-medium text-blue-700">Running in background</span>
+                  <span className="text-xs text-blue-500 font-mono">{formatTime(elapsedTime)}</span>
+                </div>
+                <button
+                  onClick={() => router.push('/')}
+                  className="text-xs text-gray-500 hover:text-gray-700 underline underline-offset-2"
+                >
+                  Go to dashboard →
+                </button>
               </div>
             ) : (
               <div className="flex items-center gap-2 text-xs text-gray-500">

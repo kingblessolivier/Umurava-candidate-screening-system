@@ -2,8 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { Providers } from './providers';
 import { AuthGuard } from '@/components/layout/AuthGuard';
-import { SidebarClientWrapper } from '@/components/layout/SidebarClientWrapper';
-import { TopNavClientWrapper } from '@/components/layout/TopNavClientWrapper';
+import { LayoutWrapper } from '@/components/layout/LayoutWrapper';
 
 export const metadata: Metadata = {
   title: 'TalentAI — Intelligent Hiring Platform',
@@ -23,11 +22,7 @@ export default function RootLayout({
         <Providers>
           <AuthGuard>
             <div className="flex min-h-screen bg-white">
-              <SidebarClientWrapper />
-              <main className="flex-1 min-h-screen flex flex-col">
-                <TopNavClientWrapper />
-                <div className="py-4 px-6 flex-1">{children}</div>
-              </main>
+              <LayoutWrapper>{children}</LayoutWrapper>
             </div>
           </AuthGuard>
         </Providers>
