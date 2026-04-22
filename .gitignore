@@ -1,24 +1,21 @@
-node_modules/
-dist/
-.env
-.env.local
-.next/
-*.log
-.DS_Store
-# Node modules
+# Dependencies
 node_modules/
 
-# Environment variables
+# Environment variables (IMPORTANT - never commit these)
 .env
+.env.local
+.env.*.local
+.env.production.local
+
+# Build output
+dist/
+build/
+.next/
 
 # Logs
 logs
 *.log
 npm-debug.log*
-
-# Build output
-dist/
-build/
 
 # OS files
 .DS_Store
