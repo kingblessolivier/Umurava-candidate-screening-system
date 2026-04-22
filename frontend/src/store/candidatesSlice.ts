@@ -35,11 +35,12 @@ export const updateCandidate = createAsyncThunk("candidates/update", async ({ id
   return data.data;
 });
 
-export const uploadCSV = createAsyncThunk("candidates/uploadCSV", async (file: File) => {
+export const uploadCSV = createAsyncThunk("candidates/uploadCSV", async ({ file, jobId }: { file: File; jobId?: string }) => {
   const form = new FormData();
   form.append("file", file);
+  const url = jobId ? `/candidates/upload/csv?jobId=${jobId}` : "/candidates/upload/csv";
   const { data } = await api.post<{ data: { created: number; skipped: number; errors: string[] } }>(
-    "/candidates/upload/csv", form, { headers: { "Content-Type": "multipart/form-data" } }
+    url, form, { headers: { "Content-Type": "multipart/form-data" } }
   );
   return data.data;
 });
@@ -57,6 +58,11 @@ export const bulkImportJSON = createAsyncThunk("candidates/bulkJSON", async (pro
   const { data } = await api.post<{ data: { created: number; skipped: number; errors: string[] } }>(
     "/candidates/bulk", profiles
   );
+  return data.data;
+});
+
+export const createCandidate = createAsyncThunk("candidates/create", async (candidate: Partial<Candidate>) => {
+  const { data } = await api.post<{ data: Candidate }>("/candidates", candidate);
   return data.data;
 });
 
@@ -98,6 +104,7 @@ const candidatesSlice = createSlice({
      .addCase(uploadPDFs.pending,   (s) => { s.uploading = true; })
      .addCase(uploadPDFs.fulfilled, (s) => { s.uploading = false; })
      .addCase(uploadPDFs.rejected,  (s, { error }) => { s.uploading = false; s.error = error.message || "Upload failed"; })
+     .addCase(createCandidate.fulfilled, (s, { payload }) => { s.items.unshift(payload); s.total++; })
      .addCase(deleteCandidate.fulfilled, (s, { payload }) => { s.items = s.items.filter(c => c._id !== payload); s.total--; });
   },
 });

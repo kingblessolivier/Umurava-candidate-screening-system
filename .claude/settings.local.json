@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "PowerShell(Invoke-Item *)",
+      "Bash(rm -rf .next/trace)",
+      "Bash(npx next *)"
+    ]
+  }
+}

@@ -23,6 +23,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Input } from '@/components/ui/Input';
 import { TextArea } from '@/components/ui/TextArea';
 import { Select } from '@/components/ui/Select';
+import { Modal } from '@/components/ui/Modal';
 import toast from 'react-hot-toast';
 
 const SKILL_LEVEL_VARIANTS: Record<string, 'success' | 'primary' | 'warning' | 'neutral'> = {
@@ -85,13 +86,32 @@ export function CandidateDetailModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
-      <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto bg-white rounded-lg shadow-xl">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={`${formData.firstName} ${formData.lastName}`}
+      subtitle={formData.headline || ''}
+      size="2xl"
+      headerAccent="violet"
+      showCloseButton={true}
+      className="p-0"
+      panelClassName="bg-white"
+    >
         {/* Header */}
-        <div className="sticky top-0 bg-white border-b border-gray-200 p-6 flex items-center justify-between">
-          <h2 className="text-2xl font-semibold text-gray-900">
-            {formData.firstName} {formData.lastName}
-          </h2>
+        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-violet-50 via-white to-purple-50">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm shadow-md shadow-violet-500/20">
+              {formData.firstName?.[0]}{formData.lastName?.[0]}
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-gray-900">
+                {formData.firstName} {formData.lastName}
+              </h2>
+              {formData.headline && (
+                <p className="text-xs text-gray-500">{formData.headline}</p>
+              )}
+            </div>
+          </div>
           <div className="flex items-center gap-2">
             {isEditing && (
               <Button
@@ -106,7 +126,7 @@ export function CandidateDetailModal({
             )}
             <button
               onClick={() => (isEditing ? setIsEditing(false) : onClose())}
-              className="p-2 hover:bg-gray-100 rounded-lg transition"
+              className="p-2 hover:bg-gray-100 rounded-lg transition text-gray-400 hover:text-gray-600"
             >
               {isEditing ? <XIcon className="w-5 h-5" /> : <X className="w-5 h-5" />}
             </button>
@@ -428,7 +448,7 @@ export function CandidateDetailModal({
           )}
 
           {/* Metadata */}
-          <section className="border-t border-gray-200 pt-4">
+          <section className="border-t border-gray-100 pt-4">
             <div className="text-sm text-gray-500 space-y-1">
               <p>Source: {formData.source || 'platform'}</p>
               {formData.createdAt && (
@@ -437,7 +457,6 @@ export function CandidateDetailModal({
             </div>
           </section>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

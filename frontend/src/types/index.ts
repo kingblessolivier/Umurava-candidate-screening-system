@@ -30,12 +30,19 @@ export interface Certification {
   issueDate?: string;
 }
 
+export interface Language {
+  name: string;
+  proficiency: "Basic" | "Conversational" | "Fluent" | "Native";
+}
+
 export interface Project {
   name: string;
   description?: string;
   technologies: string[];
   role?: string;
   link?: string;
+  startDate?: string;
+  endDate?: string;
   impact?: string;
 }
 
@@ -50,6 +57,7 @@ export interface Candidate {
   location: string;
   jobId: string;
   skills: Skill[];
+  languages?: Language[];
   experience: WorkExperience[];
   education: Education[];
   certifications?: Certification[];
@@ -57,6 +65,7 @@ export interface Candidate {
   availability: {
     status: "Available" | "Open to Opportunities" | "Not Available";
     type: "Full-time" | "Part-time" | "Contract" | "Freelance";
+    startDate?: string;
     noticePeriod?: string;
   };
   socialLinks?: { linkedin?: string; github?: string; portfolio?: string };
