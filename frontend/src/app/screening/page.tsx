@@ -47,30 +47,30 @@ function SysHeader({ running, elapsed, user }: { running: boolean; elapsed: numb
   }, []);
 
   return (
-    <div className="h-9 bg-[#0d1b2a] border-b border-[#1e3a5f] flex items-center px-4 gap-0 flex-shrink-0 select-none">
+    <div className="h-9 bg-white border-b border-gray-200 flex items-center px-4 gap-0 flex-shrink-0 select-none">
       {/* Left: system identity */}
       <div className="flex items-center gap-3 flex-1">
         <div className="flex items-center gap-1.5">
-          <div className="w-2 h-2 rounded-full bg-[#22c55e] shadow-[0_0_6px_#22c55e]" />
-          <span className="text-[11px] font-bold text-[#e2e8f0] tracking-widest uppercase">TalentAI</span>
+          <div className="w-2 h-2 rounded-full bg-green-500" />
+          <span className="text-[11px] font-bold text-gray-900 tracking-widest uppercase">TalentAI</span>
         </div>
-        <div className="w-px h-3.5 bg-[#334155]" />
-        <span className="text-[10px] text-[#64748b] tracking-wider uppercase">Enterprise Screening Module</span>
-        <div className="w-px h-3.5 bg-[#334155]" />
-        <span className="text-[10px] text-[#475569] font-mono">v2.1.0</span>
+        <div className="w-px h-3.5 bg-gray-200" />
+        <span className="text-[10px] text-gray-500 tracking-wider uppercase">Enterprise Screening Module</span>
+        <div className="w-px h-3.5 bg-gray-200" />
+        <span className="text-[10px] text-gray-400 font-mono">v2.1.0</span>
       </div>
 
       {/* Center: status */}
       <div className="flex items-center gap-4">
         {running ? (
-          <div className="flex items-center gap-1.5 px-2.5 py-0.5 bg-[#1a3a20] border border-[#22c55e]/30 rounded">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e] animate-pulse" />
-            <span className="text-[10px] font-mono text-[#4ade80] tracking-wider">PROCESSING · {formatTime(elapsed)}</span>
+          <div className="flex items-center gap-1.5 px-2.5 py-0.5 bg-green-50 border border-green-200 rounded">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+            <span className="text-[10px] font-mono text-green-700 tracking-wider">PROCESSING · {formatTime(elapsed)}</span>
           </div>
         ) : (
-          <div className="flex items-center gap-1.5 px-2.5 py-0.5 bg-[#1a2535] border border-[#334155] rounded">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e]" />
-            <span className="text-[10px] font-mono text-[#94a3b8] tracking-wider">IDLE · READY</span>
+          <div className="flex items-center gap-1.5 px-2.5 py-0.5 bg-gray-50 border border-gray-200 rounded">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+            <span className="text-[10px] font-mono text-gray-500 tracking-wider">IDLE · READY</span>
           </div>
         )}
       </div>
@@ -78,11 +78,11 @@ function SysHeader({ running, elapsed, user }: { running: boolean; elapsed: numb
       {/* Right: operator info */}
       <div className="flex items-center gap-4 flex-1 justify-end">
         <div className="flex items-center gap-3 text-[10px] font-mono">
-          <span className="text-[#475569]">OPERATOR: <span className="text-[#94a3b8]">{user?.name?.split(' ')[0]?.toUpperCase() ?? 'SYS'}</span></span>
-          <div className="w-px h-3 bg-[#334155]" />
-          <span className="text-[#475569]">UTC: <span className="text-[#94a3b8]">{clock}</span></span>
-          <div className="w-px h-3 bg-[#334155]" />
-          <span className="text-[#475569]">NODE: <span className="text-[#94a3b8]">GEMINI-2.5</span></span>
+          <span className="text-gray-400">OPERATOR: <span className="text-gray-600">{user?.name?.split(' ')[0]?.toUpperCase() ?? 'SYS'}</span></span>
+          <div className="w-px h-3 bg-gray-200" />
+          <span className="text-gray-400">UTC: <span className="text-gray-600">{clock}</span></span>
+          <div className="w-px h-3 bg-gray-200" />
+          <span className="text-gray-400">NODE: <span className="text-gray-600">GEMINI-2.5</span></span>
         </div>
       </div>
     </div>
@@ -100,7 +100,7 @@ function WorkflowBar({ step, running }: { step: 'setup' | 'criteria' | 'review';
   const currentIdx = running ? 3 : order.indexOf(step);
 
   return (
-    <div className="bg-[#0f1f33] border-b border-[#1e3a5f] px-4 py-0 flex-shrink-0">
+    <div className="bg-white border-b border-gray-200 px-4 py-0 flex-shrink-0">
       <div className="flex items-stretch">
         {steps.map((s, i) => {
           const idx   = i;
@@ -110,34 +110,34 @@ function WorkflowBar({ step, running }: { step: 'setup' | 'criteria' | 'review';
             <div key={s.id} className="flex items-stretch flex-1">
               <div className={cn(
                 'flex items-center gap-2.5 py-2.5 px-3 flex-1 border-b-2 transition-all',
-                active  ? 'border-[#3b82f6] bg-[#0d1b2a]/60' :
-                done    ? 'border-[#22c55e] bg-transparent' :
+                active  ? 'border-blue-500 bg-gray-50' :
+                done    ? 'border-green-500 bg-transparent' :
                           'border-transparent bg-transparent'
               )}>
                 {/* Step num circle */}
                 <div className={cn(
                   'w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0',
-                  done   ? 'bg-[#22c55e] text-[#0f1923]' :
-                  active ? 'bg-[#3b82f6] text-white' :
-                           'bg-[#1e3a5f] text-[#475569]'
+                  done   ? 'bg-green-500 text-white' :
+                  active ? 'bg-blue-500 text-white' :
+                           'bg-gray-100 text-gray-400'
                 )}>
                   {done ? '✓' : s.num}
                 </div>
                 <div className="min-w-0">
                   <p className={cn(
                     'text-[9px] font-bold tracking-widest truncate',
-                    active  ? 'text-[#93c5fd]' :
-                    done    ? 'text-[#4ade80]' :
-                              'text-[#475569]'
+                    active  ? 'text-blue-600' :
+                    done    ? 'text-green-600' :
+                              'text-gray-400'
                   )}>
                     {s.label}
                   </p>
-                  <p className="text-[8px] text-[#334155] truncate">{s.desc}</p>
+                  <p className="text-[8px] text-gray-400 truncate">{s.desc}</p>
                 </div>
               </div>
               {i < steps.length - 1 && (
                 <div className="flex items-center px-0 flex-shrink-0">
-                  <ChevronRight className={cn('w-3 h-3', done ? 'text-[#22c55e]' : 'text-[#1e3a5f]')} />
+                  <ChevronRight className={cn('w-3 h-3', done ? 'text-green-500' : 'text-gray-200')} />
                 </div>
               )}
             </div>
@@ -164,17 +164,17 @@ function StatusBar({ totalCandidates, evaluatedCount, model }: { totalCandidates
   ];
 
   return (
-    <div className="h-7 bg-[#0d1b2a] border-t border-[#1e3a5f] flex items-center px-4 gap-0 flex-shrink-0">
+    <div className="h-7 bg-white border-t border-gray-200 flex items-center px-4 gap-0 flex-shrink-0">
       <div className="flex items-center gap-4 flex-1">
         {items.map(({ icon: Icon, label, val }) => (
           <div key={label} className="flex items-center gap-1.5 text-[9px] font-mono">
-            <Icon className="w-2.5 h-2.5 text-[#3b82f6]" />
-            <span className="text-[#475569]">{label}:</span>
-            <span className="text-[#64748b]">{val}</span>
+            <Icon className="w-2.5 h-2.5 text-blue-500" />
+            <span className="text-gray-400">{label}:</span>
+            <span className="text-gray-500">{val}</span>
           </div>
         ))}
       </div>
-      <span className="text-[9px] font-mono text-[#334155]">{clock} UTC</span>
+      <span className="text-[9px] font-mono text-gray-300">{clock} UTC</span>
     </div>
   );
 }
@@ -182,11 +182,11 @@ function StatusBar({ totalCandidates, evaluatedCount, model }: { totalCandidates
 // ─── Panel wrapper ─────────────────────────────────────────────────────────────
 function Panel({ title, badge, children, className }: { title: string; badge?: string; children: React.ReactNode; className?: string }) {
   return (
-    <div className={cn('border border-[#cbd5e1] rounded-none overflow-hidden bg-white flex flex-col', className)}>
-      <div className="flex items-center justify-between px-3 py-2 bg-[#1e3a5f] flex-shrink-0">
-        <span className="text-[10px] font-bold text-[#bfdbfe] tracking-widest uppercase">{title}</span>
+    <div className={cn('border border-gray-200 rounded-lg overflow-hidden bg-white flex flex-col', className)}>
+      <div className="flex items-center justify-between px-3 py-2 bg-gray-50 border-b border-gray-200 flex-shrink-0">
+        <span className="text-[10px] font-bold text-gray-600 tracking-widest uppercase">{title}</span>
         {badge && (
-          <span className="text-[9px] font-mono text-[#64748b] bg-[#0f1923] px-1.5 py-0.5 rounded">{badge}</span>
+          <span className="text-[9px] font-mono text-gray-500 bg-white px-1.5 py-0.5 rounded border border-gray-200">{badge}</span>
         )}
       </div>
       {children}
@@ -196,11 +196,11 @@ function Panel({ title, badge, children, className }: { title: string; badge?: s
 
 function FieldRow({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
   return (
-    <div className="flex items-center gap-0 border-b border-[#f1f5f9] last:border-0">
-      <div className="w-36 px-3 py-2 bg-[#f8fafc] border-r border-[#e2e8f0] flex-shrink-0">
-        <span className="text-[9px] font-bold text-[#64748b] tracking-wider uppercase">{label}</span>
+    <div className="flex items-center gap-0 border-b border-gray-100 last:border-0">
+      <div className="w-36 px-3 py-2 bg-gray-50 border-r border-gray-200 flex-shrink-0">
+        <span className="text-[9px] font-bold text-gray-500 tracking-wider uppercase">{label}</span>
       </div>
-      <div className={cn('flex-1 px-3 py-2 text-xs text-[#0f172a]', mono && 'font-mono')}>
+      <div className={cn('flex-1 px-3 py-2 text-xs text-gray-900', mono && 'font-mono')}>
         {value}
       </div>
     </div>
@@ -229,19 +229,19 @@ function StepJobSelection({
       <div className="space-y-4">
         <Panel title="01 — Job Selection" badge="REQUIRED">
           {/* Position reference */}
-          <div className="border-b border-[#e2e8f0] px-3 py-2 bg-[#f8fafc]">
-            <span className="text-[9px] font-bold text-[#64748b] tracking-widest">POSITION REFERENCE</span>
+          <div className="border-b border-gray-200 px-3 py-2 bg-gray-50">
+            <span className="text-[9px] font-bold text-gray-500 tracking-widest">POSITION REFERENCE</span>
           </div>
           <div className="p-3">
-            <div className="border border-[#cbd5e1] rounded-sm overflow-hidden">
-              <div className="px-2 py-1 bg-[#f1f5f9] border-b border-[#e2e8f0]">
-                <span className="text-[9px] font-bold text-[#94a3b8] tracking-wider">POSITION</span>
+            <div className="border border-gray-200 rounded-sm overflow-hidden">
+              <div className="px-2 py-1 bg-gray-50 border-b border-gray-200">
+                <span className="text-[9px] font-bold text-gray-400 tracking-wider">POSITION</span>
               </div>
               <select
                 value={jobId}
                 onChange={e => setJobId(e.target.value)}
                 disabled={jobsLoading}
-                className="w-full px-3 py-2.5 text-xs text-[#0f172a] bg-white border-0 outline-none focus:bg-[#eff6ff] transition-colors disabled:opacity-50 font-mono"
+                className="w-full px-3 py-2.5 text-xs text-gray-900 bg-white border-0 outline-none focus:bg-blue-50 transition-colors disabled:opacity-50 font-mono"
               >
                 <option value="">— SELECT POSITION —</option>
                 {jobs.map(j => (
@@ -256,8 +256,8 @@ function StepJobSelection({
           {/* Position details */}
           {selectedJob && (
             <>
-              <div className="border-t border-[#e2e8f0] px-3 py-1.5 bg-[#f8fafc]">
-                <span className="text-[9px] font-bold text-[#64748b] tracking-widest">POSITION DETAILS</span>
+              <div className="border-t border-gray-200 px-3 py-1.5 bg-gray-50">
+                <span className="text-[9px] font-bold text-gray-500 tracking-widest">POSITION DETAILS</span>
               </div>
               <FieldRow label="JOB TITLE"   value={selectedJob.title} />
               <FieldRow label="LEVEL"       value={selectedJob.experienceLevel} />
@@ -281,15 +281,15 @@ function StepJobSelection({
               </div>
             }
           />
-          <div className="flex items-center gap-0 border-b border-[#f1f5f9]">
-            <div className="w-36 px-3 py-2 bg-[#f8fafc] border-r border-[#e2e8f0] flex-shrink-0">
-              <span className="text-[9px] font-bold text-[#64748b] tracking-wider uppercase">SHORTLIST TARGET</span>
+          <div className="flex items-center gap-0 border-b border-gray-100">
+            <div className="w-36 px-3 py-2 bg-gray-50 border-r border-gray-200 flex-shrink-0">
+              <span className="text-[9px] font-bold text-gray-500 tracking-wider uppercase">SHORTLIST TARGET</span>
             </div>
             <div className="flex-1 px-3 py-1.5 flex items-center gap-3">
-              <div className="flex items-center border border-[#cbd5e1] rounded-sm overflow-hidden">
+              <div className="flex items-center border border-gray-200 rounded-sm overflow-hidden">
                 <button
                   onClick={() => setShortlistSize(Math.max(1, shortlistSize - 1))}
-                  className="px-2 py-1.5 bg-[#f1f5f9] hover:bg-[#e2e8f0] border-r border-[#cbd5e1] text-[#475569] transition-colors"
+                  className="px-2 py-1.5 bg-gray-50 hover:bg-gray-100 border-r border-gray-200 text-gray-600 transition-colors"
                 >
                   <ChevronDown className="w-3 h-3" />
                 </button>
@@ -299,11 +299,11 @@ function StepJobSelection({
                   max={Math.min(20, candidateCount || 20)}
                   value={shortlistSize}
                   onChange={e => setShortlistSize(Math.max(1, Math.min(20, Number(e.target.value))))}
-                  className="w-14 text-center text-xs font-mono font-bold text-[#0f172a] py-1.5 outline-none bg-white"
+                  className="w-14 text-center text-xs font-mono font-bold text-gray-900 py-1.5 outline-none bg-white"
                 />
                 <button
                   onClick={() => setShortlistSize(Math.min(20, candidateCount || 20, shortlistSize + 1))}
-                  className="px-2 py-1.5 bg-[#f1f5f9] hover:bg-[#e2e8f0] border-l border-[#cbd5e1] text-[#475569] transition-colors"
+                  className="px-2 py-1.5 bg-gray-50 hover:bg-gray-100 border-l border-gray-200 text-gray-600 transition-colors"
                 >
                   <ChevronUp className="w-3 h-3" />
                 </button>
@@ -406,41 +406,41 @@ function StepCriteria({
   return (
     <div className="grid grid-cols-[1fr_280px] gap-4">
       <Panel title="02 — Evaluation Criteria Configuration" badge="WEIGHT ALLOCATION">
-        <div className="px-3 py-2 bg-[#f8fafc] border-b border-[#e2e8f0]">
-          <p className="text-[9px] text-[#64748b]">
-            Assign relative weights to each evaluation criterion. <span className="font-bold text-[#0f172a]">TOTAL MUST EQUAL 100%.</span>
+        <div className="px-3 py-2 bg-gray-50 border-b border-gray-200">
+          <p className="text-[9px] text-gray-500">
+            Assign relative weights to each evaluation criterion. <span className="font-bold text-gray-900">TOTAL MUST EQUAL 100%.</span>
           </p>
         </div>
 
         {/* Table header */}
-        <div className="flex border-b border-[#e2e8f0] bg-[#f1f5f9]">
-          <div className="w-8 px-3 py-2 border-r border-[#e2e8f0] flex-shrink-0" />
-          <div className="w-44 px-3 py-2 border-r border-[#e2e8f0] flex-shrink-0">
-            <span className="text-[9px] font-bold text-[#475569] tracking-wider">CRITERION</span>
+        <div className="flex border-b border-gray-200 bg-gray-50">
+          <div className="w-8 px-3 py-2 border-r border-gray-200 flex-shrink-0" />
+          <div className="w-44 px-3 py-2 border-r border-gray-200 flex-shrink-0">
+            <span className="text-[9px] font-bold text-gray-600 tracking-wider">CRITERION</span>
           </div>
-          <div className="w-28 px-3 py-2 border-r border-[#e2e8f0] flex-shrink-0 text-center">
-            <span className="text-[9px] font-bold text-[#475569] tracking-wider">WEIGHT (%)</span>
+          <div className="w-28 px-3 py-2 border-r border-gray-200 flex-shrink-0 text-center">
+            <span className="text-[9px] font-bold text-gray-600 tracking-wider">WEIGHT (%)</span>
           </div>
           <div className="flex-1 px-3 py-2">
-            <span className="text-[9px] font-bold text-[#475569] tracking-wider">VISUAL ALLOCATION</span>
+            <span className="text-[9px] font-bold text-gray-600 tracking-wider">VISUAL ALLOCATION</span>
           </div>
-          <div className="w-36 px-3 py-2 border-l border-[#e2e8f0] flex-shrink-0">
-            <span className="text-[9px] font-bold text-[#475569] tracking-wider">DESCRIPTION</span>
+          <div className="w-36 px-3 py-2 border-l border-gray-200 flex-shrink-0">
+            <span className="text-[9px] font-bold text-gray-600 tracking-wider">DESCRIPTION</span>
           </div>
         </div>
 
         {/* Rows */}
         {criteria.map(({ key, label, desc }, i) => (
-          <div key={key} className="flex items-center border-b border-[#f1f5f9] last:border-0 hover:bg-[#f8fafc] transition-colors">
-            <div className="w-8 px-3 py-3 border-r border-[#e2e8f0] flex-shrink-0 text-center">
-              <span className="text-[9px] font-mono text-[#94a3b8]">{(i + 1).toString().padStart(2, '0')}</span>
+          <div key={key} className="flex items-center border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
+            <div className="w-8 px-3 py-3 border-r border-gray-200 flex-shrink-0 text-center">
+              <span className="text-[9px] font-mono text-gray-400">{(i + 1).toString().padStart(2, '0')}</span>
             </div>
-            <div className="w-44 px-3 py-3 border-r border-[#e2e8f0] flex-shrink-0">
-              <span className="text-[10px] font-bold text-[#0f172a] tracking-wide">{label}</span>
+            <div className="w-44 px-3 py-3 border-r border-gray-200 flex-shrink-0">
+              <span className="text-[10px] font-bold text-gray-900 tracking-wide">{label}</span>
             </div>
-            <div className="w-28 px-3 py-3 border-r border-[#e2e8f0] flex-shrink-0 text-center">
-              <div className="flex items-center justify-center border border-[#cbd5e1] rounded-sm overflow-hidden mx-auto w-20">
-                <button onClick={() => onChange({ ...weights, [key]: Math.max(0, weights[key] - 5) })} className="px-1.5 py-1 bg-[#f1f5f9] hover:bg-[#e2e8f0] border-r border-[#cbd5e1] text-[#475569]">
+            <div className="w-28 px-3 py-3 border-r border-gray-200 flex-shrink-0 text-center">
+              <div className="flex items-center justify-center border border-gray-200 rounded-sm overflow-hidden mx-auto w-20">
+                <button onClick={() => onChange({ ...weights, [key]: Math.max(0, weights[key] - 5) })} className="px-1.5 py-1 bg-gray-50 hover:bg-gray-100 border-r border-gray-200 text-gray-600">
                   <ChevronDown className="w-2.5 h-2.5" />
                 </button>
                 <input
@@ -448,16 +448,16 @@ function StepCriteria({
                   min={0} max={100}
                   value={weights[key]}
                   onChange={e => onChange({ ...weights, [key]: Math.max(0, Math.min(100, Number(e.target.value))) })}
-                  className="w-8 text-center text-xs font-mono font-bold text-[#0f172a] py-1 outline-none bg-white"
+                  className="w-8 text-center text-xs font-mono font-bold text-gray-900 py-1 outline-none bg-white"
                 />
-                <button onClick={() => onChange({ ...weights, [key]: Math.min(100, weights[key] + 5) })} className="px-1.5 py-1 bg-[#f1f5f9] hover:bg-[#e2e8f0] border-l border-[#cbd5e1] text-[#475569]">
+                <button onClick={() => onChange({ ...weights, [key]: Math.min(100, weights[key] + 5) })} className="px-1.5 py-1 bg-gray-50 hover:bg-gray-100 border-l border-gray-200 text-gray-600">
                   <ChevronUp className="w-2.5 h-2.5" />
                 </button>
               </div>
             </div>
             <div className="flex-1 px-3 py-3">
               <div className="flex items-center gap-2">
-                <div className="flex-1 h-1.5 bg-[#e2e8f0]">
+                <div className="flex-1 h-1.5 bg-gray-200">
                   <div
                     className="h-full transition-all duration-300"
                     style={{ width: `${weights[key]}%`, background: ['#2563eb','#7c3aed','#059669','#d97706','#db2777'][i] }}
@@ -465,31 +465,31 @@ function StepCriteria({
                 </div>
               </div>
             </div>
-            <div className="w-36 px-3 py-3 border-l border-[#e2e8f0] flex-shrink-0">
-              <p className="text-[9px] text-[#64748b] leading-relaxed">{desc}</p>
+            <div className="w-36 px-3 py-3 border-l border-gray-200 flex-shrink-0">
+              <p className="text-[9px] text-gray-500 leading-relaxed">{desc}</p>
             </div>
           </div>
         ))}
 
         {/* Totals row */}
-        <div className="flex items-center border-t-2 border-[#cbd5e1] bg-[#f8fafc]">
-          <div className="w-8 px-3 py-2.5 border-r border-[#e2e8f0] flex-shrink-0" />
-          <div className="w-44 px-3 py-2.5 border-r border-[#e2e8f0] flex-shrink-0">
-            <span className="text-[10px] font-bold text-[#0f172a] tracking-widest">TOTAL</span>
+        <div className="flex items-center border-t-2 border-gray-300 bg-gray-50">
+          <div className="w-8 px-3 py-2.5 border-r border-gray-200 flex-shrink-0" />
+          <div className="w-44 px-3 py-2.5 border-r border-gray-200 flex-shrink-0">
+            <span className="text-[10px] font-bold text-gray-900 tracking-widest">TOTAL</span>
           </div>
-          <div className="w-28 px-3 py-2.5 border-r border-[#e2e8f0] flex-shrink-0 text-center">
-            <span className={cn('text-sm font-bold font-mono', total === 100 ? 'text-[#16a34a]' : 'text-[#dc2626]')}>{total}%</span>
+          <div className="w-28 px-3 py-2.5 border-r border-gray-200 flex-shrink-0 text-center">
+            <span className={cn('text-sm font-bold font-mono', total === 100 ? 'text-green-600' : 'text-red-600')}>{total}%</span>
           </div>
           <div className="flex-1 px-3 py-2.5 flex items-center gap-2">
             {total === 100 ? (
               <div className="flex items-center gap-1.5">
-                <CheckCircle2 className="w-3.5 h-3.5 text-[#16a34a]" />
-                <span className="text-[10px] font-bold text-[#16a34a] tracking-wider">VALID — READY FOR EXECUTION</span>
+                <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />
+                <span className="text-[10px] font-bold text-green-600 tracking-wider">VALID — READY FOR EXECUTION</span>
               </div>
             ) : (
               <div className="flex items-center gap-1.5">
-                <AlertTriangle className="w-3.5 h-3.5 text-[#dc2626]" />
-                <span className="text-[10px] font-bold text-[#dc2626] tracking-wider">
+                <AlertTriangle className="w-3.5 h-3.5 text-red-600" />
+                <span className="text-[10px] font-bold text-red-600 tracking-wider">
                   INVALID — {total < 100 ? `DEFICIT: ${100 - total}%` : `EXCESS: ${total - 100}%`}
                 </span>
               </div>
@@ -504,8 +504,8 @@ function StepCriteria({
           <div className="p-3 space-y-2">
             {criteria.map(({ key, label }, i) => (
               <div key={key} className="flex items-center gap-2">
-                <span className="text-[9px] font-mono text-[#64748b] w-20 truncate">{label.split(' ')[0]}</span>
-                <div className="flex-1 h-3 bg-[#e2e8f0] overflow-hidden relative">
+                <span className="text-[9px] font-mono text-gray-500 w-20 truncate">{label.split(' ')[0]}</span>
+                <div className="flex-1 h-3 bg-gray-200 overflow-hidden relative">
                   <div
                     className="h-full absolute left-0 top-0 transition-all duration-300 flex items-center pl-1"
                     style={{ width: `${weights[criteria[i].key]}%`, background: ['#2563eb','#7c3aed','#059669','#d97706','#db2777'][i] }}
@@ -515,15 +515,15 @@ function StepCriteria({
                     )}
                   </div>
                   {weights[criteria[i].key] < 15 && (
-                    <span className="absolute right-1 top-0 h-full flex items-center text-[7px] font-bold text-[#64748b]">{weights[criteria[i].key]}%</span>
+                    <span className="absolute right-1 top-0 h-full flex items-center text-[7px] font-bold text-gray-500">{weights[criteria[i].key]}%</span>
                   )}
                 </div>
               </div>
             ))}
-            <div className="pt-2 border-t border-[#e2e8f0]">
+            <div className="pt-2 border-t border-gray-200">
               <div className="flex items-center gap-2">
-                <span className="text-[9px] font-mono text-[#64748b] w-20">TOTAL</span>
-                <span className={cn('text-xs font-bold font-mono', total === 100 ? 'text-[#16a34a]' : 'text-[#dc2626]')}>{total}%</span>
+                <span className="text-[9px] font-mono text-gray-500 w-20">TOTAL</span>
+                <span className={cn('text-xs font-bold font-mono', total === 100 ? 'text-green-600' : 'text-red-600')}>{total}%</span>
               </div>
             </div>
           </div>
@@ -540,7 +540,7 @@ function StepCriteria({
               <button
                 key={label}
                 onClick={() => onChange(w)}
-                className="w-full text-left px-2.5 py-1.5 text-[9px] font-mono font-bold text-[#1d4ed8] hover:bg-[#eff6ff] border border-transparent hover:border-[#bfdbfe] rounded-sm transition-all tracking-wider"
+                className="w-full text-left px-2.5 py-1.5 text-[9px] font-mono font-bold text-blue-600 hover:bg-blue-50 border border-transparent hover:border-blue-200 rounded-sm transition-all tracking-wider"
               >
                 ↳ {label}
               </button>
@@ -579,11 +579,11 @@ function StepReview({
           <FieldRow label="POSITION"       value={<span className="font-bold">{selectedJob?.title ?? '—'}</span>} />
           <FieldRow label="LEVEL"          value={selectedJob?.experienceLevel ?? '—'} />
           <FieldRow label="DEPT"           value={selectedJob?.department ?? '—'} />
-          <FieldRow label="APPLICANT POOL" value={<span className="font-mono font-bold text-[#1d4ed8]">{candidateCount} CANDIDATES</span>} />
-          <FieldRow label="SHORTLIST SIZE" value={<span className="font-mono font-bold text-[#1d4ed8]">{shortlistSize} CANDIDATES</span>} />
-          <FieldRow label="AI ENGINE"      value={<span className="font-mono text-[#7c3aed]">GEMINI-2.5-FLASH · THINKING BUDGET: 2048 TOKENS</span>} />
+          <FieldRow label="APPLICANT POOL" value={<span className="font-mono font-bold text-blue-600">{candidateCount} CANDIDATES</span>} />
+          <FieldRow label="SHORTLIST SIZE" value={<span className="font-mono font-bold text-blue-600">{shortlistSize} CANDIDATES</span>} />
+          <FieldRow label="AI ENGINE"      value={<span className="font-mono text-purple-600">GEMINI-2.5-FLASH · THINKING BUDGET: 2048 TOKENS</span>} />
           <FieldRow label="PROCESSING"     value={<span className="font-mono">SEQUENTIAL · RATE-CONTROLLED · CACHED</span>} />
-          <FieldRow label="ETA"            value={<span className="font-mono text-[#d97706]">~{Math.max(1, Math.ceil(candidateCount / 20))} MIN (ESTIMATED)</span>} />
+          <FieldRow label="ETA"            value={<span className="font-mono text-amber-600">~{Math.max(1, Math.ceil(candidateCount / 20))} MIN (ESTIMATED)</span>} />
         </Panel>
 
         <Panel title="Scoring Configuration" badge="FINAL WEIGHTS">
@@ -594,12 +594,12 @@ function StepReview({
             { k: 'PROJECT PORTFOLIO', v: weights.projects,     c: '#d97706' },
             { k: 'AVAILABILITY',      v: weights.availability, c: '#db2777' },
           ].map(w => (
-            <div key={w.k} className="flex items-center gap-0 border-b border-[#f1f5f9] last:border-0">
-              <div className="w-44 px-3 py-2 bg-[#f8fafc] border-r border-[#e2e8f0] flex-shrink-0">
-                <span className="text-[9px] font-bold text-[#64748b] tracking-wider">{w.k}</span>
+            <div key={w.k} className="flex items-center gap-0 border-b border-gray-100 last:border-0">
+              <div className="w-44 px-3 py-2 bg-gray-50 border-r border-gray-200 flex-shrink-0">
+                <span className="text-[9px] font-bold text-gray-500 tracking-wider">{w.k}</span>
               </div>
               <div className="flex-1 px-3 py-2 flex items-center gap-2">
-                <div className="flex-1 h-1.5 bg-[#e2e8f0]">
+                <div className="flex-1 h-1.5 bg-gray-200">
                   <div className="h-full" style={{ width: `${w.v}%`, backgroundColor: w.c }} />
                 </div>
                 <span className="text-[10px] font-mono font-bold w-8 text-right" style={{ color: w.c }}>{w.v}%</span>
@@ -614,10 +614,10 @@ function StepReview({
           <div className="p-3">
             <div className="space-y-1.5">
               {outputs.map((o, i) => (
-                <div key={i} className="flex items-start gap-2 py-1.5 border-b border-[#f1f5f9] last:border-0">
-                  <span className="text-[9px] font-mono text-[#94a3b8] flex-shrink-0 mt-0.5">{(i + 1).toString().padStart(2, '0')}</span>
-                  <CheckCircle2 className="w-3 h-3 text-[#16a34a] flex-shrink-0 mt-0.5" />
-                  <span className="text-[10px] text-[#374151]">{o}</span>
+                <div key={i} className="flex items-start gap-2 py-1.5 border-b border-gray-100 last:border-0">
+                  <span className="text-[9px] font-mono text-gray-400 flex-shrink-0 mt-0.5">{(i + 1).toString().padStart(2, '0')}</span>
+                  <CheckCircle2 className="w-3 h-3 text-green-600 flex-shrink-0 mt-0.5" />
+                  <span className="text-[10px] text-gray-700">{o}</span>
                 </div>
               ))}
             </div>
@@ -633,12 +633,12 @@ function StepReview({
             { label: 'AI ENGINE READY',      ok: true },
             { label: 'API KEY CONFIGURED',   ok: true },
           ].map(({ label, ok }) => (
-            <div key={label} className="flex items-center justify-between px-3 py-2 border-b border-[#f1f5f9] last:border-0">
+            <div key={label} className="flex items-center justify-between px-3 py-2 border-b border-gray-100 last:border-0">
               <div className="flex items-center gap-2">
-                <div className={cn('w-1.5 h-1.5 rounded-full flex-shrink-0', ok ? 'bg-[#22c55e]' : 'bg-[#dc2626]')} />
-                <span className="text-[9px] font-mono text-[#475569]">{label}</span>
+                <div className={cn('w-1.5 h-1.5 rounded-full flex-shrink-0', ok ? 'bg-green-500' : 'bg-red-500')} />
+                <span className="text-[9px] font-mono text-gray-600">{label}</span>
               </div>
-              <span className={cn('text-[9px] font-mono font-bold', ok ? 'text-[#16a34a]' : 'text-[#dc2626]')}>
+              <span className={cn('text-[9px] font-mono font-bold', ok ? 'text-green-600' : 'text-red-600')}>
                 {ok ? 'PASS' : 'FAIL'}
               </span>
             </div>
@@ -666,33 +666,33 @@ function ExecutionConsole({
   return (
     <div className="flex flex-col gap-3 h-full">
       {/* Console header */}
-      <div className="border border-[#1e3a5f] bg-[#0d1b2a] px-4 py-2.5 flex items-center justify-between flex-shrink-0">
+      <div className="border border-gray-200 bg-white px-4 py-2.5 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-[#22c55e] animate-pulse shadow-[0_0_8px_#22c55e]" />
-            <span className="text-[11px] font-bold text-[#93c5fd] tracking-widest uppercase">Execution Console</span>
+            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+            <span className="text-[11px] font-bold text-gray-700 tracking-widest uppercase">Execution Console</span>
           </div>
-          <div className="w-px h-3.5 bg-[#1e3a5f]" />
-          <span className="text-[10px] font-mono text-[#475569]">
-            JOB: <span className="text-[#94a3b8]">{selectedJobTitle?.toUpperCase() ?? '—'}</span>
+          <div className="w-px h-3.5 bg-gray-200" />
+          <span className="text-[10px] font-mono text-gray-500">
+            JOB: <span className="text-gray-700">{selectedJobTitle?.toUpperCase() ?? '—'}</span>
           </span>
-          <div className="w-px h-3.5 bg-[#1e3a5f]" />
-          <span className="text-[10px] font-mono text-[#475569]">
-            POOL: <span className="text-[#94a3b8]">{totalCandidates}</span>
+          <div className="w-px h-3.5 bg-gray-200" />
+          <span className="text-[10px] font-mono text-gray-500">
+            POOL: <span className="text-gray-700">{totalCandidates}</span>
           </span>
         </div>
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
-            <div className="w-32 h-1.5 bg-[#1e3a5f] overflow-hidden">
+            <div className="w-32 h-1.5 bg-gray-200 overflow-hidden">
               <div
-                className="h-full bg-gradient-to-r from-[#2563eb] to-[#4ade80] transition-all duration-500"
+                className="h-full bg-gradient-to-r from-blue-500 to-green-400 transition-all duration-500"
                 style={{ width: `${progressPercent}%` }}
               />
             </div>
-            <span className="text-[10px] font-mono text-[#4ade80] font-bold">{progressPercent}%</span>
+            <span className="text-[10px] font-mono text-green-600 font-bold">{progressPercent}%</span>
           </div>
-          <span className="text-[10px] font-mono text-[#475569]">
-            ELAPSED: <span className="text-[#93c5fd] font-bold">{formatTime(elapsed)}</span>
+          <span className="text-[10px] font-mono text-gray-500">
+            ELAPSED: <span className="text-gray-700 font-bold">{formatTime(elapsed)}</span>
           </span>
         </div>
       </div>
@@ -703,9 +703,9 @@ function ExecutionConsole({
         <AIThinkingStream thoughts={thoughts} isRunning={true} />
 
         {/* SCORE METRICS */}
-        <div className="border border-[#cbd5e1] bg-white flex flex-col overflow-hidden">
-          <div className="px-3 py-2 bg-[#1e3a5f] flex-shrink-0">
-            <span className="text-[10px] font-bold text-[#bfdbfe] tracking-widest">SCORE METRICS</span>
+        <div className="border border-gray-200 bg-white flex flex-col overflow-hidden">
+          <div className="px-3 py-2 bg-gray-50 border-b border-gray-200 flex-shrink-0">
+            <span className="text-[10px] font-bold text-gray-600 tracking-widest">SCORE METRICS</span>
           </div>
           <div className="flex-1 overflow-y-auto">
             {[
@@ -715,27 +715,27 @@ function ExecutionConsole({
               { label: 'PROJECTS',    val: liveScores.projects,     c: '#d97706' },
               { label: 'AVAILABILITY',val: liveScores.availability, c: '#db2777' },
             ].map(({ label, val, c }) => (
-              <div key={label} className="px-3 py-3 border-b border-[#f1f5f9] last:border-0">
+              <div key={label} className="px-3 py-3 border-b border-gray-100 last:border-0">
                 <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[9px] font-mono font-bold text-[#64748b]">{label}</span>
+                  <span className="text-[9px] font-mono font-bold text-gray-500">{label}</span>
                   <span className="text-[10px] font-mono font-bold" style={{ color: c }}>{Math.round(val)}</span>
                 </div>
-                <div className="h-1.5 bg-[#e2e8f0] overflow-hidden">
+                <div className="h-1.5 bg-gray-200 overflow-hidden">
                   <div className="h-full transition-all duration-700" style={{ width: `${val}%`, backgroundColor: c }} />
                 </div>
               </div>
             ))}
 
-            <div className="px-3 py-3 bg-[#f8fafc] border-t border-[#cbd5e1]">
+            <div className="px-3 py-3 bg-gray-50 border-t border-gray-200">
               <div className="flex items-center justify-between mb-1">
-                <span className="text-[9px] font-mono font-bold text-[#0f172a]">EVALUATED</span>
-                <span className="text-[10px] font-mono font-bold text-[#1d4ed8]">
+                <span className="text-[9px] font-mono font-bold text-gray-900">EVALUATED</span>
+                <span className="text-[10px] font-mono font-bold text-blue-600">
                   {evaluatedCount}/{totalCandidates}
                 </span>
               </div>
-              <div className="h-2 bg-[#e2e8f0] overflow-hidden">
+              <div className="h-2 bg-gray-200 overflow-hidden">
                 <div
-                  className="h-full bg-[#2563eb] transition-all duration-500"
+                  className="h-full bg-blue-500 transition-all duration-500"
                   style={{ width: totalCandidates > 0 ? `${(evaluatedCount / totalCandidates) * 100}%` : '0%' }}
                 />
               </div>
@@ -744,45 +744,45 @@ function ExecutionConsole({
         </div>
 
         {/* CANDIDATE REGISTRY */}
-        <div className="border border-[#cbd5e1] bg-white flex flex-col overflow-hidden">
-          <div className="px-3 py-2 bg-[#1e3a5f] flex-shrink-0">
-            <span className="text-[10px] font-bold text-[#bfdbfe] tracking-widest">CANDIDATE REGISTRY</span>
+        <div className="border border-gray-200 bg-white flex flex-col overflow-hidden">
+          <div className="px-3 py-2 bg-gray-50 border-b border-gray-200 flex-shrink-0">
+            <span className="text-[10px] font-bold text-gray-600 tracking-widest">CANDIDATE REGISTRY</span>
           </div>
 
           {/* Table header */}
-          <div className="grid grid-cols-[24px_1fr_52px] bg-[#f1f5f9] border-b border-[#e2e8f0] flex-shrink-0">
-            <div className="px-2 py-1.5 border-r border-[#e2e8f0] text-center">
-              <span className="text-[8px] font-bold text-[#94a3b8]">RK</span>
+          <div className="grid grid-cols-[24px_1fr_52px] bg-gray-50 border-b border-gray-200 flex-shrink-0">
+            <div className="px-2 py-1.5 border-r border-gray-200 text-center">
+              <span className="text-[8px] font-bold text-gray-400">RK</span>
             </div>
-            <div className="px-2 py-1.5 border-r border-[#e2e8f0]">
-              <span className="text-[8px] font-bold text-[#94a3b8]">CANDIDATE</span>
+            <div className="px-2 py-1.5 border-r border-gray-200">
+              <span className="text-[8px] font-bold text-gray-400">CANDIDATE</span>
             </div>
             <div className="px-2 py-1.5 text-center">
-              <span className="text-[8px] font-bold text-[#94a3b8]">SCORE</span>
+              <span className="text-[8px] font-bold text-gray-400">SCORE</span>
             </div>
           </div>
 
           <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
             {partialShortlist.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full py-8 text-center">
-                <Brain className="w-6 h-6 text-[#cbd5e1] mb-2" />
-                <p className="text-[9px] font-mono text-[#94a3b8]">AWAITING RESULTS</p>
-                <p className="text-[9px] text-[#cbd5e1] mt-1">AI IS EVALUATING...</p>
+                <Brain className="w-6 h-6 text-gray-300 mb-2" />
+                <p className="text-[9px] font-mono text-gray-400">AWAITING RESULTS</p>
+                <p className="text-[9px] text-gray-300 mt-1">AI IS EVALUATING...</p>
               </div>
             ) : (
               partialShortlist.map((c, i) => (
-                <div key={c.candidateId} className="grid grid-cols-[24px_1fr_52px] border-b border-[#f1f5f9] last:border-0 hover:bg-[#f8fafc] transition-colors">
-                  <div className="px-2 py-2.5 border-r border-[#f1f5f9] text-center">
+                <div key={c.candidateId} className="grid grid-cols-[24px_1fr_52px] border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
+                  <div className="px-2 py-2.5 border-r border-gray-100 text-center">
                     <span className={cn(
                       'text-[9px] font-mono font-bold',
-                      i === 0 ? 'text-[#d97706]' : i === 1 ? 'text-[#94a3b8]' : i === 2 ? 'text-[#b45309]' : 'text-[#94a3b8]'
+                      i === 0 ? 'text-amber-600' : i === 1 ? 'text-gray-400' : i === 2 ? 'text-amber-700' : 'text-gray-400'
                     )}>
                       {c.rank ?? i + 1}
                     </span>
                   </div>
-                  <div className="px-2 py-2.5 border-r border-[#f1f5f9] min-w-0">
-                    <p className="text-[10px] font-medium text-[#0f172a] truncate">{c.candidateName}</p>
-                    <p className="text-[8px] text-[#94a3b8] font-mono truncate">{c.recommendation?.split(' ').map(w => w[0]).join('') ?? '—'}</p>
+                  <div className="px-2 py-2.5 border-r border-gray-100 min-w-0">
+                    <p className="text-[10px] font-medium text-gray-900 truncate">{c.candidateName}</p>
+                    <p className="text-[8px] text-gray-400 font-mono truncate">{c.recommendation?.split(' ').map(w => w[0]).join('') ?? '—'}</p>
                   </div>
                   <div className="px-2 py-2.5 text-center">
                     <span className="text-[10px] font-mono font-bold" style={{ color: scoreColor(c.finalScore) }}>
@@ -794,9 +794,9 @@ function ExecutionConsole({
             )}
           </div>
 
-          <div className="px-3 py-2 bg-[#f8fafc] border-t border-[#e2e8f0] flex-shrink-0">
-            <span className="text-[9px] font-mono text-[#64748b]">
-              SHORTLIST: <span className="font-bold text-[#0f172a]">{partialShortlist.length}</span> CANDIDATES
+          <div className="px-3 py-2 bg-gray-50 border-t border-gray-200 flex-shrink-0">
+            <span className="text-[9px] font-mono text-gray-500">
+              SHORTLIST: <span className="font-bold text-gray-900">{partialShortlist.length}</span> CANDIDATES
             </span>
           </div>
         </div>
@@ -826,12 +826,12 @@ function NavBar({
   const currentIdx = stepOrder.indexOf(step);
 
   return (
-    <div className="border-t border-[#cbd5e1] bg-[#f8fafc] px-4 py-2.5 flex items-center justify-between flex-shrink-0">
+    <div className="border-t border-gray-200 bg-white px-4 py-2.5 flex items-center justify-between flex-shrink-0">
       <div className="flex items-center gap-3">
         {currentIdx > 0 && (
           <button
             onClick={() => setStep(stepOrder[currentIdx - 1])}
-            className="flex items-center gap-1.5 px-3 py-1.5 border border-[#cbd5e1] bg-white hover:bg-[#f1f5f9] text-[10px] font-bold text-[#475569] tracking-wider transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 bg-white hover:bg-gray-50 text-[10px] font-bold text-gray-600 tracking-wider transition-colors"
           >
             <ChevronLeft className="w-3 h-3" />
             PREVIOUS
@@ -842,13 +842,13 @@ function NavBar({
       <div className="flex items-center gap-3">
         {/* Validation hints */}
         {step === 'setup' && !selectedJob && (
-          <span className="text-[9px] font-mono text-[#dc2626]">⚠ SELECT A POSITION TO CONTINUE</span>
+          <span className="text-[9px] font-mono text-red-600">⚠ SELECT A POSITION TO CONTINUE</span>
         )}
         {step === 'criteria' && totalWeight !== 100 && (
-          <span className="text-[9px] font-mono text-[#dc2626]">⚠ WEIGHTS MUST SUM TO 100%</span>
+          <span className="text-[9px] font-mono text-red-600">⚠ WEIGHTS MUST SUM TO 100%</span>
         )}
         {step === 'review' && !isReady && (
-          <span className="text-[9px] font-mono text-[#dc2626]">⚠ CHECKLIST INCOMPLETE</span>
+          <span className="text-[9px] font-mono text-red-600">⚠ CHECKLIST INCOMPLETE</span>
         )}
 
         {step === 'review' ? (
@@ -858,8 +858,8 @@ function NavBar({
             className={cn(
               'flex items-center gap-2 px-5 py-2 text-[11px] font-bold tracking-widest transition-all',
               isReady && !running
-                ? 'bg-[#0052cc] text-white hover:bg-[#0041a8] border border-[#003d99]'
-                : 'bg-[#e2e8f0] text-[#94a3b8] cursor-not-allowed border border-[#cbd5e1]'
+                ? 'bg-blue-600 text-white hover:bg-blue-700 border border-blue-600'
+                : 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'
             )}
           >
             <Zap className="w-3.5 h-3.5" />
@@ -872,8 +872,8 @@ function NavBar({
             className={cn(
               'flex items-center gap-1.5 px-4 py-1.5 text-[10px] font-bold tracking-wider transition-all',
               canGoNext
-                ? 'bg-[#1e3a5f] text-white hover:bg-[#0f2a4a] border border-[#1e3a5f]'
-                : 'bg-[#e2e8f0] text-[#94a3b8] cursor-not-allowed border border-[#cbd5e1]'
+                ? 'bg-gray-700 text-white hover:bg-gray-800 border border-gray-700'
+                : 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'
             )}
           >
             NEXT

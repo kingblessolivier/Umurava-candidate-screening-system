@@ -1,9 +1,9 @@
 "use client";
-import { useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useDispatch, useSelector }       from "react-redux";
 import { AppDispatch, RootState }         from "@/store";
 import { uploadCSV, uploadPDFs, bulkImportJSON, fetchCandidates } from "@/store/candidatesSlice";
-import { useRouter }                      from "next/navigation";
+import { useRouter, useSearchParams }     from "next/navigation";
 import { useJobs }                        from "@/hooks/useJobs";
 import toast                              from "react-hot-toast";
 import { motion, AnimatePresence }        from "framer-motion";
@@ -28,17 +28,27 @@ const SAMPLE_JSON = JSON.stringify([
 export default function UploadCandidatesPage() {
   const dispatch    = useDispatch<AppDispatch>();
   const router      = useRouter();
+  const searchParams = useSearchParams();
   const { uploading } = useSelector((s: RootState) => s.candidates);
   const { jobs } = useJobs();
+  const jobIdFromRoute = searchParams.get("jobId") || "";
 
   const [tab, setTab]           = useState<TabType>("csv");
   const [dragging, setDragging] = useState(false);
   const [files, setFiles]       = useState<File[]>([]);
   const [jsonText, setJsonText] = useState(SAMPLE_JSON);
+  const [csvJobId, setCsvJobId] = useState(jobIdFromRoute);
   const [pdfJobId, setPdfJobId] = useState("");
   const [pdfQueued, setPdfQueued] = useState(false);
   const [result, setResult]     = useState<{ created: number; skipped: number; errors: string[] } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (jobIdFromRoute) {
+      setCsvJobId(jobIdFromRoute);
+      setPdfJobId(jobIdFromRoute);
+    }
+  }, [jobIdFromRoute]);
 
   const accept = tab === "pdf" ? ".pdf" : ".csv,.xlsx,.xls";
   const multiple = tab === "pdf";
@@ -67,7 +77,8 @@ export default function UploadCandidatesPage() {
         }
       } else if (tab === "csv") {
         if (!files[0]) return toast.error("Select a CSV or Excel file first");
-        const res = await dispatch(uploadCSV({ file: files[0] })).unwrap() as { created: number; skipped: number; errors: string[] };
+        if (!csvJobId) return toast.error("Select a job position for the CSV import");
+        const res = await dispatch(uploadCSV({ file: files[0], jobId: csvJobId })).unwrap() as { created: number; skipped: number; errors: string[] };
         setResult(res);
         await dispatch(fetchCandidates({}));
         if (res.created > 0) {
@@ -123,12 +134,12 @@ export default function UploadCandidatesPage() {
       </div>
 
       {/* Job selector — required for PDF uploads */}
-      {tab === "pdf" && (
+      {(tab === "csv" || tab === "pdf") && (
         <div className="space-y-1.5">
           <label className="text-xs font-medium text-gray-400">Job Position (required)</label>
           <select
-            value={pdfJobId}
-            onChange={e => setPdfJobId(e.target.value)}
+            value={tab === "csv" ? csvJobId : pdfJobId}
+            onChange={e => tab === "csv" ? setCsvJobId(e.target.value) : setPdfJobId(e.target.value)}
             className="w-full px-3 py-2.5 rounded-xl text-sm text-white outline-none"
             style={{ background: "var(--bg-surface)", border: "1px solid var(--border)" }}
           >
@@ -138,7 +149,9 @@ export default function UploadCandidatesPage() {
             ))}
           </select>
           <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
-            Resumes will be parsed by AI and linked to the selected job.
+            {tab === "csv"
+              ? "CSV rows will be linked to the selected job."
+              : "Resumes will be parsed by AI and linked to the selected job."}
           </p>
         </div>
       )}
@@ -170,9 +183,17 @@ export default function UploadCandidatesPage() {
           </p>
           <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>or click to browse</p>
           {tab === "csv" && (
-            <p className="text-[11px] mt-4 text-center" style={{ color: "var(--text-muted)" }}>
-              Required column: <code className="text-blue-400">email</code>. Optional: firstName, lastName, headline, location, skills, availabilityType
-            </p>
+            <div className="mt-4 space-y-2 text-center text-[11px]" style={{ color: "var(--text-muted)" }}>
+              <p>
+                Required column: <code className="text-blue-400">email</code>.
+              </p>
+              <p>
+                Recommended: <code className="text-blue-400">firstName</code>, <code className="text-blue-400">lastName</code>, <code className="text-blue-400">headline</code>, <code className="text-blue-400">location</code>, <code className="text-blue-400">skills</code>, <code className="text-blue-400">availabilityType</code>.
+              </p>
+              <p>
+                Choose a job above. The upload will attach every row to that job, so the CSV does not need a <code className="text-blue-400">jobId</code> column.
+              </p>
+            </div>
           )}
           {files.length > 0 && (
             <div className="mt-4 space-y-1 w-full max-w-xs">

@@ -174,13 +174,14 @@ export const uploadCSV = async (req: Request, res: Response) => {
 
     const { Job } = await import("../models/Job");
     const results = { created: 0, skipped: 0, errors: [] as string[] };
+    const defaultJobId = (req.query.jobId as string) || (req.headers["x-job-id"] as string) || "";
 
     for (const row of rows) {
       const email = row.email || row.Email;
       if (!email) { results.errors.push("Row missing email — skipped"); continue; }
 
       try {
-        const jobId = row.jobId || row.JobId || row.job_id;
+        const jobId = row.jobId || row.JobId || row.job_id || defaultJobId;
         if (!jobId) {
           results.errors.push(`${email}: Missing jobId — skipped`);
           continue;

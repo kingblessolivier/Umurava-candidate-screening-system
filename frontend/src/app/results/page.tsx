@@ -4,7 +4,6 @@ import { useDispatch, useSelector } from "react-redux";
 import { AppDispatch, RootState } from "@/store";
 import { fetchResults, deleteResult } from "@/store/screeningSlice";
 import Link from "next/link";
-import { motion } from "framer-motion";
 import { Trophy, Users, Clock, Zap, ArrowRight, BarChart3, Trash2 } from "lucide-react";
 
 export default function ResultsPage() {
@@ -29,15 +28,15 @@ export default function ResultsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-sm font-bold text-gray-900">Screening Results</h1>
-          <p className="text-xs mt-0.5 text-gray-500">{results.length} screening{results.length !== 1 ? "s" : ""} run</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-sm font-bold text-gray-900">Screening Results</h1>
+            <p className="text-xs mt-0.5 text-gray-500">{results.length} screening{results.length !== 1 ? "s" : ""} run</p>
+          </div>
+          <Link href="/analytics" className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-white border border-gray-200 text-gray-600 hover:border-gray-300 transition-all">
+            <BarChart3 className="w-3.5 h-3.5" /> Analytics
+          </Link>
         </div>
-        <Link href="/analytics" className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-white border border-gray-200 text-gray-600 hover:border-gray-300 transition-all">
-          <BarChart3 className="w-3.5 h-3.5" /> Analytics
-        </Link>
-      </div>
 
       {loading ? (
         <div className="space-y-2">
@@ -60,11 +59,8 @@ export default function ResultsPage() {
               : 0;
 
             return (
-              <motion.div
+              <div
                 key={r._id}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.04 }}
                 className="flex items-center gap-2"
               >
                 <Link
@@ -110,7 +106,7 @@ export default function ResultsPage() {
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
-              </motion.div>
+              </div>
             );
           })}
         </div>
