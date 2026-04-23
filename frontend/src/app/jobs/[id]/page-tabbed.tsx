@@ -84,12 +84,14 @@ export default function JobDetailPageTabbed() {
     toast.loading(`Uploading ${file.name}...`);
     try {
       if (file.name.endsWith('.csv') || file.name.endsWith('.xlsx')) {
+        if (!id) throw new Error('Missing job id');
         const result = await dispatch(uploadCSV({ file, jobId: id })).unwrap();
         toast.dismiss();
         toast.success(`${result.created} candidates imported!`);
         await dispatch(fetchCandidates());
         setShowAddCandidates(false);
       } else if (file.name.endsWith('.pdf')) {
+        if (!id) throw new Error('Missing job id');
         const result = await dispatch(uploadPDFs({ files: [file], jobId: id })).unwrap();
         toast.dismiss();
         toast.success(`Processing ${file.name} in background...`);
