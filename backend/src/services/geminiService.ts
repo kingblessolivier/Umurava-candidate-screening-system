@@ -75,16 +75,17 @@ function safeJSON<T>(text: string, fallback: T): T {
 async function generateWithRateLimit<T>(
   cacheKey: string,
   opts: GenerateOptions,
-  fallback: T
+  fallback: T,
+  { useCache = true }: { useCache?: boolean } = {}
 ): Promise<T> {
   try {
     const raw = await rateLimitService.executeWithRateLimit(
       cacheKey,
       () => generate(opts),
-      { useCache: true }
+      { useCache }
     );
     const parsed = safeJSON<T>(raw as string, fallback);
-    rateLimitService.cacheResult(cacheKey, parsed);
+    if (useCache) rateLimitService.cacheResult(cacheKey, parsed);
     return parsed;
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
@@ -544,12 +545,11 @@ IMPORTANT:
   }
 }`;
 
-  // Never cache resume parses — each upload is a fresh document.
-  // Use a random key to bypass rateLimitService cache.
   return generateWithRateLimit(
     `resume-parse:${Date.now()}-${Math.random().toString(36).slice(2)}`,
     { prompt, temperature: 0.1, maxOutputTokens: 6144, thinkingBudget: 512 },
-    fallback
+    fallback,
+    { useCache: false }
   );
 }
 
