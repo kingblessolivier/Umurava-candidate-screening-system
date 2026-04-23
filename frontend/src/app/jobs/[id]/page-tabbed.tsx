@@ -83,16 +83,17 @@ export default function JobDetailPageTabbed() {
   const handleFileUpload = async (file: File) => {
     toast.loading(`Uploading ${file.name}...`);
     try {
+      const jobId = id;
+      if (!jobId) throw new Error('Missing job id');
+
       if (file.name.endsWith('.csv') || file.name.endsWith('.xlsx')) {
-        if (!id) throw new Error('Missing job id');
-        const result = await dispatch(uploadCSV({ file, jobId: id })).unwrap();
+        const result = await dispatch(uploadCSV({ file, jobId })).unwrap();
         toast.dismiss();
         toast.success(`${result.created} candidates imported!`);
         await dispatch(fetchCandidates());
         setShowAddCandidates(false);
       } else if (file.name.endsWith('.pdf')) {
-        if (!id) throw new Error('Missing job id');
-        const result = await dispatch(uploadPDFs({ files: [file], jobId: id })).unwrap();
+        const result = await dispatch(uploadPDFs({ files: [file], jobId })).unwrap();
         toast.dismiss();
         toast.success(`Processing ${file.name} in background...`);
         setPdfQueued(true);
