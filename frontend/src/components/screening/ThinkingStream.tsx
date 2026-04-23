@@ -11,6 +11,7 @@ export type ThoughtType =
   | 'flagging'
   | 'generating'
   | 'evaluating'
+  | 'thinking'
   | 'completed';
 
 export interface Thought {
@@ -21,6 +22,7 @@ export interface Thought {
   timestamp: string;
   status: 'pending' | 'processing' | 'completed';
   detail?: string;
+  thinkingContent?: string; // raw Gemini thinking tokens — only for type === 'thinking'
 }
 
 interface ThinkingStreamProps {

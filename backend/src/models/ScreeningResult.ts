@@ -85,6 +85,15 @@ const ScreeningResultSchema = new Schema<ScreeningResultDocument>(
     screeningDate:    { type: Date, default: Date.now },
     aiModel:          { type: String, default: "gemini-2.5-flash" },
     processingTimeMs: Number,
+    thinkingLog: [{
+      stage:          { type: String, enum: ["evaluating", "reranking", "rejection"] },
+      batchIndex:     Number,
+      batchLabel:     String,
+      candidateNames: [String],
+      thinking:       String,
+      timestamp:      String,
+      _id:            false,
+    }],
   },
   { timestamps: true }
 );

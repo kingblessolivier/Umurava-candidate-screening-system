@@ -1,7 +1,7 @@
 import { GoogleGenAI, HarmCategory, HarmBlockThreshold } from "@google/genai";
 import {
   Job, TalentProfile, CandidateScore, RejectedCandidate,
-  ScreeningResult, PreprocessedCandidate, AggregateInsights,
+  ScreeningResult, PreprocessedCandidate, AggregateInsights, ThinkingSnapshot,
 } from "../types";
 import { rateLimitService } from "./rateLimitService";
 
@@ -40,6 +40,7 @@ interface GenerateOptions {
   temperature?: number;
   maxOutputTokens?: number;
   thinkingBudget?: number; // 0 = off, >0 = reasoning tokens
+  onThinking?: (thinking: string) => void; // fires with raw thinking tokens when available
 }
 
 async function generate(opts: GenerateOptions): Promise<string> {
@@ -64,6 +65,18 @@ async function generate(opts: GenerateOptions): Promise<string> {
       safetySettings:   SAFETY_SETTINGS,
     },
   });
+
+  // Extract and surface thinking tokens when thinking mode is active
+  if (useThinking && opts.onThinking) {
+    const parts = (response.candidates?.[0]?.content?.parts ?? []) as Array<{ thought?: boolean; text?: string }>;
+    const thinkingText = parts
+      .filter(p => p.thought === true)
+      .map(p => p.text ?? "")
+      .join("\n\n")
+      .trim();
+    if (thinkingText) opts.onThinking(thinkingText);
+  }
+
   return response.text ?? "";
 }
 
@@ -565,13 +578,14 @@ IMPORTANT:
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export interface ScreeningProgressEvent {
-  type: 'analyzing' | 'scoring' | 'flagging' | 'generating' | 'evaluating' | 'completed';
+  type: 'analyzing' | 'scoring' | 'flagging' | 'generating' | 'evaluating' | 'thinking' | 'completed';
   message: string;
   candidateName?: string;
   detail?: string;
   liveScores?: { skills: number; experience: number; education: number; projects: number; availability: number };
   partialShortlist?: CandidateScore[];
   evaluatedCount?: number;
+  thinkingSnapshot?: ThinkingSnapshot; // real Gemini thinking tokens for this step
 }
 
 export type ScreeningProgressFn = (event: ScreeningProgressEvent) => void;
@@ -597,6 +611,7 @@ export async function runScreeningPipeline(
 ): Promise<Omit<ScreeningResult, "_id" | "screeningDate" | "createdAt">> {
   const startTime = Date.now();
   const BATCH_SIZE = 20;
+  const thinkingLog: ThinkingSnapshot[] = [];
 
   onProgress?.({
     type: "analyzing",
@@ -605,7 +620,6 @@ export async function runScreeningPipeline(
   });
 
   // ── Step 1: Evaluate candidates in sequential batches ─────────────────────
-  // Sequential (not parallel) to respect rate limits properly
   const batches: PreprocessedCandidate[][] = [];
   for (let i = 0; i < preprocessed.length; i += BATCH_SIZE) {
     batches.push(preprocessed.slice(i, i + BATCH_SIZE));
@@ -618,7 +632,6 @@ export async function runScreeningPipeline(
     const cacheKey = `screening:${job._id}:batch-${batchIndex}:size-${batch.length}`;
     const prompt = buildEvaluationPrompt(job, batch);
 
-    // Emit the names in this batch so the user sees who is being evaluated
     const previewNames = batch.slice(0, 4).map(c => c.candidateName.split(" ")[0]).join(", ");
     const suffix = batch.length > 4 ? ` +${batch.length - 4} more` : "";
     onProgress?.({
@@ -629,15 +642,33 @@ export async function runScreeningPipeline(
 
     console.log(`[Screening] Evaluating batch ${batchIndex + 1}/${batches.length} (${batch.length} candidates)`);
 
+    // Capture real Gemini thinking tokens and surface them via SSE
+    const onThinking = (thinking: string) => {
+      const snapshot: ThinkingSnapshot = {
+        stage: "evaluating",
+        batchIndex,
+        batchLabel: `Batch ${batchIndex + 1} of ${batches.length}`,
+        candidateNames: batch.map(c => c.candidateName),
+        thinking,
+        timestamp: new Date().toISOString(),
+      };
+      thinkingLog.push(snapshot);
+      onProgress?.({
+        type: "thinking",
+        message: `AI reasoning complete — batch ${batchIndex + 1}`,
+        evaluatedCount: allEvaluations.length,
+        thinkingSnapshot: snapshot,
+      });
+    };
+
     const result = await generateWithRateLimit<{ evaluations: CandidateScore[] }>(
       cacheKey,
-      { prompt, temperature: 0.2, maxOutputTokens: 12288, thinkingBudget: 2048 },
+      { prompt, temperature: 0.2, maxOutputTokens: 12288, thinkingBudget: 2048, onThinking },
       { evaluations: [] }
     );
 
     allEvaluations.push(...(result.evaluations || []));
 
-    // Emit live scores + partial leaderboard after the batch lands
     const partialSorted = [...allEvaluations]
       .sort((a, b) => b.finalScore - a.finalScore)
       .slice(0, 5);
@@ -670,10 +701,28 @@ export async function runScreeningPipeline(
       evaluatedCount: allEvaluations.length,
     });
 
+    const rerankOnThinking = (thinking: string) => {
+      const snapshot: ThinkingSnapshot = {
+        stage: "reranking",
+        batchIndex: batches.length,
+        batchLabel: `Final Re-ranking — Top ${topPreprocessed.length}`,
+        candidateNames: topPreprocessed.map(c => c.candidateName),
+        thinking,
+        timestamp: new Date().toISOString(),
+      };
+      thinkingLog.push(snapshot);
+      onProgress?.({
+        type: "thinking",
+        message: "AI re-ranking reasoning complete",
+        evaluatedCount: allEvaluations.length,
+        thinkingSnapshot: snapshot,
+      });
+    };
+
     const finalPrompt = buildEvaluationPrompt(job, topPreprocessed);
     const finalResult = await generateWithRateLimit<{ evaluations: CandidateScore[] }>(
       `screening:${job._id}:final-ranking`,
-      { prompt: finalPrompt, temperature: 0.2, maxOutputTokens: 12288, thinkingBudget: 3072 },
+      { prompt: finalPrompt, temperature: 0.2, maxOutputTokens: 12288, thinkingBudget: 3072, onThinking: rerankOnThinking },
       { evaluations: allEvaluations.slice(0, shortlistSize) }
     );
     allEvaluations = finalResult.evaluations || allEvaluations.slice(0, shortlistSize);
@@ -715,10 +764,28 @@ export async function runScreeningPipeline(
       evaluatedCount: preprocessed.length,
     });
 
+    const rejectionOnThinking = (thinking: string) => {
+      const snapshot: ThinkingSnapshot = {
+        stage: "rejection",
+        batchIndex: batches.length + 1,
+        batchLabel: "Rejection Feedback Generation",
+        candidateNames: allRejected.map(c => c.candidateName),
+        thinking,
+        timestamp: new Date().toISOString(),
+      };
+      thinkingLog.push(snapshot);
+      onProgress?.({
+        type: "thinking",
+        message: "AI rejection reasoning complete",
+        evaluatedCount: preprocessed.length,
+        thinkingSnapshot: snapshot,
+      });
+    };
+
     const rankingPrompt = buildRankingPrompt(job, allRejected, 0, lowestShortlistScore);
     const rankResult = await generateWithRateLimit<{ rejectedCandidates: RejectedCandidate[] }>(
       `screening:${job._id}:rejection-reasons`,
-      { prompt: rankingPrompt, temperature: 0.3, maxOutputTokens: 8192, thinkingBudget: 1024 },
+      { prompt: rankingPrompt, temperature: 0.3, maxOutputTokens: 8192, thinkingBudget: 1024, onThinking: rejectionOnThinking },
       { rejectedCandidates: [] }
     );
     rejectedCandidates = rankResult.rejectedCandidates || [];
@@ -728,7 +795,7 @@ export async function runScreeningPipeline(
   const aggregateInsights = computeAggregateInsights(shortlist);
 
   const processingTimeMs = Date.now() - startTime;
-  console.log(`[Screening] Done in ${(processingTimeMs / 1000).toFixed(1)}s — ${shortlist.length} shortlisted, ${rejectedCandidates.length} rejected`);
+  console.log(`[Screening] Done in ${(processingTimeMs / 1000).toFixed(1)}s — ${shortlist.length} shortlisted, ${rejectedCandidates.length} rejected, ${thinkingLog.length} thinking snapshot(s)`);
 
   onProgress?.({
     type: "completed",
@@ -748,6 +815,7 @@ export async function runScreeningPipeline(
     aggregateInsights,
     aiModel: MODEL_NAME,
     processingTimeMs,
+    thinkingLog,
   };
 }
 

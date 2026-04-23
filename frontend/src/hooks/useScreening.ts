@@ -11,6 +11,7 @@ import {
   addThought,
   addThoughts,
   clearThoughts,
+  addThinkingSnapshot,
   updateLiveScores,
   updatePartialShortlist,
   incrementEvaluatedCount,
@@ -18,6 +19,7 @@ import {
   resetLiveState,
 } from '@/store/screeningSlice';
 import { Thought } from '@/components/screening/ThinkingStream';
+import { ThinkingSnapshot } from '@/types';
 
 interface RunScreeningParams {
   jobId: string;
@@ -33,6 +35,7 @@ export function useScreening() {
     loading,
     error,
     thoughts,
+    thinkingLog,
     liveScores,
     partialShortlist,
     evaluatedCount,
@@ -100,6 +103,13 @@ export function useScreening() {
     [dispatch]
   );
 
+  const addThinkingSnapshotToLog = useCallback(
+    (snapshot: ThinkingSnapshot) => {
+      dispatch(addThinkingSnapshot(snapshot));
+    },
+    [dispatch]
+  );
+
   const bumpEvaluatedCount = useCallback(() => {
     dispatch(incrementEvaluatedCount());
   }, [dispatch]);
@@ -122,6 +132,7 @@ export function useScreening() {
     loading,
     error,
     thoughts,
+    thinkingLog,
     liveScores,
     partialShortlist,
     evaluatedCount,
@@ -133,6 +144,7 @@ export function useScreening() {
     addScreeningThought,
     addScreeningThoughts,
     clearScreeningThoughts,
+    addThinkingSnapshotToLog,
     setLiveScores,
     setPartialShortlist,
     bumpEvaluatedCount,

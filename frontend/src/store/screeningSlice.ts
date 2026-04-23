@@ -1,6 +1,6 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import { api } from "@/lib/api";
-import { ScreeningResult, CandidateScore } from "@/types";
+import { ScreeningResult, CandidateScore, ThinkingSnapshot } from "@/types";
 import { Thought } from "@/components/screening/ThinkingStream";
 
 interface LiveScores {
@@ -15,11 +15,12 @@ interface ScreeningState {
   results: ScreeningResult[];
   current: ScreeningResult | null;
   running: boolean;
-  pendingBgJobId: string | null; // background job id while screening is in progress
+  pendingBgJobId: string | null;
   loading: boolean;
   error: string | null;
   // Live screening state for "Thinking AI" UI
   thoughts: Thought[];
+  thinkingLog: ThinkingSnapshot[]; // real Gemini reasoning snapshots — persists for review
   liveScores: LiveScores;
   partialShortlist: CandidateScore[];
   evaluatedCount: number;
@@ -39,6 +40,7 @@ const initialState: ScreeningState = {
   loading: false,
   error: null,
   thoughts: [],
+  thinkingLog: [],
   liveScores: { skills: 0, experience: 0, education: 0, projects: 0, availability: 0 },
   partialShortlist: [],
   evaluatedCount: 0,
@@ -118,8 +120,15 @@ const screeningSlice = createSlice({
     setEvaluatedCount: (s, action: { payload: number }) => {
       s.evaluatedCount = action.payload;
     },
+    addThinkingSnapshot: (s, action: { payload: ThinkingSnapshot }) => {
+      s.thinkingLog.push(action.payload);
+    },
+    setThinkingLog: (s, action: { payload: ThinkingSnapshot[] }) => {
+      s.thinkingLog = action.payload;
+    },
     resetLiveState: (s) => {
       s.thoughts = [];
+      s.thinkingLog = [];
       s.liveScores = { skills: 0, experience: 0, education: 0, projects: 0, availability: 0 };
       s.partialShortlist = [];
       s.evaluatedCount = 0;
@@ -150,6 +159,7 @@ const screeningSlice = createSlice({
         s.pendingBgJobId = null;
         s.error = null;
         s.thoughts = [];
+        s.thinkingLog = [];
         s.partialShortlist = [];
         s.evaluatedCount = 0;
       })
@@ -166,7 +176,12 @@ const screeningSlice = createSlice({
       .addCase(fetchResults.fulfilled, (s, { payload }) => { s.loading = false; s.results = payload.data; s.total = payload.total; })
       .addCase(fetchResults.rejected, (s, { error }) => { s.loading = false; s.error = error.message || "Failed"; })
       .addCase(fetchResult.pending, (s) => { s.loading = true; s.current = null; })
-      .addCase(fetchResult.fulfilled, (s, { payload }) => { s.loading = false; s.current = payload; })
+      .addCase(fetchResult.fulfilled, (s, { payload }) => {
+        s.loading = false;
+        s.current = payload;
+        // Populate thinkingLog from stored result so review modal works on the results page
+        if (payload.thinkingLog?.length) s.thinkingLog = payload.thinkingLog;
+      })
       .addCase(fetchResult.rejected, (s, { error }) => { s.loading = false; s.error = error.message || "Failed"; })
       .addCase(fetchLatestForJob.fulfilled, (s, { payload }) => { s.current = payload; })
       .addCase(deleteResult.fulfilled, (s, { payload }) => { s.results = s.results.filter(r => r._id !== payload); });
@@ -179,6 +194,8 @@ export const {
   addThought,
   addThoughts,
   clearThoughts,
+  addThinkingSnapshot,
+  setThinkingLog,
   updateLiveScores,
   updatePartialShortlist,
   incrementEvaluatedCount,

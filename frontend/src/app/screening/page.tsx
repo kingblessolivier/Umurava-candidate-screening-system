@@ -59,6 +59,7 @@ export default function ScreeningPage() {
     handleRunScreening,
     running,
     thoughts,
+    thinkingLog,
     liveScores,
     partialShortlist,
     evaluatedCount,
@@ -66,6 +67,7 @@ export default function ScreeningPage() {
     setTotalCandidatesCount,
     addScreeningThought,
     clearScreeningThoughts,
+    addThinkingSnapshotToLog,
     setLiveScores,
     setPartialShortlist,
     setEvaluatedCountTo,
@@ -191,12 +193,34 @@ export default function ScreeningPage() {
         liveScores?: { skills: number; experience: number; education: number; projects: number; availability: number };
         partialShortlist?: CandidateScore[];
         evaluatedCount?: number;
+        thinkingSnapshot?: {
+          stage: 'evaluating' | 'reranking' | 'rejection';
+          batchIndex: number;
+          batchLabel: string;
+          candidateNames: string[];
+          thinking: string;
+          timestamp: string;
+        };
       } | undefined;
 
       if (!progressEvent) continue;
 
       const now = new Date();
       const timestamp = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+
+      // Thinking snapshots: dispatch a special thought AND store in thinkingLog
+      if (progressEvent.type === 'thinking' && progressEvent.thinkingSnapshot) {
+        addThinkingSnapshotToLog(progressEvent.thinkingSnapshot);
+        addScreeningThought({
+          id: `thinking-${dedupKey}`,
+          type: 'thinking',
+          message: progressEvent.thinkingSnapshot.batchLabel,
+          timestamp,
+          status: 'completed',
+          thinkingContent: progressEvent.thinkingSnapshot.thinking,
+        });
+        continue;
+      }
 
       addScreeningThought({
         id: `thought-${dedupKey}`,

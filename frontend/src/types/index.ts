@@ -175,6 +175,15 @@ export interface AggregateInsights {
   recommendationBreakdown: Record<string, number>;
 }
 
+export interface ThinkingSnapshot {
+  stage: 'evaluating' | 'reranking' | 'rejection';
+  batchIndex: number;
+  batchLabel: string;
+  candidateNames: string[];
+  thinking: string;
+  timestamp: string;
+}
+
 export interface ScreeningResult {
   _id: string;
   jobId: string;
@@ -188,6 +197,7 @@ export interface ScreeningResult {
   aiModel: string;
   processingTimeMs: number;
   createdAt: string;
+  thinkingLog?: ThinkingSnapshot[];
 }
 
 export interface DashboardStats {
