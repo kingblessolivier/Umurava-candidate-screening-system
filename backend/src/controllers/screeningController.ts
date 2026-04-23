@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { Job as JobModel } from "../models/Job";
 import { Candidate } from "../models/Candidate";
 import { ScreeningResultModel } from "../models/ScreeningResult";
-import { runScreeningPipeline } from "../services/geminiService";
+import { runScreeningPipeline, ScreeningProgressFn } from "../services/geminiService";
 import { preprocessCandidates } from "../services/preprocessingService";
 import {
   createJob,
@@ -94,7 +94,24 @@ export const runScreening = async (req: Request, res: Response) => {
           return scoreB - scoreA;
         });
 
-        const screeningData = await runScreeningPipeline(job, preprocessed, shortlistSize);
+        // Emit real-time progress via SSE so the frontend can show AI thinking
+        const onProgress: ScreeningProgressFn = (event) => {
+          sendNotificationToUser(userId, {
+            type: "job_update",
+            jobId: bgJob.id,
+            jobType: "screening",
+            status: "running",
+            title: "Screening in Progress",
+            message: event.message,
+            metadata: {
+              ...bgJob.metadata,
+              progressEvent: event,
+            },
+            timestamp: new Date().toISOString(),
+          });
+        };
+
+        const screeningData = await runScreeningPipeline(job, preprocessed, shortlistSize, onProgress);
         const result = await ScreeningResultModel.create({ ...screeningData, jobId });
 
         updateJob(bgJob.id, "done", { screeningResultId: result._id.toString() });

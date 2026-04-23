@@ -14,6 +14,7 @@ import {
   updateLiveScores,
   updatePartialShortlist,
   incrementEvaluatedCount,
+  setEvaluatedCount,
   resetLiveState,
 } from '@/store/screeningSlice';
 import { Thought } from '@/components/screening/ThinkingStream';
@@ -103,6 +104,13 @@ export function useScreening() {
     dispatch(incrementEvaluatedCount());
   }, [dispatch]);
 
+  const setEvaluatedCountTo = useCallback(
+    (count: number) => {
+      dispatch(setEvaluatedCount(count));
+    },
+    [dispatch]
+  );
+
   const resetLiveScreeningState = useCallback(() => {
     dispatch(resetLiveState());
   }, [dispatch]);
@@ -128,6 +136,7 @@ export function useScreening() {
     setLiveScores,
     setPartialShortlist,
     bumpEvaluatedCount,
+    setEvaluatedCountTo,
     resetLiveScreeningState,
   };
 }

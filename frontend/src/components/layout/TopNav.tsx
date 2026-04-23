@@ -14,6 +14,9 @@ import {
   Sparkles,
   CheckCircle2,
   XCircle,
+  Loader2,
+  FileText,
+  Brain,
 } from 'lucide-react';
 import { Avatar } from '@/components/ui/Avatar';
 import { cn } from '@/lib/utils';
@@ -41,7 +44,8 @@ export function TopNav({
   const router = useRouter();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
-  const { notifications, unreadCount, markAsRead, clearAll } = useNotifications();
+  const { notifications, activeJobs, unreadCount, markAsRead, clearAll } = useNotifications();
+  const activeJobList = Object.values(activeJobs);
 
   const handleNotificationClick = (id: string, link?: string) => {
     markAsRead(id);
@@ -124,8 +128,8 @@ export function TopNav({
                   )}
                 </div>
 
-                <div className="max-h-96 overflow-y-auto">
-                  {notifications.length === 0 ? (
+                <div className="max-h-[480px] overflow-y-auto">
+                  {activeJobList.length === 0 && notifications.length === 0 ? (
                     <div className="p-8 text-center">
                       <Bell className="w-8 h-8 text-gray-300 mx-auto mb-2" />
                       <p className="text-sm text-gray-500">No notifications yet</p>
@@ -135,6 +139,39 @@ export function TopNav({
                     </div>
                   ) : (
                     <div className="divide-y divide-gray-100">
+                      {/* ── Active (in-progress) jobs at top ─────────────── */}
+                      {activeJobList.map((job) => (
+                        <div key={job.bgJobId} className="p-4 bg-blue-50/40">
+                          <div className="flex gap-3">
+                            <div className="flex-shrink-0 mt-0.5">
+                              <div className="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center">
+                                {job.jobType === 'screening' ? (
+                                  <Brain className="w-3.5 h-3.5 text-blue-600" />
+                                ) : (
+                                  <FileText className="w-3.5 h-3.5 text-blue-600" />
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-0.5">
+                                <p className="text-xs font-semibold text-gray-900">{job.title}</p>
+                                <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-blue-100">
+                                  <span className="w-1 h-1 rounded-full bg-blue-600 animate-pulse" />
+                                  <span className="text-[10px] font-medium text-blue-700">Live</span>
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-gray-600 line-clamp-2">{job.message}</p>
+                              <div className="mt-2 h-1 bg-blue-100 rounded-full overflow-hidden">
+                                <div className="h-full bg-blue-500 rounded-full animate-pulse w-2/3" />
+                              </div>
+                              <p className="text-[10px] text-gray-400 mt-1">{formatTimestamp(job.timestamp)}</p>
+                            </div>
+                            <Loader2 className="w-4 h-4 text-blue-500 animate-spin flex-shrink-0 mt-0.5" />
+                          </div>
+                        </div>
+                      ))}
+
+                      {/* ── Completed notifications ───────────────────────── */}
                       {notifications.map((n) => (
                         <div
                           key={n.id}

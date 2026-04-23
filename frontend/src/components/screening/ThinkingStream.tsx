@@ -20,6 +20,7 @@ export interface Thought {
   candidateName?: string;
   timestamp: string;
   status: 'pending' | 'processing' | 'completed';
+  detail?: string;
 }
 
 interface ThinkingStreamProps {

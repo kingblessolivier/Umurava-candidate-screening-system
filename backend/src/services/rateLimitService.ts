@@ -205,8 +205,13 @@ export class RateLimitedGeminiService {
         console.log("[Quota Reset] Attempting requests again");
       }, retrySeconds * 1000 + 1000);
     } else {
-      // Default: 1 hour
-      this.quotaResetTime = Date.now() + 3600 * 1000;
+      // Default: 60 seconds — conservative but not permanently locked
+      const fallbackMs = 60 * 1000;
+      this.quotaResetTime = Date.now() + fallbackMs;
+      setTimeout(() => {
+        this.isQuotaExceeded = false;
+        console.log("[Quota Reset] Retrying after default backoff");
+      }, fallbackMs + 1000);
     }
   }
 

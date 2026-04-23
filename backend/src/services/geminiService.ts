@@ -44,16 +44,23 @@ interface GenerateOptions {
 
 async function generate(opts: GenerateOptions): Promise<string> {
   const ai = getClient();
+  const budget = opts.thinkingBudget ?? 0;
+  const useThinking = budget > 0;
+
   const response = await ai.models.generateContent({
     model: MODEL_NAME,
     contents: opts.prompt,
     config: {
       systemInstruction: RECRUITER_SYSTEM_INSTRUCTION,
-      temperature:      opts.temperature      ?? 0.2,
-      topP:             0.8,
+      // gemini-2.5-flash only supports temperature=1 when thinking is enabled.
+      // Sending any other value causes a 400 that silently becomes empty evaluations.
+      temperature:     useThinking ? 1 : (opts.temperature ?? 0.2),
+      // topP is not compatible with thinking mode on gemini-2.5
+      ...(useThinking ? {} : { topP: 0.8 }),
       maxOutputTokens:  opts.maxOutputTokens  ?? 8192,
       responseMimeType: "application/json",
-      thinkingConfig:   { thinkingBudget: opts.thinkingBudget ?? 0 },
+      // Only include thinkingConfig when actually using thinking
+      ...(useThinking ? { thinkingConfig: { thinkingBudget: budget } } : {}),
       safetySettings:   SAFETY_SETTINGS,
     },
   });
@@ -557,13 +564,45 @@ IMPORTANT:
 // MAIN SCREENING PIPELINE
 // ═══════════════════════════════════════════════════════════════════════════════
 
+export interface ScreeningProgressEvent {
+  type: 'analyzing' | 'scoring' | 'flagging' | 'generating' | 'evaluating' | 'completed';
+  message: string;
+  candidateName?: string;
+  detail?: string;
+  liveScores?: { skills: number; experience: number; education: number; projects: number; availability: number };
+  partialShortlist?: CandidateScore[];
+  evaluatedCount?: number;
+}
+
+export type ScreeningProgressFn = (event: ScreeningProgressEvent) => void;
+
+function computePartialLiveScores(
+  evaluations: CandidateScore[]
+): ScreeningProgressEvent["liveScores"] {
+  if (evaluations.length === 0) return undefined;
+  return {
+    skills:       avg(evaluations.map(e => e.breakdown.skillsScore)),
+    experience:   avg(evaluations.map(e => e.breakdown.experienceScore)),
+    education:    avg(evaluations.map(e => e.breakdown.educationScore)),
+    projects:     avg(evaluations.map(e => e.breakdown.projectsScore)),
+    availability: avg(evaluations.map(e => e.breakdown.availabilityScore)),
+  };
+}
+
 export async function runScreeningPipeline(
   job: Job,
   preprocessed: PreprocessedCandidate[],
-  shortlistSize: number
+  shortlistSize: number,
+  onProgress?: ScreeningProgressFn
 ): Promise<Omit<ScreeningResult, "_id" | "screeningDate" | "createdAt">> {
   const startTime = Date.now();
   const BATCH_SIZE = 20;
+
+  onProgress?.({
+    type: "analyzing",
+    message: `Analyzing ${preprocessed.length} candidate${preprocessed.length !== 1 ? "s" : ""} for "${job.title}"…`,
+    evaluatedCount: 0,
+  });
 
   // ── Step 1: Evaluate candidates in sequential batches ─────────────────────
   // Sequential (not parallel) to respect rate limits properly
@@ -579,6 +618,15 @@ export async function runScreeningPipeline(
     const cacheKey = `screening:${job._id}:batch-${batchIndex}:size-${batch.length}`;
     const prompt = buildEvaluationPrompt(job, batch);
 
+    // Emit the names in this batch so the user sees who is being evaluated
+    const previewNames = batch.slice(0, 4).map(c => c.candidateName.split(" ")[0]).join(", ");
+    const suffix = batch.length > 4 ? ` +${batch.length - 4} more` : "";
+    onProgress?.({
+      type: "evaluating",
+      message: `Evaluating batch ${batchIndex + 1} of ${batches.length}: ${previewNames}${suffix}`,
+      evaluatedCount: allEvaluations.length,
+    });
+
     console.log(`[Screening] Evaluating batch ${batchIndex + 1}/${batches.length} (${batch.length} candidates)`);
 
     const result = await generateWithRateLimit<{ evaluations: CandidateScore[] }>(
@@ -588,6 +636,18 @@ export async function runScreeningPipeline(
     );
 
     allEvaluations.push(...(result.evaluations || []));
+
+    // Emit live scores + partial leaderboard after the batch lands
+    const partialSorted = [...allEvaluations]
+      .sort((a, b) => b.finalScore - a.finalScore)
+      .slice(0, 5);
+    onProgress?.({
+      type: "scoring",
+      message: `Batch ${batchIndex + 1} scored — ${allEvaluations.length}/${preprocessed.length} candidates evaluated`,
+      liveScores: computePartialLiveScores(allEvaluations),
+      partialShortlist: partialSorted,
+      evaluatedCount: allEvaluations.length,
+    });
   }
 
   if (allEvaluations.length === 0 && preprocessed.length > 0) {
@@ -603,6 +663,12 @@ export async function runScreeningPipeline(
     const topPreprocessed = preprocessed.filter(p => topIds.has(p.candidateId));
 
     console.log(`[Screening] Re-ranking top ${topPreprocessed.length} candidates across batches`);
+
+    onProgress?.({
+      type: "analyzing",
+      message: `Re-ranking top ${topPreprocessed.length} candidates across all batches…`,
+      evaluatedCount: allEvaluations.length,
+    });
 
     const finalPrompt = buildEvaluationPrompt(job, topPreprocessed);
     const finalResult = await generateWithRateLimit<{ evaluations: CandidateScore[] }>(
@@ -643,6 +709,12 @@ export async function runScreeningPipeline(
   const allRejected = [...rejectedFromEval, ...neverEvaluated];
 
   if (allRejected.length > 0 && shortlist.length > 0) {
+    onProgress?.({
+      type: "generating",
+      message: `Generating feedback for ${allRejected.length} candidate${allRejected.length !== 1 ? "s" : ""} not shortlisted…`,
+      evaluatedCount: preprocessed.length,
+    });
+
     const rankingPrompt = buildRankingPrompt(job, allRejected, 0, lowestShortlistScore);
     const rankResult = await generateWithRateLimit<{ rejectedCandidates: RejectedCandidate[] }>(
       `screening:${job._id}:rejection-reasons`,
@@ -657,6 +729,14 @@ export async function runScreeningPipeline(
 
   const processingTimeMs = Date.now() - startTime;
   console.log(`[Screening] Done in ${(processingTimeMs / 1000).toFixed(1)}s — ${shortlist.length} shortlisted, ${rejectedCandidates.length} rejected`);
+
+  onProgress?.({
+    type: "completed",
+    message: `Screening complete — ${shortlist.length} candidates shortlisted from ${preprocessed.length} applicants`,
+    liveScores: computePartialLiveScores(shortlist),
+    partialShortlist: shortlist.slice(0, 5),
+    evaluatedCount: preprocessed.length,
+  });
 
   return {
     jobId: job._id || "",

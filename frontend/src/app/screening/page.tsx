@@ -11,14 +11,11 @@ import { useScreening } from '@/hooks/useScreening';
 import { useNotifications } from '@/contexts/NotificationsContext';
 import {
   Zap,
-  Loader2,
   Users,
   Brain,
   AlertTriangle,
-  Clock,
   Sparkles,
   Trophy,
-  ChevronRight,
   Eye,
   Settings2,
   Star,
@@ -28,12 +25,12 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
 import { cn } from '@/lib/utils';
 import { AIThinkingStream } from '@/components/screening/AIThinkingStream';
 import { LiveScoreGauges } from '@/components/screening/LiveScoreGauges';
 import { LiveLeaderboard } from '@/components/screening/LiveLeaderboard';
 import { CriteriaSelector } from '@/components/screening/CriteriaSelector';
+import { CandidateScore } from '@/types';
 
 function formatTime(seconds: number): string {
   const mins = Math.floor(seconds / 60);
@@ -56,7 +53,7 @@ export default function ScreeningPage() {
   // Hooks after state
   const { jobs, loading: jobsLoading } = useJobs();
   const { total: candidateCount } = useJobCandidates(jobId || null);
-  const { notifications } = useNotifications();
+  const { notifications, liveEvents } = useNotifications();
   const pendingBgJobId = useSelector((s: RootState) => s.screening.pendingBgJobId);
   const {
     handleRunScreening,
@@ -71,7 +68,7 @@ export default function ScreeningPage() {
     clearScreeningThoughts,
     setLiveScores,
     setPartialShortlist,
-    bumpEvaluatedCount,
+    setEvaluatedCountTo,
     resetLiveScreeningState,
   } = useScreening();
 
@@ -101,6 +98,7 @@ export default function ScreeningPage() {
     if (running) {
       resetLiveScreeningState();
       setTotalCandidatesCount(candidateCount);
+      seenEventTimestamps.current.clear();
     }
   }, [running]);
 
@@ -138,6 +136,9 @@ export default function ScreeningPage() {
     }
   }, [notifications, pendingBgJobId, dispatch, router]);
 
+  // Ref for deduplicating live SSE events — cleared when a new run starts
+  const seenEventTimestamps = React.useRef<Set<string>>(new Set());
+
   const handleRun = async () => {
     if (!jobId) {
       toast.error('Please select a job position');
@@ -169,100 +170,57 @@ export default function ScreeningPage() {
     }
   };
 
-  // Simulation for demo
-  const [simulatedCandidates, setSimulatedCandidates] = useState<string[]>([]);
-
+  // Consume real SSE progress events from the backend and feed them into the thought stream
   useEffect(() => {
-    if (running && simulatedCandidates.length === 0 && candidateCount > 0) {
-      const firstNames = ['Alexandra', 'Marcus', 'Priya', 'James', 'Sofia', 'Chen', 'Maria', 'David', 'Emma', 'Kenji', 'Sarah', 'Michael', 'Yuki', 'Daniel', 'Aisha'];
-      const lastNames = ['Chen', 'Rodriguez', 'Sharma', 'Williams', 'Martinez', 'Thompson', 'Kim', 'Johnson', 'Patel', 'Anderson', 'Garcia', 'Lee', 'Brown', 'Taylor', 'Nguyen'];
-      const names: string[] = [];
-      for (let i = 0; i < Math.min(candidateCount, 15); i++) {
-        names.push(`${firstNames[i % firstNames.length]} ${lastNames[i % lastNames.length]}`);
-      }
-      setSimulatedCandidates(names);
-    }
-    if (!running) {
-      setSimulatedCandidates([]);
-    }
-  }, [running, candidateCount]);
+    if (!pendingBgJobId || liveEvents.length === 0) return;
 
-  // Simulated scoring
-  useEffect(() => {
-    if (!running || simulatedCandidates.length === 0) return;
+    // Process only events matching our active background job
+    for (const event of liveEvents) {
+      if (event.jobId !== pendingBgJobId) continue;
 
-    const interval = setInterval(() => {
-      const thoughtTypes = [
-        { type: 'analyzing' as const, messages: ['Analyzing candidate profile...', 'Reviewing skills alignment...', 'Computing match score...'] },
-        { type: 'scoring' as const, messages: ['Scoring technical skills...', 'Evaluating experience depth...', 'Assessing project portfolio...'] },
-        { type: 'flagging' as const, messages: ['Running bias detection...', 'Checking availability windows...', 'Validating data integrity...'] },
-      ];
+      // Deduplicate by timestamp to avoid re-processing on re-renders
+      const dedupKey = `${event.jobId}:${event.timestamp}`;
+      if (seenEventTimestamps.current.has(dedupKey)) continue;
+      seenEventTimestamps.current.add(dedupKey);
 
-      const candidate = simulatedCandidates[Math.floor(Math.random() * simulatedCandidates.length)];
-      const thoughtType = thoughtTypes[Math.floor(Math.random() * thoughtTypes.length)];
-      const message = thoughtType.messages[Math.floor(Math.random() * thoughtType.messages.length)];
+      const progressEvent = event.metadata.progressEvent as {
+        type: string;
+        message: string;
+        candidateName?: string;
+        detail?: string;
+        liveScores?: { skills: number; experience: number; education: number; projects: number; availability: number };
+        partialShortlist?: CandidateScore[];
+        evaluatedCount?: number;
+      } | undefined;
+
+      if (!progressEvent) continue;
 
       const now = new Date();
       const timestamp = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
 
       addScreeningThought({
-        id: `thought-${Date.now()}-${Math.random()}`,
-        type: thoughtType.type,
-        message: `${message} ${candidate.split(' ')[0]}`,
-        candidateName: candidate,
+        id: `thought-${dedupKey}`,
+        type: (progressEvent.type as 'analyzing' | 'scoring' | 'flagging' | 'generating' | 'evaluating' | 'completed') || 'analyzing',
+        message: progressEvent.message,
+        candidateName: progressEvent.candidateName,
         timestamp,
         status: 'completed',
+        detail: progressEvent.detail,
       });
 
-      // Update scores
-      setLiveScores({
-        skills: 65 + Math.random() * 30,
-        experience: 60 + Math.random() * 30,
-        education: 70 + Math.random() * 25,
-        projects: 55 + Math.random() * 35,
-        availability: 65 + Math.random() * 30,
-      });
-
-      // Add to leaderboard
-      if (Math.random() > 0.5 && partialShortlist.length < 5) {
-        const score = 70 + Math.floor(Math.random() * 25);
-        const newCandidate = {
-          candidateId: `sim-${Date.now()}`,
-          candidateName: candidate,
-          email: `${candidate.toLowerCase().replace(' ', '.')}@example.com`,
-          rank: partialShortlist.length + 1,
-          finalScore: score,
-          breakdown: {
-            skillsScore: 60 + Math.floor(Math.random() * 35),
-            experienceScore: 55 + Math.floor(Math.random() * 40),
-            educationScore: 65 + Math.floor(Math.random() * 30),
-            projectsScore: 50 + Math.floor(Math.random() * 45),
-            availabilityScore: 60 + Math.floor(Math.random() * 40),
-          },
-          confidenceScore: 75 + Math.floor(Math.random() * 20),
-          strengths: ['Strong technical background', 'Relevant experience', 'Good culture fit'],
-          gaps: ['Could improve certain skills'],
-          risks: [],
-          recommendation: score >= 85 ? 'Strongly Recommended' as const : score >= 70 ? 'Recommended' as const : 'Consider' as const,
-          summary: `Experienced professional with strong potential.`,
-          reasoning: 'Candidate shows strong alignment with job requirements.',
-          interviewQuestions: ['Tell me about your experience with...', 'Describe a challenging project...', 'How do you handle conflicts?'],
-          skillGapAnalysis: {
-            matched: ['JavaScript', 'React', 'Node.js'],
-            missing: ['TypeScript'],
-            bonus: ['AWS', 'Docker'],
-          },
-          biasFlags: [],
-          riskFlags: [],
-        };
-        setPartialShortlist([...partialShortlist.slice(-4), newCandidate]);
+      if (progressEvent.liveScores) {
+        setLiveScores(progressEvent.liveScores);
       }
 
-      bumpEvaluatedCount();
-    }, 800);
+      if (progressEvent.partialShortlist && progressEvent.partialShortlist.length > 0) {
+        setPartialShortlist(progressEvent.partialShortlist);
+      }
 
-    return () => clearInterval(interval);
-  }, [running, simulatedCandidates]);
+      if (progressEvent.evaluatedCount !== undefined) {
+        setEvaluatedCountTo(progressEvent.evaluatedCount);
+      }
+    }
+  }, [liveEvents, pendingBgJobId]);
 
   return (
     <div className="min-h-screen bg-gray-50/50">

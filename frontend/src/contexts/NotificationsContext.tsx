@@ -15,7 +15,7 @@ export interface AppNotification {
   bgJobId: string;
   title: string;
   message: string;
-  type: 'success' | 'error';
+  type: 'success' | 'error' | 'running';
   timestamp: string;
   read: boolean;
   link?: string;
@@ -26,7 +26,7 @@ interface SSEEvent {
   type: string;
   jobId: string;
   jobType: 'screening' | 'pdf_upload';
-  status: 'done' | 'failed' | string;
+  status: 'done' | 'failed' | 'running' | string;
   title: string;
   message: string;
   metadata: Record<string, unknown>;
@@ -35,22 +35,38 @@ interface SSEEvent {
   timestamp: string;
 }
 
+// Raw running-status events — used by the screening page to show real AI thoughts
+export interface SSELiveEvent {
+  jobId: string;
+  jobType: 'screening' | 'pdf_upload';
+  message: string;
+  metadata: Record<string, unknown>;
+  timestamp: string;
+}
+
 interface NotificationsContextValue {
   notifications: AppNotification[];
+  activeJobs: Record<string, AppNotification>; // in-progress jobs, keyed by bgJobId
   unreadCount: number;
   markAsRead: (id: string) => void;
   clearAll: () => void;
+  liveEvents: SSELiveEvent[];
 }
 
 const NotificationsContext = createContext<NotificationsContextValue>({
   notifications: [],
+  activeJobs: {},
   unreadCount: 0,
   markAsRead: () => {},
   clearAll: () => {},
+  liveEvents: [],
 });
 
 export function NotificationsProvider({ children }: { children: React.ReactNode }) {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  // Active (running) jobs updated in-place — one entry per bgJobId
+  const [activeJobs, setActiveJobs] = useState<Record<string, AppNotification>>({});
+  const [liveEvents, setLiveEvents] = useState<SSELiveEvent[]>([]);
   const esRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
@@ -71,7 +87,46 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
           const data = JSON.parse(event.data as string) as SSEEvent;
 
           if (data.type !== 'job_update') return;
+
+          // ── Running events: update the active-jobs panel + liveEvents ─────
+          if (data.status === 'running') {
+            // Update the active job entry (upsert in-place)
+            setActiveJobs((prev) => ({
+              ...prev,
+              [data.jobId]: {
+                id: `${data.jobId}-active`,
+                bgJobId: data.jobId,
+                title: data.title,
+                message: data.message,
+                type: 'running',
+                timestamp: data.timestamp,
+                read: false,
+                jobType: data.jobType,
+              },
+            }));
+
+            // Also add to liveEvents ring-buffer for the screening page
+            setLiveEvents((prev) => [
+              ...prev.slice(-99),
+              {
+                jobId: data.jobId,
+                jobType: data.jobType,
+                message: data.message,
+                metadata: data.metadata,
+                timestamp: data.timestamp,
+              },
+            ]);
+            return;
+          }
+
           if (data.status !== 'done' && data.status !== 'failed') return;
+
+          // ── Done / Failed: remove from active jobs, add to completed list ─
+          setActiveJobs((prev) => {
+            const next = { ...prev };
+            delete next[data.jobId];
+            return next;
+          });
 
           const link =
             data.status === 'done' &&
@@ -128,11 +183,14 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
 
   const clearAll = useCallback(() => setNotifications([]), []);
 
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  // Active jobs always count as "unread" while running
+  const unreadCount =
+    notifications.filter((n) => !n.read).length +
+    Object.keys(activeJobs).length;
 
   return (
     <NotificationsContext.Provider
-      value={{ notifications, unreadCount, markAsRead, clearAll }}
+      value={{ notifications, activeJobs, unreadCount, markAsRead, clearAll, liveEvents }}
     >
       {children}
     </NotificationsContext.Provider>

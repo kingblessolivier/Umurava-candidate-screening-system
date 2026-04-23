@@ -115,6 +115,9 @@ const screeningSlice = createSlice({
     incrementEvaluatedCount: (s) => {
       s.evaluatedCount += 1;
     },
+    setEvaluatedCount: (s, action: { payload: number }) => {
+      s.evaluatedCount = action.payload;
+    },
     resetLiveState: (s) => {
       s.thoughts = [];
       s.liveScores = { skills: 0, experience: 0, education: 0, projects: 0, availability: 0 };
@@ -179,6 +182,7 @@ export const {
   updateLiveScores,
   updatePartialShortlist,
   incrementEvaluatedCount,
+  setEvaluatedCount,
   resetLiveState,
   stopRunning,
   setSearchQuery,
