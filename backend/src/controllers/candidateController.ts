@@ -281,62 +281,98 @@ export const uploadPDFResumes = async (req: Request, res: Response) => {
         updateJob(bgJob.id, "running");
 
         const results = { parsed: [] as object[], errors: [] as string[] };
+        const jobTitle = (bgJob.metadata.jobTitle as string) ?? jobId;
 
-        // Process sequentially — pdfjs-dist allocates a large WASM heap per parse;
-        // running them in parallel exhausts Node's addressable memory and throws
-        // RangeError: Array buffer allocation failed via a native EventEmitter,
-        // which escapes try/catch and becomes an uncaughtException.
+        // ── Phase 1: Extract text from all PDFs sequentially ─────────────────
+        // pdfjs-dist allocates a large WASM heap per parse. Running extractions
+        // in parallel exhausts Node's addressable memory (RangeError: Array buffer
+        // allocation failed) via a native EventEmitter that escapes try/catch.
+        type Extracted = { originalname: string; cleanedText: string; email?: string };
+        const extracted: Extracted[] = [];
+
         for (const file of fileSnapshots) {
           try {
             const pdfData = await pdfParse(file.buffer);
-            const rawText = pdfData.text;
-
-            // Clean up noisy PDF extraction output before sending to AI
-            const cleanedText = rawText
+            const cleanedText = pdfData.text
               .replace(/\r\n/g, "\n")
               .replace(/\r/g, "\n")
-              .replace(/[ \t]+/g, " ")          // collapse horizontal whitespace
-              .replace(/\n{3,}/g, "\n\n")        // max two blank lines
-              .replace(/^\s*\d+\s*$/gm, "")      // remove lone page numbers
-              .replace(/[^\x00-\x7F]/g, " ")     // strip non-ASCII artifacts
+              .replace(/[ \t]+/g, " ")
+              .replace(/\n{3,}/g, "\n\n")
+              .replace(/^\s*\d+\s*$/gm, "")
+              .replace(/[^\x00-\x7F]/g, " ")
               .trim();
 
             const emailMatch = cleanedText.match(/[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,}/);
-            const email = emailMatch?.[0]?.toLowerCase();
-
-            const profile = await parseResumeToProfile(cleanedText, email);
-
-            const candidate = await Candidate.findOneAndUpdate(
-              { email: profile.email || email },
-              { ...profile, jobId, source: "pdf", parsedResumeText: cleanedText.substring(0, 6000) },
-              { upsert: true, new: true, setDefaultsOnInsert: true }
-            );
-
-            results.parsed.push({
-              candidateId: candidate._id,
-              name: `${profile.firstName} ${profile.lastName}`,
-              email: profile.email || email,
+            extracted.push({
+              originalname: file.originalname,
+              cleanedText,
+              email: emailMatch?.[0]?.toLowerCase(),
             });
           } catch (err) {
             results.errors.push(
-              `${file.originalname}: ${err instanceof Error ? err.message : "Parse failed"}`
+              `${file.originalname}: PDF read failed — ${err instanceof Error ? err.message : "unknown"}`
             );
           }
         }
+
+        // ── Phase 2: Parse all extracted texts concurrently via Gemini ────────
+        // The rate-limiter (MAX_CONCURRENT_REQUESTS = 2) caps concurrency so we
+        // don't hammer the API. Running these concurrently cuts total wall-clock
+        // time roughly in half versus the old sequential approach.
+        let completed = 0;
+        const total = extracted.length;
+
+        await Promise.allSettled(
+          extracted.map(async ({ originalname, cleanedText, email }) => {
+            try {
+              const profile = await parseResumeToProfile(cleanedText, email);
+
+              const candidate = await Candidate.findOneAndUpdate(
+                { email: profile.email || email },
+                { ...profile, jobId, source: "pdf", parsedResumeText: cleanedText.substring(0, 6000) },
+                { upsert: true, new: true, setDefaultsOnInsert: true }
+              );
+
+              results.parsed.push({
+                candidateId: candidate._id,
+                name:  `${profile.firstName} ${profile.lastName}`,
+                email: profile.email || email,
+              });
+            } catch (err) {
+              results.errors.push(
+                `${originalname}: ${err instanceof Error ? err.message : "Parse failed"}`
+              );
+            } finally {
+              completed++;
+              // Progress update after every resume so the user isn't left waiting
+              if (completed < total) {
+                sendNotificationToUser(userId, {
+                  type: "job_update",
+                  jobId: bgJob.id,
+                  jobType: "pdf_upload",
+                  status: "running",
+                  title: "Parsing Resumes…",
+                  message: `${completed} of ${total} resume(s) processed for "${jobTitle}"`,
+                  metadata: bgJob.metadata,
+                  timestamp: new Date().toISOString(),
+                });
+              }
+            }
+          })
+        );
 
         updateJob(bgJob.id, "done", {
           parsed: results.parsed.length,
           errors: results.errors.length,
         });
 
-        const jobTitle = (bgJob.metadata.jobTitle as string) ?? jobId;
         sendNotificationToUser(userId, {
           type: "job_update",
           jobId: bgJob.id,
           jobType: "pdf_upload",
           status: "done",
           title: "Resume Upload Complete",
-          message: `${results.parsed.length} of ${files.length} resume(s) parsed for "${jobTitle}".${
+          message: `${results.parsed.length} of ${fileSnapshots.length} resume(s) parsed for "${jobTitle}".${
             results.errors.length ? ` ${results.errors.length} failed.` : ""
           }`,
           metadata: bgJob.metadata,
