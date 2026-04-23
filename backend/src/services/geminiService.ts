@@ -5,7 +5,10 @@ import {
 } from "../types";
 import { rateLimitService } from "./rateLimitService";
 
-const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+// Dual-model configuration: resume parsing uses a fast model, screening uses a thinking-capable model
+const RESUME_PARSER_MODEL = process.env.RESUME_PARSER_MODEL || "gemini-2.0-flash-exp";
+const SCREENING_MODEL = process.env.SCREENING_MODEL || "gemini-2.5-pro";
+const SCREENING_THINKING_BUDGET = parseInt(process.env.SCREENING_THINKING_BUDGET || "2048", 10);
 
 // ─── System Instruction (set once, applies to all calls) ──────────────────────
 const RECRUITER_SYSTEM_INSTRUCTION = `You are an expert AI recruiter co-pilot built for a leading talent acquisition platform.
@@ -37,6 +40,7 @@ function getClient(): GoogleGenAI {
 // ─── Core generation wrapper ───────────────────────────────────────────────────
 interface GenerateOptions {
   prompt: string;
+  model?: string; // defaults to SCREENING_MODEL
   temperature?: number;
   maxOutputTokens?: number;
   thinkingBudget?: number; // 0 = off, >0 = reasoning tokens
@@ -45,11 +49,12 @@ interface GenerateOptions {
 
 async function generate(opts: GenerateOptions): Promise<string> {
   const ai = getClient();
+  const model = opts.model ?? SCREENING_MODEL;
   const budget = opts.thinkingBudget ?? 0;
   const useThinking = budget > 0;
 
   const response = await ai.models.generateContent({
-    model: MODEL_NAME,
+    model,
     contents: opts.prompt,
     config: {
       systemInstruction: RECRUITER_SYSTEM_INSTRUCTION,
@@ -180,7 +185,7 @@ Return ONLY this JSON structure:
 
   return generateWithRateLimit(
     `job-enhance:${title.toLowerCase().replace(/\s+/g, "-")}`,
-    { prompt, temperature: 0.3, maxOutputTokens: 4096, thinkingBudget: 512 },
+    { prompt, model: SCREENING_MODEL, temperature: 0.3, maxOutputTokens: 4096, thinkingBudget: 512 },
     fallback
   );
 }
@@ -567,7 +572,7 @@ IMPORTANT:
 
   return generateWithRateLimit(
     `resume-parse:${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    { prompt, temperature: 0.1, maxOutputTokens: 6144, thinkingBudget: 512 },
+    { prompt, model: RESUME_PARSER_MODEL, temperature: 0.1, maxOutputTokens: 6144, thinkingBudget: 0 },
     fallback,
     { useCache: false }
   );
@@ -663,7 +668,7 @@ export async function runScreeningPipeline(
 
     const result = await generateWithRateLimit<{ evaluations: CandidateScore[] }>(
       cacheKey,
-      { prompt, temperature: 0.2, maxOutputTokens: 12288, thinkingBudget: 2048, onThinking },
+      { prompt, model: SCREENING_MODEL, temperature: 0.2, maxOutputTokens: 12288, thinkingBudget: SCREENING_THINKING_BUDGET, onThinking },
       { evaluations: [] }
     );
 
@@ -722,7 +727,7 @@ export async function runScreeningPipeline(
     const finalPrompt = buildEvaluationPrompt(job, topPreprocessed);
     const finalResult = await generateWithRateLimit<{ evaluations: CandidateScore[] }>(
       `screening:${job._id}:final-ranking`,
-      { prompt: finalPrompt, temperature: 0.2, maxOutputTokens: 12288, thinkingBudget: 3072, onThinking: rerankOnThinking },
+      { prompt: finalPrompt, model: SCREENING_MODEL, temperature: 0.2, maxOutputTokens: 12288, thinkingBudget: SCREENING_THINKING_BUDGET, onThinking: rerankOnThinking },
       { evaluations: allEvaluations.slice(0, shortlistSize) }
     );
     allEvaluations = finalResult.evaluations || allEvaluations.slice(0, shortlistSize);
@@ -785,7 +790,7 @@ export async function runScreeningPipeline(
     const rankingPrompt = buildRankingPrompt(job, allRejected, 0, lowestShortlistScore);
     const rankResult = await generateWithRateLimit<{ rejectedCandidates: RejectedCandidate[] }>(
       `screening:${job._id}:rejection-reasons`,
-      { prompt: rankingPrompt, temperature: 0.3, maxOutputTokens: 8192, thinkingBudget: 1024, onThinking: rejectionOnThinking },
+      { prompt: rankingPrompt, model: SCREENING_MODEL, temperature: 0.3, maxOutputTokens: 8192, thinkingBudget: SCREENING_THINKING_BUDGET, onThinking: rejectionOnThinking },
       { rejectedCandidates: [] }
     );
     rejectedCandidates = rankResult.rejectedCandidates || [];
@@ -813,7 +818,7 @@ export async function runScreeningPipeline(
     shortlist,
     rejectedCandidates,
     aggregateInsights,
-    aiModel: MODEL_NAME,
+    aiModel: SCREENING_MODEL,
     processingTimeMs,
     thinkingLog,
   };
