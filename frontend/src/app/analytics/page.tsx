@@ -146,13 +146,13 @@ function SectionHeader({
 
 // ─── Chart Components ──────────────────────────────────────────────────────────
 
-function SkillGapChart({ skills, gaps }: { skills: { skill: string; count: number; avgScore: number }[]; gaps: { skill: string; missingCount: number }[] }) {
+function SkillGapChart({ skills, gaps }: { skills: { skill: string; count: number; avgScore: number }[]; gaps: { skill: string; count: number }[] }) {
   const combinedData = useMemo(() => {
     const data = skills.slice(0, 6).map((s, i) => ({
       skill: s.skill,
       demand: Math.min(100, s.count * 5 + 40),
       supply: Math.min(100, Math.max(20, s.avgScore)),
-      gap: gaps.find(g => g.skill === s.skill) ? -Math.min(30, gaps.find(g => g.skill === s.skill)!.missingCount * 3) : 10,
+      gap: gaps.find(g => g.skill === s.skill) ? -Math.min(30, gaps.find(g => g.skill === s.skill)!.count * 3) : 10,
       color: criteriaColors[i % criteriaColors.length],
     }));
     return data;
@@ -308,7 +308,12 @@ export default function AnalyticsPage() {
   const totalRecs = Object.values(recBreakdown).reduce((a, b) => a + b, 0);
   const topSkills = dashboard?.topSkills || [];
   const commonGaps = dashboard?.commonGaps || [];
-  const recentScreenings = dashboard?.recentScreenings || [];
+  const recentScreenings = (dashboard?.recentScreenings || []).map((s) => ({
+    jobTitle: s.jobTitle || 'Unknown Job',
+    totalApplicants: s.totalApplicants ?? 0,
+    shortlistSize: s.shortlistSize ?? 0,
+    screeningDate: s.screeningDate || new Date().toISOString(),
+  }));
   const candidateSources = dashboard?.candidateSources || [];
 
   const handleRefresh = () => {
@@ -604,12 +609,12 @@ export default function AnalyticsPage() {
                         <div className="flex-1">
                           <div className="flex items-center justify-between mb-1">
                             <span className="text-xs font-medium text-gray-700">{gap.skill}</span>
-                            <span className="text-xs font-bold text-amber-600">{gap.missingCount}</span>
+                            <span className="text-xs font-bold text-amber-600">{gap.count}</span>
                           </div>
                           <div className="h-1.5 bg-gray-100 rounded overflow-hidden">
                             <div
                               className="h-full rounded transition-all duration-500 bg-amber-400"
-                              style={{ width: `${Math.min(100, (gap.missingCount / commonGaps[0].missingCount) * 100)}%` }}
+                              style={{ width: `${Math.min(100, (gap.count / commonGaps[0].count) * 100)}%` }}
                             />
                           </div>
                         </div>
