@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CheckCircle2, Circle, Brain, Sparkles, AlertTriangle, FileText, Trophy } from 'lucide-react';
+import { CheckCircle2, Circle, Brain, Sparkles, AlertTriangle, FileText, Trophy, Cpu } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export type ThoughtType =
@@ -36,6 +36,7 @@ const THOUGHT_ICONS: Record<ThoughtType, React.ElementType> = {
   flagging: AlertTriangle,
   generating: FileText,
   evaluating: Circle,
+  thinking: Cpu,
   completed: Trophy,
 };
 
@@ -45,6 +46,7 @@ const THOUGHT_COLORS: Record<ThoughtType, string> = {
   flagging: '#f59e0b',
   generating: '#34d399',
   evaluating: '#6b7280',
+  thinking: '#8b5cf6',
   completed: '#22c55e',
 };
 

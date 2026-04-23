@@ -11,8 +11,10 @@ import {
   ArrowLeft, Users, Clock, ChevronDown, ChevronUp, ChevronRight,
   MessageSquare, CheckCircle, XCircle, AlertTriangle, Shield, Eye,
   TrendingDown, Lightbulb, BarChart3, Download, Check,
-  CheckSquare, Square, Sparkles, Filter,
+  CheckSquare, Square, Sparkles, Filter, Brain, Activity,
+  Database, Trophy, FileText, Server,
 } from "lucide-react";
+import { AIThinkingReviewModal } from "@/components/screening/AIThinkingReviewModal";
 import {
   RadarChart, PolarGrid, PolarAngleAxis, Radar, ResponsiveContainer,
   Tooltip, BarChart, Bar, XAxis, YAxis, Cell,
@@ -23,12 +25,12 @@ import { CandidateScore, RejectedCandidate, ScreeningResult } from "@/types";
 type PipelineStage = "new" | "interview" | "hold" | "offer" | "hired" | "pass";
 
 const PIPELINE: Record<PipelineStage, { label: string; color: string; bg: string; border: string }> = {
-  new:       { label: "New",       color: "#6b7280", bg: "#f9fafb",  border: "#e5e7eb" },
-  interview: { label: "Interview", color: "#2563eb", bg: "#eff6ff",  border: "#bfdbfe" },
-  hold:      { label: "On Hold",   color: "#d97706", bg: "#fffbeb",  border: "#fde68a" },
-  offer:     { label: "Offer",     color: "#7c3aed", bg: "#f5f3ff",  border: "#ddd6fe" },
-  hired:     { label: "Hired",     color: "#16a34a", bg: "#f0fdf4",  border: "#bbf7d0" },
-  pass:      { label: "Pass",      color: "#dc2626", bg: "#fef2f2",  border: "#fecaca" },
+  new:       { label: "New",       color: "#64748b", bg: "#1e293b",  border: "#334155" },
+  interview: { label: "Interview", color: "#60a5fa", bg: "#1e3a5f",  border: "#2563eb" },
+  hold:      { label: "On Hold",   color: "#fbbf24", bg: "#2d1f00",  border: "#d97706" },
+  offer:     { label: "Offer",     color: "#a78bfa", bg: "#1e1040",  border: "#7c3aed" },
+  hired:     { label: "Hired",     color: "#4ade80", bg: "#052e16",  border: "#16a34a" },
+  pass:      { label: "Pass",      color: "#f87171", bg: "#2d0707",  border: "#dc2626" },
 };
 
 type RecFilter = "All" | "Strongly Recommended" | "Recommended" | "Consider" | "Not Recommended";
@@ -36,20 +38,20 @@ type SortBy    = "score" | "confidence" | "skills";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const REC_CONFIG: Record<string, { color: string; bg: string; border: string; dot: string; short: string }> = {
-  "Strongly Recommended": { color: "#16a34a", bg: "#f0fdf4", border: "#bbf7d0", dot: "#22c55e", short: "Strong Rec." },
-  "Recommended":          { color: "#2563eb", bg: "#eff6ff", border: "#bfdbfe", dot: "#3b82f6", short: "Recommended" },
-  "Consider":             { color: "#d97706", bg: "#fffbeb", border: "#fde68a", dot: "#f59e0b", short: "Consider"    },
-  "Not Recommended":      { color: "#dc2626", bg: "#fef2f2", border: "#fecaca", dot: "#ef4444", short: "Not Rec."    },
+  "Strongly Recommended": { color: "#4ade80", bg: "#052e16", border: "#16a34a33", dot: "#22c55e", short: "STRONG REC." },
+  "Recommended":          { color: "#60a5fa", bg: "#0c1e35", border: "#2563eb33", dot: "#3b82f6", short: "RECOMMENDED" },
+  "Consider":             { color: "#fbbf24", bg: "#2d1f00", border: "#d9770633", dot: "#f59e0b", short: "CONSIDER"    },
+  "Not Recommended":      { color: "#f87171", bg: "#2d0707", border: "#dc262633", dot: "#ef4444", short: "NOT REC."    },
 };
 
 function scoreColor(s: number): string {
-  if (s >= 80) return "#16a34a";
-  if (s >= 65) return "#2563eb";
-  if (s >= 50) return "#d97706";
-  return "#dc2626";
+  if (s >= 80) return "#4ade80";
+  if (s >= 65) return "#60a5fa";
+  if (s >= 50) return "#fbbf24";
+  return "#f87171";
 }
 
-const SEVERITY_COLOR: Record<string, string> = { high: "#dc2626", medium: "#d97706", low: "#6b7280" };
+const SEVERITY_COLOR: Record<string, string> = { high: "#f87171", medium: "#fbbf24", low: "#94a3b8" };
 
 function hexToRgb(hex: string): [number, number, number] {
   return [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)];
@@ -58,6 +60,11 @@ function hexToRgb(hex: string): [number, number, number] {
 function displayName(c: CandidateScore): string {
   if (c.candidateName?.trim()) return c.candidateName;
   return c.email.split("@")[0];
+}
+
+function nowClock() {
+  const n = new Date();
+  return `${n.getHours().toString().padStart(2,"0")}:${n.getMinutes().toString().padStart(2,"0")}:${n.getSeconds().toString().padStart(2,"0")} UTC`;
 }
 
 // ─── PDF Export ───────────────────────────────────────────────────────────────
@@ -184,25 +191,199 @@ async function exportPDF(candidates: CandidateScore[], jobTitle: string, screeni
   doc.save(`Screening-${jobTitle.replace(/\s+/g, "-")}-${new Date().toISOString().split("T")[0]}.pdf`);
 }
 
+// ─── System chrome components ─────────────────────────────────────────────────
+
+function SysHeader({
+  result, selectedIds, onExport, exporting, thinkingLog, onShowThinking,
+}: {
+  result: ScreeningResult;
+  selectedIds: Set<string>;
+  onExport: () => void;
+  exporting: boolean;
+  thinkingLog: { length: number };
+  onShowThinking: () => void;
+}) {
+  const [clock, setClock] = useState(nowClock());
+  useEffect(() => {
+    const t = setInterval(() => setClock(nowClock()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const hasThinking = thinkingLog?.length > 0 || (result as ScreeningResult & { thinkingLog?: unknown[] }).thinkingLog?.length;
+
+  return (
+    <div className="h-9 bg-[#0d1b2a] border-b border-[#1e3a5f] flex items-center px-4 gap-0 flex-shrink-0 select-none">
+      <div className="flex items-center gap-3 flex-1">
+        <div className="flex items-center gap-1.5">
+          <div className="w-2 h-2 rounded-full bg-[#22c55e] shadow-[0_0_6px_#22c55e]" />
+          <span className="text-[11px] font-bold text-[#e2e8f0] tracking-widest uppercase">TalentAI</span>
+        </div>
+        <div className="w-px h-3.5 bg-[#334155]" />
+        <span className="text-[10px] text-[#64748b] tracking-wider uppercase">Screening Results Module</span>
+        <div className="w-px h-3.5 bg-[#334155]" />
+        <span className="text-[10px] text-[#475569] font-mono">REPORT · FINAL</span>
+      </div>
+
+      <div className="flex items-center gap-2">
+        {hasThinking && (
+          <button
+            onClick={onShowThinking}
+            className="flex items-center gap-1.5 px-2.5 py-1 border border-[#4c1d95]/50 bg-[#1a0a35] hover:bg-[#2d1060] text-[#a78bfa] text-[10px] font-mono tracking-wider uppercase transition-colors rounded-sm"
+          >
+            <Brain className="w-3 h-3" />
+            AI REASONING
+            <span className="ml-0.5 px-1 py-px bg-[#4c1d95]/40 text-[9px] font-bold rounded">
+              {typeof thinkingLog?.length === 'number' && thinkingLog.length > 0 ? thinkingLog.length : (result as ScreeningResult & { thinkingLog?: unknown[] }).thinkingLog?.length ?? 0}
+            </span>
+          </button>
+        )}
+
+        {selectedIds.size > 0 && (
+          <button
+            onClick={onExport}
+            disabled={exporting}
+            className="flex items-center gap-1.5 px-2.5 py-1 border border-[#1e4080] bg-[#0a2040] hover:bg-[#0d2a55] text-[#60a5fa] text-[10px] font-mono tracking-wider uppercase transition-colors rounded-sm"
+          >
+            {exporting
+              ? <><Sparkles className="w-3 h-3 animate-spin" /> GENERATING...</>
+              : <><Download className="w-3 h-3" /> EXPORT {selectedIds.size} PDF</>}
+          </button>
+        )}
+      </div>
+
+      <div className="flex items-center gap-4 flex-1 justify-end">
+        <span className="text-[10px] font-mono text-[#475569]">{clock}</span>
+        <div className="w-px h-3.5 bg-[#334155]" />
+        <div className="flex items-center gap-1.5 px-2 py-0.5 bg-[#0d2d0a] border border-[#16a34a]/30 rounded-sm">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e]" />
+          <span className="text-[10px] font-mono text-[#4ade80] tracking-wider">REPORT LOADED</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ReportBanner({ result, onBack }: { result: ScreeningResult; onBack: () => void }) {
+  return (
+    <div className="bg-[#0f1c2e] border-b border-[#1e3a5f] px-5 py-2.5 flex items-center justify-between flex-shrink-0">
+      <div className="flex items-center gap-3">
+        <button onClick={onBack} className="flex items-center gap-1 text-[#475569] hover:text-[#94a3b8] transition-colors">
+          <ArrowLeft className="w-3.5 h-3.5" />
+        </button>
+        <div className="w-px h-3.5 bg-[#334155]" />
+        <Link href="/results" className="text-[10px] font-mono text-[#475569] hover:text-[#94a3b8] tracking-wider uppercase transition-colors">
+          RESULTS
+        </Link>
+        <span className="text-[#334155] text-[10px]">/</span>
+        <span className="text-[10px] font-mono text-[#cbd5e1] tracking-wider uppercase truncate max-w-[300px]">{result.jobTitle}</span>
+      </div>
+      <div className="flex items-center gap-4 text-[10px] font-mono text-[#475569]">
+        <span className="flex items-center gap-1.5">
+          <Users className="w-3 h-3" />
+          {result.totalApplicants} APPLICANTS
+        </span>
+        <div className="w-px h-3 bg-[#334155]" />
+        <span className="flex items-center gap-1.5">
+          <Clock className="w-3 h-3" />
+          {new Date(result.screeningDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }).toUpperCase()}
+        </span>
+        <div className="w-px h-3 bg-[#334155]" />
+        <span className="flex items-center gap-1.5 text-[#4ade80]">
+          <Trophy className="w-3 h-3" />
+          {result.shortlistSize} SHORTLISTED
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function IntelStrip({ result }: { result: ScreeningResult }) {
+  const avgScore = result.shortlist.length
+    ? Math.round(result.shortlist.reduce((a, c) => a + c.finalScore, 0) / result.shortlist.length) : 0;
+  const avgConf = result.shortlist.length
+    ? Math.round(result.shortlist.reduce((a, c) => a + c.confidenceScore, 0) / result.shortlist.length) : 0;
+  const topScore = result.shortlist[0]?.finalScore ?? 0;
+
+  const metrics = [
+    { label: "SCREENED",    value: result.totalApplicants,  unit: "",  icon: Database },
+    { label: "SHORTLISTED", value: result.shortlistSize,    unit: "",  icon: Trophy, accent: "#4ade80" },
+    { label: "REJECTED",    value: result.rejectedCandidates?.length ?? 0, unit: "", icon: XCircle, accent: "#f87171" },
+    { label: "AVG SCORE",   value: avgScore,                unit: "%", icon: Activity, accent: scoreColor(avgScore) },
+    { label: "TOP SCORE",   value: topScore,                unit: "%", icon: Sparkles, accent: scoreColor(topScore) },
+    { label: "CONFIDENCE",  value: avgConf,                 unit: "%", icon: Shield },
+    { label: "DURATION",    value: (result.processingTimeMs / 1000).toFixed(1), unit: "s", icon: Clock },
+  ];
+
+  return (
+    <div className="bg-[#0a1628] border-b border-[#1e3a5f]/60 flex items-stretch flex-shrink-0">
+      {metrics.map(({ label, value, unit, icon: Icon, accent }, i) => (
+        <React.Fragment key={label}>
+          {i > 0 && <div className="w-px bg-[#1e3a5f]/40 self-stretch" />}
+          <div className="flex-1 px-4 py-2.5 flex items-center gap-2.5 min-w-0">
+            <Icon className="w-3 h-3 flex-shrink-0" style={{ color: accent ?? "#475569" }} />
+            <div className="min-w-0">
+              <p className="text-[8px] font-semibold uppercase tracking-widest text-[#475569] leading-none mb-0.5">{label}</p>
+              <p className="text-sm font-bold font-mono leading-none" style={{ color: accent ?? "#94a3b8" }}>
+                {value}{unit}
+              </p>
+            </div>
+          </div>
+        </React.Fragment>
+      ))}
+    </div>
+  );
+}
+
+// ─── Panel wrapper ─────────────────────────────────────────────────────────────
+function SysPanel({
+  title, badge, badgeColor, toolbar, children, className = "",
+}: {
+  title: string; badge?: React.ReactNode; badgeColor?: string;
+  toolbar?: React.ReactNode; children: React.ReactNode; className?: string;
+}) {
+  return (
+    <div className={`flex flex-col overflow-hidden border border-[#1e3a5f]/60 rounded-sm ${className}`}>
+      <div className="flex items-center justify-between px-4 py-2.5 bg-[#0f1c2e] border-b border-[#1e3a5f]/60 flex-shrink-0">
+        <div className="flex items-center gap-2.5">
+          <div className="w-1.5 h-4 bg-[#0052cc] rounded-sm" />
+          <span className="text-[10px] font-bold tracking-widest uppercase text-[#cbd5e1]">{title}</span>
+          {badge !== undefined && (
+            <span
+              className="text-[9px] font-bold px-1.5 py-px rounded-sm font-mono"
+              style={{ background: `${badgeColor ?? "#0052cc"}20`, color: badgeColor ?? "#60a5fa", border: `1px solid ${badgeColor ?? "#0052cc"}40` }}
+            >
+              {badge}
+            </span>
+          )}
+        </div>
+        {toolbar && <div className="flex items-center gap-2">{toolbar}</div>}
+      </div>
+      <div className="flex-1 bg-[#0d1b2a] overflow-hidden">{children}</div>
+    </div>
+  );
+}
+
 // ─── Micro components ─────────────────────────────────────────────────────────
 
 function ScoreBar({ value }: { value: number }) {
   const color = scoreColor(value);
   return (
-    <div className="flex items-center gap-2.5">
-      <div className="w-20 h-1.5 rounded-full overflow-hidden bg-gray-200 flex-shrink-0">
-        <div className="h-full rounded-full" style={{ width: `${value}%`, background: color }} />
+    <div className="flex items-center gap-2">
+      <div className="w-16 h-1 bg-[#1e3a5f] overflow-hidden flex-shrink-0">
+        <div className="h-full" style={{ width: `${value}%`, background: color }} />
       </div>
-      <span className="text-sm font-semibold tabular-nums w-7" style={{ color }}>{value}</span>
+      <span className="text-xs font-bold font-mono tabular-nums" style={{ color }}>{value}</span>
     </div>
   );
 }
 
 function RecBadge({ rec }: { rec: string }) {
-  const cfg = REC_CONFIG[rec] ?? { color: "#6b7280", bg: "#f9fafb", border: "#e5e7eb", dot: "#9ca3af", short: rec };
+  const cfg = REC_CONFIG[rec] ?? { color: "#94a3b8", bg: "#1e293b", border: "#33415533", dot: "#94a3b8", short: rec };
   return (
-    <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full"
-      style={{ background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}` }}>
+    <span
+      className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 font-mono tracking-wider"
+      style={{ background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}` }}
+    >
       <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: cfg.dot }} />
       {cfg.short}
     </span>
@@ -210,14 +391,15 @@ function RecBadge({ rec }: { rec: string }) {
 }
 
 function ConfTag({ score }: { score: number }) {
-  const color  = score >= 85 ? "#16a34a" : score >= 65 ? "#d97706" : "#dc2626";
-  const bg     = score >= 85 ? "#f0fdf4" : score >= 65 ? "#fffbeb" : "#fef2f2";
-  const border = score >= 85 ? "#bbf7d0" : score >= 65 ? "#fde68a" : "#fecaca";
-  const label  = score >= 85 ? "High"    : score >= 65 ? "Med"     : "Low";
+  const color = score >= 85 ? "#4ade80" : score >= 65 ? "#fbbf24" : "#f87171";
+  const bg    = score >= 85 ? "#052e16" : score >= 65 ? "#2d1f00" : "#2d0707";
+  const label = score >= 85 ? "HIGH"    : score >= 65 ? "MED"     : "LOW";
   return (
-    <span className="inline-flex items-center gap-1 text-[11px] font-medium px-1.5 py-0.5 rounded"
-      style={{ background: bg, color, border: `1px solid ${border}` }}>
-      <Shield className="w-2.5 h-2.5" />{score}% {label}
+    <span
+      className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-px font-mono tracking-wider"
+      style={{ background: bg, color, border: `1px solid ${color}33` }}
+    >
+      <Shield className="w-2 h-2" />{score}% {label}
     </span>
   );
 }
@@ -230,14 +412,14 @@ function StageSelect({ stage, onChange }: { stage: PipelineStage; onChange: (s: 
         value={stage}
         onChange={e => onChange(e.target.value as PipelineStage)}
         onClick={e => e.stopPropagation()}
-        className="appearance-none text-xs font-medium pl-2 pr-6 py-1 rounded-full cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-        style={{ background: p.bg, color: p.color, border: `1px solid ${p.border}` }}
+        className="appearance-none text-[10px] font-bold font-mono pl-2 pr-5 py-0.5 cursor-pointer focus:outline-none tracking-wider uppercase"
+        style={{ background: p.bg, color: p.color, border: `1px solid ${p.border}50` }}
       >
         {(Object.entries(PIPELINE) as [PipelineStage, typeof PIPELINE[PipelineStage]][]).map(([v, s]) => (
-          <option key={v} value={v}>{s.label}</option>
+          <option key={v} value={v} style={{ background: "#0d1b2a" }}>{s.label}</option>
         ))}
       </select>
-      <ChevronDown className="w-3 h-3 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: p.color }} />
+      <ChevronDown className="w-2.5 h-2.5 absolute right-1 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: p.color }} />
     </div>
   );
 }
@@ -257,22 +439,26 @@ function CandidateDetail({ candidate }: { candidate: CandidateScore }) {
   return (
     <tr>
       <td colSpan={7} className="p-0">
-        <div className="mx-4 mb-4 rounded-lg overflow-hidden" style={{ border: "1px solid #e5e7eb", background: "#f9fafb" }}>
-
-          {/* Tabs */}
-          <div className="flex border-b" style={{ borderColor: "#e5e7eb", background: "#ffffff" }}>
+        <div className="border-t border-[#1e3a5f]/60 bg-[#070f1a]">
+          {/* Sub-nav */}
+          <div className="flex border-b border-[#1e3a5f]/60 bg-[#0a1628]">
+            <div className="w-9 flex-shrink-0 border-r border-[#1e3a5f]/40" />
             {([
-              { id: "overview",  label: "Overview",            icon: BarChart3     },
-              { id: "interview", label: "Interview Questions", icon: MessageSquare },
-              { id: "bias",      label: "Bias Report",         icon: Eye           },
+              { id: "overview",  label: "EVALUATION OVERVIEW", icon: BarChart3     },
+              { id: "interview", label: "INTERVIEW QUESTIONS",  icon: MessageSquare },
+              { id: "bias",      label: "BIAS AUDIT",           icon: Eye           },
             ] as { id: typeof tab; label: string; icon: React.ElementType }[]).map(({ id, label, icon: Icon }) => (
-              <button key={id} onClick={() => setTab(id)}
-                className="flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 -mb-px transition-colors"
+              <button
+                key={id}
+                onClick={() => setTab(id)}
+                className="flex items-center gap-1.5 px-4 py-2 text-[10px] font-bold font-mono tracking-wider uppercase border-b-2 transition-colors"
                 style={{
-                  borderBottomColor: tab === id ? "#3b82f6" : "transparent",
-                  color: tab === id ? "#2563eb" : "#6b7280",
-                }}>
-                <Icon className="w-3.5 h-3.5" />{label}
+                  borderBottomColor: tab === id ? "#0052cc" : "transparent",
+                  color: tab === id ? "#60a5fa" : "#475569",
+                  background: tab === id ? "#0a1f38" : "transparent",
+                }}
+              >
+                <Icon className="w-3 h-3" />{label}
               </button>
             ))}
           </div>
@@ -283,21 +469,28 @@ function CandidateDetail({ candidate }: { candidate: CandidateScore }) {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="space-y-5">
                   {/* Summary */}
-                  <p className="text-sm leading-relaxed" style={{ color: "#374151" }}>{candidate.summary}</p>
-
-                  {/* Score breakdown table */}
                   <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-widest mb-2" style={{ color: "#9ca3af" }}>Score Breakdown</p>
-                    <div className="space-y-2">
+                    <p className="text-[9px] font-bold uppercase tracking-widest text-[#475569] mb-2">EVALUATION SUMMARY</p>
+                    <p className="text-xs leading-relaxed text-[#94a3b8] font-mono">{candidate.summary}</p>
+                  </div>
+
+                  {/* Score breakdown */}
+                  <div>
+                    <p className="text-[9px] font-bold uppercase tracking-widest text-[#475569] mb-2">SCORE BREAKDOWN</p>
+                    <div className="border border-[#1e3a5f]/60">
                       {[
-                        ["Skills",       candidate.breakdown.skillsScore      ],
-                        ["Experience",   candidate.breakdown.experienceScore  ],
-                        ["Education",    candidate.breakdown.educationScore   ],
-                        ["Projects",     candidate.breakdown.projectsScore    ],
-                        ["Availability", candidate.breakdown.availabilityScore],
-                      ].map(([label, val]) => (
-                        <div key={label as string} className="flex items-center gap-3">
-                          <span className="text-xs w-20 flex-shrink-0" style={{ color: "#6b7280" }}>{label}</span>
+                        ["SKILLS",       candidate.breakdown.skillsScore      ],
+                        ["EXPERIENCE",   candidate.breakdown.experienceScore  ],
+                        ["EDUCATION",    candidate.breakdown.educationScore   ],
+                        ["PROJECTS",     candidate.breakdown.projectsScore    ],
+                        ["AVAILABILITY", candidate.breakdown.availabilityScore],
+                      ].map(([label, val], i) => (
+                        <div
+                          key={label as string}
+                          className="flex items-center gap-3 px-3 py-2"
+                          style={{ borderTop: i > 0 ? "1px solid #1e3a5f40" : "none", background: i % 2 === 0 ? "#0a1628" : "#070f1a" }}
+                        >
+                          <span className="text-[10px] font-mono font-bold text-[#475569] w-24 flex-shrink-0">{label}</span>
                           <ScoreBar value={val as number} />
                         </div>
                       ))}
@@ -305,65 +498,65 @@ function CandidateDetail({ candidate }: { candidate: CandidateScore }) {
                   </div>
 
                   {/* Strengths & Gaps */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-widest mb-2" style={{ color: "#16a34a" }}>Strengths</p>
-                      <ul className="space-y-1.5">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="border border-[#16a34a]/20 bg-[#052e16]/40">
+                      <p className="text-[9px] font-bold uppercase tracking-widest text-[#4ade80] px-3 py-2 border-b border-[#16a34a]/20">STRENGTHS</p>
+                      <ul className="p-3 space-y-1.5">
                         {candidate.strengths.map((s, i) => (
-                          <li key={i} className="flex items-start gap-1.5 text-xs" style={{ color: "#374151" }}>
-                            <CheckCircle className="w-3 h-3 text-green-500 mt-0.5 flex-shrink-0" />{s}
+                          <li key={i} className="flex items-start gap-1.5 text-[11px] text-[#86efac] font-mono">
+                            <span className="text-[#4ade80] flex-shrink-0 mt-px">+</span>{s}
                           </li>
                         ))}
                       </ul>
                     </div>
-                    <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-widest mb-2" style={{ color: "#dc2626" }}>Gaps</p>
-                      <ul className="space-y-1.5">
+                    <div className="border border-[#dc2626]/20 bg-[#2d0707]/40">
+                      <p className="text-[9px] font-bold uppercase tracking-widest text-[#f87171] px-3 py-2 border-b border-[#dc2626]/20">GAPS</p>
+                      <ul className="p-3 space-y-1.5">
                         {candidate.gaps.map((g, i) => (
-                          <li key={i} className="flex items-start gap-1.5 text-xs" style={{ color: "#374151" }}>
-                            <XCircle className="w-3 h-3 text-red-500 mt-0.5 flex-shrink-0" />{g}
+                          <li key={i} className="flex items-start gap-1.5 text-[11px] text-[#fca5a5] font-mono">
+                            <span className="text-[#f87171] flex-shrink-0 mt-px">-</span>{g}
                           </li>
                         ))}
                       </ul>
                     </div>
                   </div>
 
-                  {/* Skill gap pills */}
+                  {/* Skill analysis */}
                   <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-widest mb-2" style={{ color: "#9ca3af" }}>Skills</p>
-                    <div className="flex flex-wrap gap-1.5">
+                    <p className="text-[9px] font-bold uppercase tracking-widest text-[#475569] mb-2">SKILL ANALYSIS</p>
+                    <div className="flex flex-wrap gap-1">
                       {candidate.skillGapAnalysis.matched.map(s => (
-                        <span key={s} className="text-[11px] px-2 py-0.5 rounded-full font-medium"
-                          style={{ background: "#f0fdf4", color: "#16a34a", border: "1px solid #bbf7d0" }}>✓ {s}</span>
+                        <span key={s} className="text-[10px] px-2 py-0.5 font-mono font-bold"
+                          style={{ background: "#052e16", color: "#4ade80", border: "1px solid #16a34a40" }}>✓ {s}</span>
                       ))}
                       {candidate.skillGapAnalysis.missing.map(s => (
-                        <span key={s} className="text-[11px] px-2 py-0.5 rounded-full font-medium"
-                          style={{ background: "#fef2f2", color: "#dc2626", border: "1px solid #fecaca" }}>✗ {s}</span>
+                        <span key={s} className="text-[10px] px-2 py-0.5 font-mono font-bold"
+                          style={{ background: "#2d0707", color: "#f87171", border: "1px solid #dc262640" }}>✗ {s}</span>
                       ))}
                       {candidate.skillGapAnalysis.bonus.map(s => (
-                        <span key={s} className="text-[11px] px-2 py-0.5 rounded-full font-medium"
-                          style={{ background: "#eff6ff", color: "#2563eb", border: "1px solid #bfdbfe" }}>+ {s}</span>
+                        <span key={s} className="text-[10px] px-2 py-0.5 font-mono font-bold"
+                          style={{ background: "#0c1e35", color: "#60a5fa", border: "1px solid #2563eb40" }}>+ {s}</span>
                       ))}
                     </div>
                   </div>
 
                   {/* Evaluation notes */}
                   {candidate.reasoning && (
-                    <div className="p-3 rounded-lg" style={{ background: "#ffffff", border: "1px solid #e5e7eb" }}>
-                      <p className="text-[10px] font-semibold uppercase tracking-widest mb-1.5" style={{ color: "#9ca3af" }}>Evaluation Notes</p>
-                      <p className="text-xs leading-relaxed" style={{ color: "#6b7280" }}>{candidate.reasoning}</p>
+                    <div className="border border-[#1e3a5f]/60">
+                      <p className="text-[9px] font-bold uppercase tracking-widest text-[#475569] px-3 py-2 border-b border-[#1e3a5f]/60 bg-[#0a1628]">EVALUATION NOTES</p>
+                      <p className="text-[11px] leading-relaxed text-[#64748b] font-mono p-3">{candidate.reasoning}</p>
                     </div>
                   )}
 
                   {/* Risk flags */}
                   {candidate.riskFlags?.length > 0 && (
-                    <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-widest mb-2" style={{ color: "#d97706" }}>Risk Flags</p>
-                      <div className="flex flex-wrap gap-1.5">
+                    <div className="border border-[#d97706]/20">
+                      <p className="text-[9px] font-bold uppercase tracking-widest text-[#fbbf24] px-3 py-2 border-b border-[#d97706]/20 bg-[#2d1f00]/60">RISK FLAGS</p>
+                      <div className="p-3 flex flex-wrap gap-1.5">
                         {candidate.riskFlags.map((r, i) => (
-                          <span key={i} className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full"
+                          <span key={i} className="flex items-center gap-1 text-[10px] px-2 py-0.5 font-mono font-bold"
                             style={{ background: `${SEVERITY_COLOR[r.severity]}14`, color: SEVERITY_COLOR[r.severity], border: `1px solid ${SEVERITY_COLOR[r.severity]}30` }}>
-                            <AlertTriangle className="w-2.5 h-2.5" />{r.type.replace(/_/g, " ")}
+                            <AlertTriangle className="w-2.5 h-2.5" />{r.type.replace(/_/g, " ").toUpperCase()}
                           </span>
                         ))}
                       </div>
@@ -373,16 +566,18 @@ function CandidateDetail({ candidate }: { candidate: CandidateScore }) {
 
                 {/* Radar chart */}
                 <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-widest mb-3" style={{ color: "#9ca3af" }}>Score Profile</p>
-                  <div className="h-56">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <RadarChart data={radar}>
-                        <PolarGrid stroke="#e5e7eb" />
-                        <PolarAngleAxis dataKey="subject" tick={{ fill: "#9ca3af", fontSize: 11 }} />
-                        <Radar dataKey="value" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.1} strokeWidth={2} />
-                        <Tooltip contentStyle={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 11, color: "#111827" }} />
-                      </RadarChart>
-                    </ResponsiveContainer>
+                  <p className="text-[9px] font-bold uppercase tracking-widest text-[#475569] mb-3">SCORE PROFILE</p>
+                  <div className="border border-[#1e3a5f]/60 bg-[#0a1628] p-4">
+                    <div className="h-56">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <RadarChart data={radar}>
+                          <PolarGrid stroke="#1e3a5f" />
+                          <PolarAngleAxis dataKey="subject" tick={{ fill: "#475569", fontSize: 10 }} />
+                          <Radar dataKey="value" stroke="#0052cc" fill="#0052cc" fillOpacity={0.15} strokeWidth={1.5} />
+                          <Tooltip contentStyle={{ background: "#0a1628", border: "1px solid #1e3a5f", borderRadius: 2, fontSize: 11, color: "#94a3b8" }} />
+                        </RadarChart>
+                      </ResponsiveContainer>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -390,32 +585,38 @@ function CandidateDetail({ candidate }: { candidate: CandidateScore }) {
 
             {/* Interview */}
             {tab === "interview" && (
-              <ol className="space-y-2.5 max-w-2xl">
+              <div className="space-y-2 max-w-3xl">
                 {candidate.interviewQuestions.map((q, i) => (
-                  <li key={i} className="flex gap-3 p-3 rounded-lg text-sm" style={{ background: "#ffffff", border: "1px solid #e5e7eb", color: "#374151" }}>
-                    <span className="font-bold text-blue-600 flex-shrink-0 w-5">{i + 1}.</span>{q}
-                  </li>
+                  <div key={i} className="flex gap-3 p-3 border border-[#1e3a5f]/60" style={{ background: i % 2 === 0 ? "#0a1628" : "#070f1a" }}>
+                    <span className="font-bold text-[#0052cc] font-mono text-sm flex-shrink-0 w-5">{i + 1}.</span>
+                    <p className="text-xs font-mono leading-relaxed text-[#94a3b8]">{q}</p>
+                  </div>
                 ))}
-              </ol>
+              </div>
             )}
 
             {/* Bias */}
             {tab === "bias" && (
               <div className="max-w-2xl">
                 {candidate.biasFlags?.length > 0 ? (
-                  <div className="space-y-3">
+                  <div className="space-y-2">
                     {candidate.biasFlags.map((b, i) => (
-                      <div key={i} className="p-3 rounded-lg" style={{ background: "#fffbeb", border: "1px solid #fde68a" }}>
-                        <p className="text-xs font-semibold text-amber-700">{b.type.replace(/_/g, " ")}</p>
-                        <p className="text-xs mt-1" style={{ color: "#6b7280" }}>Signal: {b.signal}</p>
-                        <p className="text-xs mt-0.5 text-blue-600">Recommendation: {b.recommendation}</p>
+                      <div key={i} className="border border-[#d97706]/30 bg-[#2d1f00]/40">
+                        <p className="text-[10px] font-bold font-mono text-[#fbbf24] uppercase tracking-wider px-3 py-2 border-b border-[#d97706]/20">{b.type.replace(/_/g, " ")}</p>
+                        <div className="p-3 space-y-1.5">
+                          <p className="text-[11px] font-mono text-[#94a3b8]">Signal: {b.signal}</p>
+                          <p className="text-[11px] font-mono text-[#60a5fa]">Recommendation: {b.recommendation}</p>
+                        </div>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2 p-3 rounded-lg" style={{ background: "#f0fdf4", border: "1px solid #bbf7d0" }}>
-                    <CheckCircle className="w-4 h-4 text-green-500" />
-                    <p className="text-xs text-green-700">No bias signals detected in this assessment.</p>
+                  <div className="flex items-center gap-2.5 p-4 border border-[#16a34a]/30 bg-[#052e16]/40">
+                    <CheckCircle className="w-4 h-4 text-[#4ade80]" />
+                    <div>
+                      <p className="text-[10px] font-bold font-mono text-[#4ade80] uppercase tracking-wider">NO BIAS SIGNALS DETECTED</p>
+                      <p className="text-[11px] font-mono text-[#64748b] mt-0.5">Assessment passed automated bias audit.</p>
+                    </div>
                   </div>
                 )}
               </div>
@@ -427,76 +628,74 @@ function CandidateDetail({ candidate }: { candidate: CandidateScore }) {
   );
 }
 
-// ─── Table row ────────────────────────────────────────────────────────────────
-function CandidateRow({ candidate, isSelected, onSelect, stage, onStageChange, isExpanded, onToggle, index }: {
-  candidate: CandidateScore;
-  isSelected: boolean;
-  onSelect: (id: string) => void;
-  stage: PipelineStage;
-  onStageChange: (id: string, s: PipelineStage) => void;
-  isExpanded: boolean;
-  onToggle: (id: string) => void;
-  index: number;
+// ─── Candidate table row ───────────────────────────────────────────────────────
+function CandidateRow({
+  candidate, isSelected, onSelect, stage, onStageChange, isExpanded, onToggle, index,
+}: {
+  candidate: CandidateScore; isSelected: boolean; onSelect: (id: string) => void;
+  stage: PipelineStage; onStageChange: (id: string, s: PipelineStage) => void;
+  isExpanded: boolean; onToggle: (id: string) => void; index: number;
 }) {
-  const isTop3 = candidate.rank <= 3;
-  const rowBg  = isExpanded ? "#f0f7ff" : isSelected ? "#eff6ff" : "transparent";
+  const isTop3  = candidate.rank <= 3;
+  const rowBg   = isExpanded ? "#0a1f38" : isSelected ? "#0a1a30" : index % 2 === 0 ? "#0d1b2a" : "#070f1a";
 
   return (
     <>
       <tr
-        className="group cursor-pointer transition-colors hover:bg-blue-50/40"
-        style={{ borderBottom: "1px solid #f3f4f6", background: rowBg }}
+        className="group cursor-pointer transition-colors"
+        style={{ borderBottom: "1px solid #1e3a5f40", background: rowBg }}
         onClick={() => onToggle(candidate.candidateId)}
       >
         {/* Checkbox */}
-        <td className="pl-4 pr-3 py-3.5 w-9" onClick={e => e.stopPropagation()}>
+        <td className="pl-4 pr-3 py-3 w-9" onClick={e => e.stopPropagation()}>
           <button
             onClick={() => onSelect(candidate.candidateId)}
-            className="w-4 h-4 rounded flex items-center justify-center transition-all"
+            className="w-3.5 h-3.5 flex items-center justify-center transition-all flex-shrink-0"
             style={{
-              background: isSelected ? "#2563eb" : "#ffffff",
-              border: `1.5px solid ${isSelected ? "#2563eb" : "#d1d5db"}`,
-            }}>
-            {isSelected && <Check className="w-2.5 h-2.5 text-white" />}
+              background: isSelected ? "#0052cc" : "transparent",
+              border: `1px solid ${isSelected ? "#0052cc" : "#334155"}`,
+            }}
+          >
+            {isSelected && <Check className="w-2 h-2 text-white" />}
           </button>
         </td>
 
         {/* Rank */}
-        <td className="px-3 py-3.5 w-12">
-          <span className="text-xs font-bold tabular-nums" style={{ color: isTop3 ? "#d97706" : "#9ca3af" }}>
-            #{candidate.rank}
+        <td className="px-3 py-3 w-10">
+          <span className="text-xs font-bold font-mono tabular-nums" style={{ color: isTop3 ? "#fbbf24" : "#475569" }}>
+            {isTop3 ? `#${candidate.rank}` : `${candidate.rank}`}
           </span>
         </td>
 
         {/* Candidate */}
-        <td className="px-3 py-3.5">
-          <p className="text-sm font-semibold" style={{ color: "#111827" }}>{displayName(candidate)}</p>
-          <p className="text-xs mt-0.5" style={{ color: "#9ca3af" }}>{candidate.email}</p>
-          <div className="mt-1.5">
+        <td className="px-3 py-3">
+          <p className="text-xs font-semibold font-mono text-[#e2e8f0]">{displayName(candidate)}</p>
+          <p className="text-[10px] font-mono text-[#475569] mt-0.5">{candidate.email}</p>
+          <div className="mt-1">
             <ConfTag score={candidate.confidenceScore} />
           </div>
         </td>
 
         {/* Score */}
-        <td className="px-3 py-3.5 w-36">
+        <td className="px-3 py-3 w-32">
           <ScoreBar value={candidate.finalScore} />
         </td>
 
         {/* Recommendation */}
-        <td className="px-3 py-3.5 w-36">
+        <td className="px-3 py-3 w-40">
           <RecBadge rec={candidate.recommendation} />
         </td>
 
         {/* Stage */}
-        <td className="px-3 py-3.5 w-32" onClick={e => e.stopPropagation()}>
+        <td className="px-3 py-3 w-32" onClick={e => e.stopPropagation()}>
           <StageSelect stage={stage} onChange={s => onStageChange(candidate.candidateId, s)} />
         </td>
 
         {/* Expand */}
-        <td className="pl-2 pr-4 py-3.5 w-8">
+        <td className="pl-2 pr-4 py-3 w-8">
           <ChevronRight
-            className="w-4 h-4 transition-transform"
-            style={{ color: "#d1d5db", transform: isExpanded ? "rotate(90deg)" : "none" }}
+            className="w-3.5 h-3.5 transition-transform"
+            style={{ color: "#334155", transform: isExpanded ? "rotate(90deg)" : "none" }}
           />
         </td>
       </tr>
@@ -507,68 +706,73 @@ function CandidateRow({ candidate, isSelected, onSelect, stage, onStageChange, i
 }
 
 // ─── Rejected row ─────────────────────────────────────────────────────────────
-function RejectedRow({ rejected }: { rejected: RejectedCandidate }) {
+function RejectedRow({ rejected, index }: { rejected: RejectedCandidate; index: number }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <tr className="cursor-pointer hover:bg-gray-50 transition-colors"
-        style={{ borderBottom: "1px solid #f3f4f6" }}
-        onClick={() => setOpen(v => !v)}>
-        <td className="pl-4 pr-3 py-3 w-9" />
-        <td className="px-3 py-3 w-12">
-          <span className="text-xs font-semibold tabular-nums" style={{ color: "#dc2626" }}>{rejected.finalScore}</span>
+      <tr
+        className="cursor-pointer transition-colors"
+        style={{ borderBottom: "1px solid #1e3a5f30", background: index % 2 === 0 ? "#0a0d14" : "#070a10" }}
+        onClick={() => setOpen(v => !v)}
+      >
+        <td className="pl-4 pr-3 py-2.5 w-9" />
+        <td className="px-3 py-2.5 w-10">
+          <span className="text-xs font-bold font-mono tabular-nums text-[#f87171]">{rejected.finalScore}</span>
         </td>
-        <td className="px-3 py-3">
-          <p className="text-sm font-medium" style={{ color: "#374151" }}>{rejected.candidateName || rejected.email.split("@")[0]}</p>
-          <p className="text-xs mt-0.5" style={{ color: "#9ca3af" }}>{rejected.email}</p>
+        <td className="px-3 py-2.5">
+          <p className="text-xs font-mono text-[#64748b]">{rejected.candidateName || rejected.email.split("@")[0]}</p>
+          <p className="text-[10px] font-mono text-[#334155] mt-0.5">{rejected.email}</p>
         </td>
-        <td className="px-3 py-3 w-36">
+        <td className="px-3 py-2.5 w-32">
           <ScoreBar value={rejected.finalScore} />
         </td>
-        <td className="px-3 py-3 w-36">
-          <span className="text-xs" style={{ color: "#9ca3af" }}>
-            {Math.round(rejected.closestShortlistScore - rejected.finalScore)} pts below cutoff
+        <td className="px-3 py-2.5 w-40">
+          <span className="text-[10px] font-mono text-[#475569]">
+            -{Math.round(rejected.closestShortlistScore - rejected.finalScore)} PTS FROM CUTOFF
           </span>
         </td>
-        <td className="px-3 py-3 w-32" />
-        <td className="pl-2 pr-4 py-3 w-8">
-          <ChevronRight className="w-4 h-4 transition-transform" style={{ color: "#d1d5db", transform: open ? "rotate(90deg)" : "none" }} />
+        <td className="px-3 py-2.5 w-32" />
+        <td className="pl-2 pr-4 py-2.5 w-8">
+          <ChevronRight className="w-3.5 h-3.5 transition-transform" style={{ color: "#334155", transform: open ? "rotate(90deg)" : "none" }} />
         </td>
       </tr>
       {open && (
         <tr>
           <td colSpan={7} className="p-0">
-            <div className="mx-4 mb-3 p-4 rounded-lg space-y-3" style={{ background: "#fef2f2", border: "1px solid #fecaca" }}>
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-widest mb-1.5 flex items-center gap-1.5" style={{ color: "#9ca3af" }}>
-                  <TrendingDown className="w-3 h-3" /> Reason Not Selected
+            <div className="border-t border-[#dc2626]/20 bg-[#0d0505] p-4 space-y-4">
+              <div className="border border-[#dc2626]/20 bg-[#150808]">
+                <p className="text-[9px] font-bold uppercase tracking-widest text-[#f87171] px-3 py-2 border-b border-[#dc2626]/20 flex items-center gap-1.5">
+                  <TrendingDown className="w-3 h-3" /> REJECTION REASON
                 </p>
-                <p className="text-xs leading-relaxed" style={{ color: "#374151" }}>{rejected.whyNotSelected}</p>
+                <p className="text-[11px] font-mono leading-relaxed text-[#94a3b8] p-3">{rejected.whyNotSelected}</p>
               </div>
-              {rejected.topMissingSkills?.length > 0 && (
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-widest mb-1.5" style={{ color: "#dc2626" }}>Missing Skills</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {rejected.topMissingSkills.map(s => (
-                      <span key={s} className="text-[11px] px-2 py-0.5 rounded-full" style={{ background: "#fef2f2", color: "#dc2626", border: "1px solid #fecaca" }}>✗ {s}</span>
-                    ))}
+              <div className="grid grid-cols-2 gap-3">
+                {rejected.topMissingSkills?.length > 0 && (
+                  <div className="border border-[#dc2626]/20">
+                    <p className="text-[9px] font-bold uppercase tracking-widest text-[#f87171] px-3 py-2 border-b border-[#dc2626]/20 bg-[#150808]">MISSING SKILLS</p>
+                    <div className="p-3 flex flex-wrap gap-1">
+                      {rejected.topMissingSkills.map(s => (
+                        <span key={s} className="text-[10px] px-2 py-0.5 font-mono font-bold"
+                          style={{ background: "#2d0707", color: "#f87171", border: "1px solid #dc262640" }}>✗ {s}</span>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
-              {rejected.improvementSuggestions?.length > 0 && (
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-widest mb-1.5 flex items-center gap-1" style={{ color: "#2563eb" }}>
-                    <Lightbulb className="w-3 h-3" /> Improvement Areas
-                  </p>
-                  <ul className="space-y-1">
-                    {rejected.improvementSuggestions.map((s, i) => (
-                      <li key={i} className="text-xs flex items-start gap-1.5" style={{ color: "#374151" }}>
-                        <span style={{ color: "#3b82f6" }}>→</span>{s}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+                )}
+                {rejected.improvementSuggestions?.length > 0 && (
+                  <div className="border border-[#1e3a5f]/40">
+                    <p className="text-[9px] font-bold uppercase tracking-widest text-[#60a5fa] px-3 py-2 border-b border-[#1e3a5f]/40 bg-[#0a1628] flex items-center gap-1">
+                      <Lightbulb className="w-3 h-3" /> IMPROVEMENT AREAS
+                    </p>
+                    <ul className="p-3 space-y-1">
+                      {rejected.improvementSuggestions.map((s, i) => (
+                        <li key={i} className="text-[11px] font-mono flex items-start gap-1.5 text-[#64748b]">
+                          <span className="text-[#0052cc]">→</span>{s}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
             </div>
           </td>
         </tr>
@@ -577,46 +781,47 @@ function RejectedRow({ rejected }: { rejected: RejectedCandidate }) {
   );
 }
 
-// ─── Sidebar ──────────────────────────────────────────────────────────────────
-function Sidebar({ result }: { result: ScreeningResult }) {
+// ─── Analytics sidebar ─────────────────────────────────────────────────────────
+function AnalyticsSidebar({ result }: { result: ScreeningResult }) {
   const dist    = result.aggregateInsights?.scoreDistribution.filter(d => d.count > 0) ?? [];
   const avgScore = result.shortlist.length
     ? Math.round(result.shortlist.reduce((a, c) => a + c.finalScore, 0) / result.shortlist.length) : 0;
-  const avgConf  = result.shortlist.length
-    ? Math.round(result.shortlist.reduce((a, c) => a + c.confidenceScore, 0) / result.shortlist.length) : 0;
 
-  const card = "rounded-lg p-4 space-y-3 bg-white border border-gray-200";
-  const label = "text-[10px] font-semibold uppercase tracking-widest text-gray-400";
-  const row = "flex items-center justify-between";
+  function SidePanel({ title, children }: { title: string; children: React.ReactNode }) {
+    return (
+      <div className="border border-[#1e3a5f]/60 overflow-hidden">
+        <div className="px-3 py-2 bg-[#0f1c2e] border-b border-[#1e3a5f]/60 flex items-center gap-2">
+          <div className="w-1 h-3 bg-[#0052cc]" />
+          <span className="text-[9px] font-bold tracking-widest uppercase text-[#cbd5e1]">{title}</span>
+        </div>
+        <div className="bg-[#0a1628] p-3">{children}</div>
+      </div>
+    );
+  }
+
+  function DataRow({ label, value, accent }: { label: string; value: React.ReactNode; accent?: string }) {
+    return (
+      <div className="flex items-center justify-between py-1.5 border-b border-[#1e3a5f]/30 last:border-0">
+        <span className="text-[10px] font-mono text-[#475569] uppercase tracking-wider">{label}</span>
+        <span className="text-[11px] font-bold font-mono" style={{ color: accent ?? "#94a3b8" }}>{value}</span>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">
-      {/* Stats */}
-      <div className={card}>
-        <p className={label}>Cohort Summary</p>
-        <div className="space-y-2">
-          {[
-            { l: "Screened",    v: result.totalApplicants },
-            { l: "Shortlisted", v: result.shortlistSize   },
-            { l: "Rejected",    v: result.rejectedCandidates?.length ?? 0 },
-            { l: "Avg Score",   v: `${avgScore}%` },
-            { l: "Top Score",   v: `${result.shortlist[0]?.finalScore ?? 0}%` },
-            { l: "Avg Confidence", v: `${avgConf}%` },
-            { l: "Duration",    v: `${(result.processingTimeMs / 1000).toFixed(1)}s` },
-          ].map(({ l, v }) => (
-            <div key={l} className={row}>
-              <span className="text-xs text-gray-500">{l}</span>
-              <span className="text-sm font-semibold text-gray-900">{v}</span>
-            </div>
-          ))}
-        </div>
-      </div>
+      <SidePanel title="COHORT ANALYTICS">
+        <DataRow label="SCREENED"    value={result.totalApplicants} />
+        <DataRow label="SHORTLISTED" value={result.shortlistSize} accent="#4ade80" />
+        <DataRow label="REJECTED"    value={result.rejectedCandidates?.length ?? 0} accent="#f87171" />
+        <DataRow label="AVG SCORE"   value={`${avgScore}%`} accent={scoreColor(avgScore)} />
+        <DataRow label="TOP SCORE"   value={`${result.shortlist[0]?.finalScore ?? 0}%`} accent={scoreColor(result.shortlist[0]?.finalScore ?? 0)} />
+        <DataRow label="DURATION"    value={`${(result.processingTimeMs / 1000).toFixed(1)}s`} />
+      </SidePanel>
 
-      {/* Recommendation breakdown */}
       {result.aggregateInsights?.recommendationBreakdown && (
-        <div className={card}>
-          <p className={label}>Recommendations</p>
-          <div className="space-y-2.5">
+        <SidePanel title="RECOMMENDATION DIST.">
+          <div className="space-y-3">
             {Object.entries(result.aggregateInsights.recommendationBreakdown).map(([rec, count]) => {
               const cfg = REC_CONFIG[rec];
               if (!cfg) return null;
@@ -624,57 +829,64 @@ function Sidebar({ result }: { result: ScreeningResult }) {
               return (
                 <div key={rec}>
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs font-medium" style={{ color: cfg.color }}>{cfg.short}</span>
-                    <span className="text-xs font-bold" style={{ color: cfg.color }}>{count}</span>
+                    <span className="text-[9px] font-bold font-mono tracking-wider" style={{ color: cfg.color }}>{cfg.short}</span>
+                    <span className="text-[10px] font-bold font-mono" style={{ color: cfg.color }}>{count}</span>
                   </div>
-                  <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                    <motion.div className="h-full rounded-full" style={{ background: cfg.color }}
-                      initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 0.5 }} />
+                  <div className="h-1 bg-[#1e3a5f] overflow-hidden">
+                    <motion.div
+                      className="h-full"
+                      style={{ background: cfg.color }}
+                      initial={{ width: 0 }}
+                      animate={{ width: `${pct}%` }}
+                      transition={{ duration: 0.6 }}
+                    />
                   </div>
                 </div>
               );
             })}
           </div>
-        </div>
+        </SidePanel>
       )}
 
-      {/* Score distribution */}
       {dist.length > 0 && (
-        <div className={card}>
-          <p className={label}>Score Distribution</p>
+        <SidePanel title="SCORE DISTRIBUTION">
           <div className="h-28">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={dist} barSize={20}>
-                <XAxis dataKey="range" tick={{ fill: "#9ca3af", fontSize: 9 }} axisLine={false} tickLine={false} />
+              <BarChart data={dist} barSize={16}>
+                <XAxis dataKey="range" tick={{ fill: "#475569", fontSize: 8 }} axisLine={false} tickLine={false} />
                 <YAxis hide />
-                <Tooltip contentStyle={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 11 }}
-                  formatter={(v: number) => [`${v} candidates`]} />
-                <Bar dataKey="count" radius={[3, 3, 0, 0]}>
+                <Tooltip
+                  contentStyle={{ background: "#0a1628", border: "1px solid #1e3a5f", borderRadius: 2, fontSize: 10, color: "#94a3b8" }}
+                  formatter={(v: number) => [`${v} candidates`]}
+                />
+                <Bar dataKey="count" radius={[1, 1, 0, 0]}>
                   {dist.map((e, i) => {
                     const [lo] = e.range.split("-").map(Number);
-                    return <Cell key={i} fill={lo >= 80 ? "#16a34a" : lo >= 65 ? "#2563eb" : lo >= 50 ? "#d97706" : "#9ca3af"} />;
+                    return <Cell key={i} fill={lo >= 80 ? "#16a34a" : lo >= 65 ? "#0052cc" : lo >= 50 ? "#d97706" : "#475569"} />;
                   })}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
-        </div>
+        </SidePanel>
       )}
 
-      {/* Common gaps */}
       {result.aggregateInsights?.commonGaps?.length > 0 && (
-        <div className={card}>
-          <p className={label}>Common Skill Gaps</p>
-          <div className="flex flex-wrap gap-1.5">
+        <SidePanel title="COMMON SKILL GAPS">
+          <div className="flex flex-wrap gap-1">
             {result.aggregateInsights.commonGaps.slice(0, 8).map(g => (
-              <span key={g.skill} className="text-[11px] px-2 py-0.5 rounded-full"
-                style={{ background: "#fef2f2", color: "#dc2626", border: "1px solid #fecaca" }}>
-                {g.skill} ({g.missingCount})
+              <span
+                key={g.skill}
+                className="text-[9px] px-1.5 py-0.5 font-mono font-bold"
+                style={{ background: "#2d0707", color: "#f87171", border: "1px solid #dc262640" }}
+              >
+                {g.skill.toUpperCase()} ({g.missingCount})
               </span>
             ))}
           </div>
-        </div>
+        </SidePanel>
       )}
+
     </div>
   );
 }
@@ -684,7 +896,7 @@ export default function ResultDetailPage() {
   const dispatch = useDispatch<AppDispatch>();
   const params   = useParams();
   const id       = params.id as string;
-  const { current: result, loading } = useSelector((s: RootState) => s.screening);
+  const { current: result, loading, thinkingLog } = useSelector((s: RootState) => s.screening);
 
   const [selectedIds, setSelectedIds]   = useState<Set<string>>(new Set());
   const [expandedId, setExpandedId]     = useState<string | null>(null);
@@ -693,6 +905,7 @@ export default function ResultDetailPage() {
   const [filter, setFilter]             = useState<RecFilter>("All");
   const [sortBy, setSortBy]             = useState<SortBy>("score");
   const [stages, setStages]             = useState<Record<string, PipelineStage>>({});
+  const [showThinkingModal, setShowThinkingModal] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -709,9 +922,9 @@ export default function ResultDetailPage() {
     });
   };
 
-  const toggleSelect  = (cid: string) => setSelectedIds(prev => { const n = new Set(prev); n.has(cid) ? n.delete(cid) : n.add(cid); return n; });
-  const toggleAll     = () => { if (!result) return; setSelectedIds(selectedIds.size === result.shortlist.length ? new Set() : new Set(result.shortlist.map(c => c.candidateId))); };
-  const toggleExpand  = (cid: string) => setExpandedId(prev => prev === cid ? null : cid);
+  const toggleSelect = (cid: string) => setSelectedIds(prev => { const n = new Set(prev); n.has(cid) ? n.delete(cid) : n.add(cid); return n; });
+  const toggleAll    = () => { if (!result) return; setSelectedIds(selectedIds.size === result.shortlist.length ? new Set() : new Set(result.shortlist.map(c => c.candidateId))); };
+  const toggleExpand = (cid: string) => setExpandedId(prev => prev === cid ? null : cid);
 
   const filtered = useMemo(() => {
     if (!result) return [];
@@ -733,179 +946,210 @@ export default function ResultDetailPage() {
     finally { setExporting(false); }
   };
 
+  // ── Loading ────────────────────────────────────────────────────────────────
   if (loading || !result) {
     return (
-      <div className="max-w-7xl mx-auto space-y-4 animate-pulse">
-        <div className="h-10 rounded-lg bg-gray-100 w-80" />
-        <div className="h-24 rounded-lg bg-gray-100" />
-        <div className="h-96 rounded-lg bg-gray-100" />
+      <div className="min-h-screen bg-[#040d18] flex flex-col">
+        {/* Skeleton header */}
+        <div className="h-9 bg-[#0d1b2a] border-b border-[#1e3a5f] flex items-center px-4 gap-3">
+          <div className="w-2 h-2 rounded-full bg-[#334155] animate-pulse" />
+          <div className="w-32 h-2 bg-[#1e3a5f] rounded animate-pulse" />
+          <div className="w-px h-3.5 bg-[#334155]" />
+          <div className="w-48 h-2 bg-[#1e3a5f] rounded animate-pulse" />
+        </div>
+        <div className="bg-[#0f1c2e] border-b border-[#1e3a5f] h-10" />
+        <div className="bg-[#0a1628] border-b border-[#1e3a5f]/60 h-12" />
+        <div className="flex-1 p-5 space-y-4">
+          <div className="h-8 bg-[#0d1b2a] border border-[#1e3a5f]/40 animate-pulse" />
+          <div className="h-80 bg-[#0d1b2a] border border-[#1e3a5f]/40 animate-pulse" />
+        </div>
+        <div className="h-7 bg-[#0d1b2a] border-t border-[#1e3a5f]" />
       </div>
     );
   }
 
   const allSelected  = result.shortlist.length > 0 && selectedIds.size === result.shortlist.length;
-  const avgScore     = result.shortlist.length ? Math.round(result.shortlist.reduce((a, c) => a + c.finalScore, 0) / result.shortlist.length) : 0;
   const REC_FILTERS: RecFilter[] = ["All", "Strongly Recommended", "Recommended", "Consider", "Not Recommended"];
 
+  const effectiveThinkingLog = thinkingLog?.length ? thinkingLog : (result.thinkingLog ?? []);
+
   return (
-    <div className="max-w-7xl mx-auto space-y-5">
+    <div className="min-h-screen bg-[#040d18] flex flex-col">
+      {/* System header */}
+      <SysHeader
+        result={result}
+        selectedIds={selectedIds}
+        onExport={handleExport}
+        exporting={exporting}
+        thinkingLog={effectiveThinkingLog}
+        onShowThinking={() => setShowThinkingModal(true)}
+      />
 
-      {/* Breadcrumb + actions */}
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-2 text-sm min-w-0">
-          <Link href="/results" className="p-1.5 rounded hover:bg-gray-100 text-gray-400 transition-colors flex-shrink-0">
-            <ArrowLeft className="w-4 h-4" />
-          </Link>
-          <span className="text-gray-400">/</span>
-          <span className="text-gray-500">Screening Results</span>
-          <span className="text-gray-400">/</span>
-          <span className="font-semibold text-gray-900 truncate">{result.jobTitle}</span>
-        </div>
+      {/* Report banner */}
+      <ReportBanner result={result} onBack={() => window.history.back()} />
 
-        <div className="flex items-center gap-2 flex-shrink-0">
-          {selectedIds.size > 0 && (
-            <motion.button initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-              onClick={handleExport} disabled={exporting}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all bg-blue-600 text-white hover:bg-blue-700">
-              {exporting
-                ? <><Sparkles className="w-3.5 h-3.5 animate-spin" /> Generating...</>
-                : <><Download className="w-3.5 h-3.5" /> Export {selectedIds.size} PDF</>}
-            </motion.button>
-          )}
-          <span className="text-xs px-2.5 py-1.5 rounded bg-gray-100 text-gray-500 font-medium">
-            {new Date(result.screeningDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-          </span>
-        </div>
-      </div>
+      {/* Intel strip */}
+      <IntelStrip result={result} />
 
-      {/* KPI bar */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-        {[
-          { label: "Screened",       value: result.totalApplicants,                suffix: "" },
-          { label: "Shortlisted",    value: result.shortlistSize,                  suffix: "" },
-          { label: "Avg Score",      value: avgScore,                              suffix: "%" },
-          { label: "Top Score",      value: result.shortlist[0]?.finalScore ?? 0,  suffix: "%", accent: true },
-          { label: "Avg Confidence", value: result.shortlist.length ? Math.round(result.shortlist.reduce((a, c) => a + c.confidenceScore, 0) / result.shortlist.length) : 0, suffix: "%" },
-        ].map(({ label, value, suffix, accent }) => (
-          <div key={label} className="rounded-lg px-4 py-3 bg-white border border-gray-200">
-            <p className="text-[10px] uppercase tracking-widest font-medium text-gray-400 mb-1">{label}</p>
-            <p className="text-2xl font-bold" style={{ color: accent ? scoreColor(value as number) : "#111827" }}>
-              {value}{suffix}
-            </p>
-          </div>
-        ))}
-      </div>
+      {/* Main content */}
+      <div className="flex-1 p-4 overflow-y-auto" style={{ scrollbarWidth: "thin", scrollbarColor: "#1e3a5f transparent" }}>
+        <div className="grid grid-cols-1 xl:grid-cols-[1fr_256px] gap-4 items-start max-w-[1600px] mx-auto">
 
-      {/* Two column */}
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_252px] gap-5 items-start">
-
-        {/* Table */}
-        <div className="rounded-lg overflow-hidden bg-white border border-gray-200">
-
-          {/* Toolbar */}
-          <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-gray-100 bg-gray-50">
-            <div className="flex items-center gap-1 flex-wrap">
+          {/* Candidate Registry */}
+          <SysPanel
+            title="CANDIDATE REGISTRY"
+            badge={`${filtered.length} RECORDS`}
+            toolbar={
+              <div className="flex items-center gap-2">
+                <select
+                  value={sortBy}
+                  onChange={e => setSortBy(e.target.value as SortBy)}
+                  className="text-[10px] font-mono font-bold px-2 py-1 bg-[#0a1628] border border-[#1e3a5f] text-[#94a3b8] focus:outline-none uppercase tracking-wider"
+                >
+                  <option value="score">SORT: SCORE</option>
+                  <option value="confidence">SORT: CONFIDENCE</option>
+                  <option value="skills">SORT: SKILLS</option>
+                </select>
+                <button
+                  onClick={toggleAll}
+                  className="flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-1 border border-[#1e3a5f] bg-[#0a1628] text-[#64748b] hover:text-[#94a3b8] transition-colors uppercase tracking-wider"
+                >
+                  {allSelected ? <><CheckSquare className="w-3 h-3" /> DESELECT</> : <><Square className="w-3 h-3" /> SELECT ALL</>}
+                </button>
+              </div>
+            }
+          >
+            {/* Filter bar */}
+            <div className="flex items-center gap-px px-4 py-2 border-b border-[#1e3a5f]/40 bg-[#070f1a] flex-wrap">
               {REC_FILTERS.map(f => {
-                const count  = f === "All" ? result.shortlist.length : result.shortlist.filter(c => c.recommendation === f).length;
-                const cfg    = REC_CONFIG[f];
+                const count = f === "All" ? result.shortlist.length : result.shortlist.filter(c => c.recommendation === f).length;
+                const cfg   = REC_CONFIG[f];
                 const active = filter === f;
                 if (count === 0 && f !== "All") return null;
                 return (
-                  <button key={f} onClick={() => setFilter(f)}
-                    className="text-xs font-medium px-2.5 py-1 rounded-full transition-all"
+                  <button
+                    key={f}
+                    onClick={() => setFilter(f)}
+                    className="text-[10px] font-bold font-mono px-3 py-1 tracking-wider uppercase transition-colors"
                     style={{
-                      background: active ? (cfg ? cfg.bg   : "#f3f4f6") : "transparent",
-                      color:      active ? (cfg ? cfg.color : "#374151") : "#6b7280",
-                      border:     `1px solid ${active ? (cfg ? cfg.border : "#d1d5db") : "transparent"}`,
-                    }}>
-                    {f === "All" ? "All" : (cfg?.short ?? f)} ({count})
+                      background: active ? (cfg ? cfg.bg : "#1e293b") : "transparent",
+                      color:      active ? (cfg ? cfg.color : "#94a3b8") : "#334155",
+                      borderBottom: `2px solid ${active ? (cfg ? cfg.color : "#0052cc") : "transparent"}`,
+                    }}
+                  >
+                    {f === "All" ? "ALL" : (cfg?.short ?? f)} ({count})
                   </button>
                 );
               })}
             </div>
 
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <select value={sortBy} onChange={e => setSortBy(e.target.value as SortBy)}
-                className="text-xs px-2 py-1 rounded border border-gray-200 bg-white text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500/30">
-                <option value="score">Sort: Score</option>
-                <option value="confidence">Sort: Confidence</option>
-                <option value="skills">Sort: Skills</option>
-              </select>
-              <button onClick={toggleAll}
-                className="flex items-center gap-1 text-xs px-2.5 py-1 rounded border border-gray-200 bg-white text-gray-600 hover:border-gray-300 transition-colors">
-                {allSelected ? <><CheckSquare className="w-3 h-3" /> Deselect all</> : <><Square className="w-3 h-3" /> Select all</>}
-              </button>
+            {/* Table */}
+            <div className="overflow-x-auto">
+              <table className="w-full" style={{ borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ borderBottom: "1px solid #1e3a5f60", background: "#050d18" }}>
+                    <th className="pl-4 pr-3 py-2.5 w-9" />
+                    <th className="px-3 py-2.5 w-10 text-left text-[9px] font-bold uppercase tracking-widest text-[#334155] font-mono">RNK</th>
+                    <th className="px-3 py-2.5 text-left text-[9px] font-bold uppercase tracking-widest text-[#334155] font-mono">CANDIDATE</th>
+                    <th className="px-3 py-2.5 w-32 text-left text-[9px] font-bold uppercase tracking-widest text-[#334155] font-mono">SCORE</th>
+                    <th className="px-3 py-2.5 w-40 text-left text-[9px] font-bold uppercase tracking-widest text-[#334155] font-mono">DECISION</th>
+                    <th className="px-3 py-2.5 w-32 text-left text-[9px] font-bold uppercase tracking-widest text-[#334155] font-mono">PIPELINE</th>
+                    <th className="pl-2 pr-4 py-2.5 w-8" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((c, i) => (
+                    <CandidateRow
+                      key={c.candidateId}
+                      candidate={c}
+                      index={i}
+                      isSelected={selectedIds.has(c.candidateId)}
+                      onSelect={toggleSelect}
+                      stage={stages[c.candidateId] ?? "new"}
+                      onStageChange={updateStage}
+                      isExpanded={expandedId === c.candidateId}
+                      onToggle={toggleExpand}
+                    />
+                  ))}
+                </tbody>
+              </table>
             </div>
+
+            {/* Not shortlisted */}
+            {result.rejectedCandidates?.length > 0 && (
+              <>
+                <button
+                  onClick={() => setShowRejected(v => !v)}
+                  className="w-full flex items-center justify-between px-5 py-2.5 text-[10px] font-mono font-bold uppercase tracking-widest border-t border-[#1e3a5f]/60 transition-colors"
+                  style={{ background: showRejected ? "#0a0d14" : "#070a10", color: "#475569" }}
+                >
+                  <div className="flex items-center gap-2">
+                    <TrendingDown className="w-3 h-3 text-[#f87171]" />
+                    <span className="text-[#64748b]">NOT SHORTLISTED</span>
+                    <span className="px-1.5 py-px text-[9px] font-mono font-bold" style={{ background: "#2d0707", color: "#f87171", border: "1px solid #dc262640" }}>
+                      {result.rejectedCandidates.length}
+                    </span>
+                  </div>
+                  {showRejected ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                </button>
+
+                <AnimatePresence>
+                  {showRejected && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <table className="w-full" style={{ borderCollapse: "collapse" }}>
+                        <tbody>
+                          {result.rejectedCandidates.map((r, i) => (
+                            <RejectedRow key={r.candidateId} rejected={r} index={i} />
+                          ))}
+                        </tbody>
+                      </table>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </>
+            )}
+          </SysPanel>
+
+          {/* Sidebar analytics */}
+          <div className="sticky top-0">
+            <AnalyticsSidebar result={result} />
           </div>
-
-          {/* Table */}
-          <div className="overflow-x-auto">
-            <table className="w-full" style={{ borderCollapse: "collapse" }}>
-              <thead>
-                <tr className="border-b border-gray-100 bg-gray-50">
-                  <th className="pl-4 pr-3 py-2.5 w-9" />
-                  <th className="px-3 py-2.5 w-12 text-left text-[10px] font-semibold uppercase tracking-widest text-gray-400">#</th>
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-widest text-gray-400">Candidate</th>
-                  <th className="px-3 py-2.5 w-36 text-left text-[10px] font-semibold uppercase tracking-widest text-gray-400">Score</th>
-                  <th className="px-3 py-2.5 w-36 text-left text-[10px] font-semibold uppercase tracking-widest text-gray-400">Recommendation</th>
-                  <th className="px-3 py-2.5 w-32 text-left text-[10px] font-semibold uppercase tracking-widest text-gray-400">Stage</th>
-                  <th className="pl-2 pr-4 py-2.5 w-8" />
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((c, i) => (
-                  <CandidateRow
-                    key={c.candidateId}
-                    candidate={c}
-                    index={i}
-                    isSelected={selectedIds.has(c.candidateId)}
-                    onSelect={toggleSelect}
-                    stage={stages[c.candidateId] ?? "new"}
-                    onStageChange={updateStage}
-                    isExpanded={expandedId === c.candidateId}
-                    onToggle={toggleExpand}
-                  />
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Not shortlisted */}
-          {result.rejectedCandidates?.length > 0 && (
-            <>
-              <button onClick={() => setShowRejected(v => !v)}
-                className="w-full flex items-center justify-between px-5 py-3 text-sm border-t border-gray-100 bg-gray-50 hover:bg-gray-100 transition-colors text-gray-500">
-                <div className="flex items-center gap-2">
-                  <TrendingDown className="w-4 h-4" />
-                  <span className="font-medium text-gray-600">Not Shortlisted</span>
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-gray-200 text-gray-500 font-medium">
-                    {result.rejectedCandidates.length}
-                  </span>
-                </div>
-                {showRejected ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-              </button>
-
-              <AnimatePresence>
-                {showRejected && (
-                  <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-                    className="overflow-hidden">
-                    <table className="w-full" style={{ borderCollapse: "collapse" }}>
-                      <tbody>
-                        {result.rejectedCandidates.map(r => <RejectedRow key={r.candidateId} rejected={r} />)}
-                      </tbody>
-                    </table>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </>
-          )}
-        </div>
-
-        {/* Sidebar */}
-        <div className="sticky top-6">
-          <Sidebar result={result} />
         </div>
       </div>
+
+      {/* Status bar */}
+      <div className="h-7 bg-[#0d1b2a] border-t border-[#1e3a5f] flex items-center px-4 gap-4 flex-shrink-0 select-none">
+        {[
+          { icon: Database, label: "RECORDS",  value: `${result.shortlistSize} / ${result.totalApplicants}` },
+          { icon: Filter,   label: "FILTER",   value: filter === "All" ? "NONE" : REC_CONFIG[filter]?.short ?? filter },
+          { icon: Activity, label: "AVG SCORE",value: `${result.shortlist.length ? Math.round(result.shortlist.reduce((a,c)=>a+c.finalScore,0)/result.shortlist.length) : 0}%` },
+          { icon: Server,   label: "ENGINE",   value: "GEMINI 2.5 FLASH" },
+        ].map(({ icon: Icon, label, value }, i) => (
+          <React.Fragment key={label}>
+            {i > 0 && <div className="w-px h-3 bg-[#334155]" />}
+            <div className="flex items-center gap-1.5 text-[9px] font-mono">
+              <Icon className="w-2.5 h-2.5 text-[#334155]" />
+              <span className="text-[#334155] tracking-wider">{label}:</span>
+              <span className="text-[#475569] tracking-wider">{value}</span>
+            </div>
+          </React.Fragment>
+        ))}
+      </div>
+
+      {/* AI Thinking Review Modal */}
+      <AIThinkingReviewModal
+        isOpen={showThinkingModal}
+        onClose={() => setShowThinkingModal(false)}
+        thinkingLog={effectiveThinkingLog}
+        jobTitle={result.jobTitle}
+        screeningDate={result.screeningDate}
+        totalApplicants={result.totalApplicants}
+      />
     </div>
   );
 }

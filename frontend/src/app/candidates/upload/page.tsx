@@ -61,13 +61,19 @@ export default function UploadCandidatesPage() {
         const res = await dispatch(bulkImportJSON(parsed)).unwrap() as { created: number; skipped: number; errors: string[] };
         setResult(res);
         await dispatch(fetchCandidates({}));
-        if (res.created > 0) toast.success(`${res.created} candidates imported!`);
+        if (res.created > 0) {
+          toast.success(`${res.created} candidates imported!`);
+          setTimeout(() => router.push("/candidates"), 1500);
+        }
       } else if (tab === "csv") {
         if (!files[0]) return toast.error("Select a CSV or Excel file first");
         const res = await dispatch(uploadCSV({ file: files[0] })).unwrap() as { created: number; skipped: number; errors: string[] };
         setResult(res);
         await dispatch(fetchCandidates({}));
-        if (res.created > 0) toast.success(`${res.created} candidates imported!`);
+        if (res.created > 0) {
+          toast.success(`${res.created} candidates imported!`);
+          setTimeout(() => router.push("/candidates"), 1500);
+        }
       } else {
         // PDF — runs in background
         if (!files.length) return toast.error("Select PDF files first");

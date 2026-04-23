@@ -4,17 +4,19 @@ import { useDispatch, useSelector } from "react-redux";
 import { useParams, useRouter } from "next/navigation";
 import { AppDispatch, RootState } from "@/store";
 import { fetchJob, deleteJob, clearSelected } from "@/store/jobsSlice";
-import { fetchCandidates } from "@/store/candidatesSlice";
+import { fetchCandidates, updateCandidate, uploadCSV, uploadPDFs, bulkImportJSON } from "@/store/candidatesSlice";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import toast from "react-hot-toast";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { DragDropUpload } from "@/components/ui/DragDropUpload";
+import { CandidateDetailModal } from "@/components/candidates/CandidateDetailModal";
 import {
   ArrowLeft, Briefcase, MapPin, Clock, DollarSign, Award, CheckCircle,
-  AlertCircle, Edit, Trash2, Zap, Users, BarChart3, Plus,
+  AlertCircle, Edit, Trash2, Zap, Users, BarChart3, Plus, FileText,
 } from "lucide-react";
+import { Candidate } from "@/types";
 
 const LEVEL_COLORS: Record<string, string> = {
   Junior: "#10b981",
@@ -35,6 +37,9 @@ export default function JobDetailPageTabbed() {
 
   const [activeTab, setActiveTab] = useState<TabType>("details");
   const [showAddCandidates, setShowAddCandidates] = useState(false);
+  const [selectedCandidate, setSelectedCandidate] = useState<typeof candidates[0] | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [pdfQueued, setPdfQueued] = useState(false);
 
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
 
@@ -48,6 +53,22 @@ export default function JobDetailPageTabbed() {
     };
   }, [id, dispatch]);
 
+  useEffect(() => {
+    if (!pdfQueued || !id) return;
+
+    let attempts = 0;
+    const maxAttempts = 24; // 24 * 5s = 2 minutes
+    const timer = setInterval(async () => {
+      attempts += 1;
+      await dispatch(fetchCandidates());
+      if (attempts >= maxAttempts) {
+        setPdfQueued(false);
+      }
+    }, 5000);
+
+    return () => clearInterval(timer);
+  }, [pdfQueued, id, dispatch]);
+
   const handleDelete = async () => {
     if (!job || !confirm(`Delete "${job.title}"? This cannot be undone.`)) return;
     try {
@@ -59,10 +80,49 @@ export default function JobDetailPageTabbed() {
     }
   };
 
-  const handleFileUpload = (file: File) => {
-    console.log("File selected:", file.name);
-    toast.success(`Preparing to import ${file.name}...`);
-    // TODO: Implement candidate import logic
+  const handleFileUpload = async (file: File) => {
+    toast.loading(`Uploading ${file.name}...`);
+    try {
+      if (file.name.endsWith('.csv') || file.name.endsWith('.xlsx')) {
+        const result = await dispatch(uploadCSV({ file, jobId: id })).unwrap();
+        toast.dismiss();
+        toast.success(`${result.created} candidates imported!`);
+        await dispatch(fetchCandidates());
+        setShowAddCandidates(false);
+      } else if (file.name.endsWith('.pdf')) {
+        const result = await dispatch(uploadPDFs({ files: [file], jobId: id })).unwrap();
+        toast.dismiss();
+        toast.success(`Processing ${file.name} in background...`);
+        setPdfQueued(true);
+        setShowAddCandidates(false);
+      } else if (file.name.endsWith('.json')) {
+        const text = await file.text();
+        const parsed = JSON.parse(text);
+        if (!Array.isArray(parsed)) throw new Error('JSON must be an array');
+        const result = await dispatch(bulkImportJSON(parsed)).unwrap();
+        toast.dismiss();
+        toast.success(`${result.created} candidates imported!`);
+        await dispatch(fetchCandidates());
+        setShowAddCandidates(false);
+      }
+    } catch (err) {
+      toast.dismiss();
+      toast.error(err instanceof Error ? err.message : 'Upload failed');
+    }
+  };
+
+  const handleViewCandidate = (candidate: typeof candidates[0]) => {
+    setSelectedCandidate(candidate);
+    setModalOpen(true);
+  };
+
+  const handleUpdateCandidate = async (id: string, updates: Partial<Candidate>) => {
+    const result = await dispatch(updateCandidate({ id, updates }));
+    if (result.meta.requestStatus === 'fulfilled') {
+      setSelectedCandidate(result.payload as typeof candidates[0]);
+      await dispatch(fetchCandidates());
+    }
+    return result;
   };
 
   if (loading) {
@@ -271,13 +331,23 @@ export default function JobDetailPageTabbed() {
                             <p className="text-white font-medium">{candidate.firstName} {candidate.lastName}</p>
                             <p className="text-sm text-gray-400">{candidate.email}</p>
                           </div>
-                          <button className="px-3 py-1.5 rounded-lg text-sm font-medium" style={{ backgroundColor: "rgba(59, 130, 246, 0.2)", color: "#3b82f6" }}>
+                          <button
+                            onClick={() => handleViewCandidate(candidate)}
+                            className="px-3 py-1.5 rounded-lg text-sm font-medium"
+                            style={{ backgroundColor: "rgba(59, 130, 246, 0.2)", color: "#3b82f6" }}
+                          >
                             View
                           </button>
                         </div>
                       ))}
                       {candidates.length > 5 && (
-                        <button className="text-blue-400 hover:text-blue-300 text-sm font-medium">
+                        <button
+                          onClick={() => {
+                            setSelectedCandidate(null);
+                            setModalOpen(true);
+                          }}
+                          className="text-blue-400 hover:text-blue-300 text-sm font-medium"
+                        >
                           View all {candidates.length} candidates →
                         </button>
                       )}
@@ -296,13 +366,31 @@ export default function JobDetailPageTabbed() {
                     ✕
                   </button>
                 </div>
-                <DragDropUpload
-                  onFileSelect={handleFileUpload}
-                  accept=".csv,.json,.xlsx,.pdf"
-                  maxSize={10}
-                  label="Upload Candidates"
-                  description="Drag candidates file here or click to browse"
-                />
+                {pdfQueued ? (
+                  <div className="rounded-xl p-4 flex items-start gap-3" style={{ background: "rgba(59, 130, 246, 0.1)", border: "1px solid rgba(59, 130, 246, 0.3)" }}>
+                    <CheckCircle className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-medium text-blue-300">Processing in background</p>
+                      <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+                        AI is parsing your resumes. You'll receive a notification when it's done.
+                      </p>
+                      <button
+                        onClick={() => { setPdfQueued(false); setShowAddCandidates(false); }}
+                        className="mt-2 text-xs text-blue-400 hover:text-blue-300"
+                      >
+                        Got it →
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <DragDropUpload
+                    onFileSelect={handleFileUpload}
+                    accept=".csv,.json,.xlsx,.pdf"
+                    maxSize={10}
+                    label="Upload Candidates"
+                    description="Drag candidates file here or click to browse"
+                  />
+                )}
               </div>
             )}
           </div>
@@ -341,6 +429,17 @@ export default function JobDetailPageTabbed() {
           />
         )}
       </div>
+
+      {/* Candidate Detail Modal */}
+      <CandidateDetailModal
+        candidate={selectedCandidate}
+        isOpen={modalOpen}
+        onClose={() => {
+          setModalOpen(false);
+          setSelectedCandidate(null);
+        }}
+        onUpdate={handleUpdateCandidate}
+      />
     </motion.div>
   );
 }

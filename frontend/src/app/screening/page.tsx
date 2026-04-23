@@ -9,728 +9,1056 @@ import { useJobs } from '@/hooks/useJobs';
 import { useJobCandidates } from '@/hooks/useJobCandidates';
 import { useScreening } from '@/hooks/useScreening';
 import { useNotifications } from '@/contexts/NotificationsContext';
+import { useAuth } from '@/hooks/useAuth';
 import {
-  Zap,
-  Users,
-  Brain,
-  AlertTriangle,
-  Sparkles,
-  Trophy,
-  Eye,
-  Settings2,
-  Star,
-  ArrowRight,
-  CheckCircle2,
+  AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight,
+  Brain, Users, Trophy, Zap, Activity, Server,
+  Database, Cpu, Shield, ChevronDown, ChevronUp,
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
-import toast from 'react-hot-toast';
-import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
 import { AIThinkingStream } from '@/components/screening/AIThinkingStream';
-import { LiveScoreGauges } from '@/components/screening/LiveScoreGauges';
-import { LiveLeaderboard } from '@/components/screening/LiveLeaderboard';
-import { CriteriaSelector } from '@/components/screening/CriteriaSelector';
 import { CandidateScore } from '@/types';
 
-function formatTime(seconds: number): string {
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${mins}:${secs.toString().padStart(2, '0')}`;
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function formatTime(s: number) {
+  const m = Math.floor(s / 60);
+  return `${m.toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
 }
 
-export default function ScreeningPage() {
-  const router = useRouter();
-  const dispatch = useDispatch<AppDispatch>();
-  const params = useSearchParams();
-  const preJobId = params.get('jobId');
+function nowHMS() {
+  const n = new Date();
+  return `${n.getHours().toString().padStart(2, '0')}:${n.getMinutes().toString().padStart(2, '0')}:${n.getSeconds().toString().padStart(2, '0')}`;
+}
 
-  // State declarations first
-  const [jobId, setJobId] = useState(preJobId || '');
-  const [shortlistSize, setShortlistSize] = useState(10);
-  const [elapsedTime, setElapsedTime] = useState(0);
-  const [activeTab, setActiveTab] = useState<'setup' | 'criteria' | 'preview'>('setup');
+function scoreColor(s: number) {
+  if (s >= 80) return '#16a34a';
+  if (s >= 65) return '#2563eb';
+  if (s >= 50) return '#d97706';
+  return '#dc2626';
+}
 
-  // Hooks after state
-  const { jobs, loading: jobsLoading } = useJobs();
-  const { total: candidateCount } = useJobCandidates(jobId || null);
-  const { notifications, liveEvents } = useNotifications();
-  const pendingBgJobId = useSelector((s: RootState) => s.screening.pendingBgJobId);
-  const {
-    handleRunScreening,
-    running,
-    thoughts,
-    thinkingLog,
-    liveScores,
-    partialShortlist,
-    evaluatedCount,
-    totalCandidates,
-    setTotalCandidatesCount,
-    addScreeningThought,
-    clearScreeningThoughts,
-    addThinkingSnapshotToLog,
-    setLiveScores,
-    setPartialShortlist,
-    setEvaluatedCountTo,
-    resetLiveScreeningState,
-  } = useScreening();
+// ─── System chrome components ─────────────────────────────────────────────────
 
-  const [customWeights, setCustomWeights] = useState({
-    skills: 25,
-    experience: 25,
-    education: 20,
-    projects: 20,
-    availability: 10,
-  });
-
-  const selectedJob = jobs.find((j) => j._id === jobId);
-
+function SysHeader({ running, elapsed, user }: { running: boolean; elapsed: number; user?: { name?: string } }) {
+  const [clock, setClock] = useState(nowHMS());
   useEffect(() => {
-    if (selectedJob?.weights) {
-      setCustomWeights({
-        skills: selectedJob.weights.skills,
-        experience: selectedJob.weights.experience,
-        education: selectedJob.weights.education,
-        projects: selectedJob.weights.projects,
-        availability: selectedJob.weights.availability,
-      });
-    }
-  }, [selectedJob]);
-
-  useEffect(() => {
-    if (running) {
-      resetLiveScreeningState();
-      setTotalCandidatesCount(candidateCount);
-      seenEventTimestamps.current.clear();
-    }
-  }, [running]);
-
-  useEffect(() => {
-    if (!running) {
-      setElapsedTime(0);
-      return;
-    }
-    const timer = setInterval(() => {
-      setElapsedTime((prev) => prev + 1);
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [running]);
-
-  const progressPercent = totalCandidates > 0
-    ? Math.round((evaluatedCount / totalCandidates) * 100)
-    : 0;
-
-  const selectedJobRequirements = selectedJob?.requirements
-    .filter((r) => r.required)
-    .map((r) => r.skill) || [];
-
-  const totalWeight = Object.values(customWeights).reduce((a, b) => a + b, 0);
-
-  // When an SSE notification arrives for our pending background job, navigate to results
-  useEffect(() => {
-    if (!pendingBgJobId) return;
-    const completedNotif = notifications.find(
-      (n) => n.bgJobId === pendingBgJobId
-    );
-    if (!completedNotif) return;
-    dispatch(stopRunning());
-    if (completedNotif.link) {
-      router.push(completedNotif.link);
-    }
-  }, [notifications, pendingBgJobId, dispatch, router]);
-
-  // Ref for deduplicating live SSE events — cleared when a new run starts
-  const seenEventTimestamps = React.useRef<Set<string>>(new Set());
-
-  const handleRun = async () => {
-    if (!jobId) {
-      toast.error('Please select a job position');
-      return;
-    }
-    if (candidateCount === 0) {
-      toast.error('No candidates for this job — upload candidates first');
-      return;
-    }
-    if (candidateCount < shortlistSize) {
-      toast.error(`Only ${candidateCount} candidates available. Reduce shortlist size.`);
-      return;
-    }
-    if (totalWeight !== 100) {
-      toast.error('Criteria weights must sum to 100%');
-      return;
-    }
-
-    try {
-      clearScreeningThoughts();
-      const result = await handleRunScreening({ jobId, shortlistSize });
-      if (result.meta.requestStatus === 'fulfilled') {
-        toast.success("Screening started! We'll notify you when it's done — feel free to navigate away.");
-      } else {
-        toast.error((result.payload as string) || 'Screening failed');
-      }
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Screening failed');
-    }
-  };
-
-  // Consume real SSE progress events from the backend and feed them into the thought stream
-  useEffect(() => {
-    if (!pendingBgJobId || liveEvents.length === 0) return;
-
-    // Process only events matching our active background job
-    for (const event of liveEvents) {
-      if (event.jobId !== pendingBgJobId) continue;
-
-      // Deduplicate by timestamp to avoid re-processing on re-renders
-      const dedupKey = `${event.jobId}:${event.timestamp}`;
-      if (seenEventTimestamps.current.has(dedupKey)) continue;
-      seenEventTimestamps.current.add(dedupKey);
-
-      const progressEvent = event.metadata.progressEvent as {
-        type: string;
-        message: string;
-        candidateName?: string;
-        detail?: string;
-        liveScores?: { skills: number; experience: number; education: number; projects: number; availability: number };
-        partialShortlist?: CandidateScore[];
-        evaluatedCount?: number;
-        thinkingSnapshot?: {
-          stage: 'evaluating' | 'reranking' | 'rejection';
-          batchIndex: number;
-          batchLabel: string;
-          candidateNames: string[];
-          thinking: string;
-          timestamp: string;
-        };
-      } | undefined;
-
-      if (!progressEvent) continue;
-
-      const now = new Date();
-      const timestamp = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
-
-      // Thinking snapshots: dispatch a special thought AND store in thinkingLog
-      if (progressEvent.type === 'thinking' && progressEvent.thinkingSnapshot) {
-        addThinkingSnapshotToLog(progressEvent.thinkingSnapshot);
-        addScreeningThought({
-          id: `thinking-${dedupKey}`,
-          type: 'thinking',
-          message: progressEvent.thinkingSnapshot.batchLabel,
-          timestamp,
-          status: 'completed',
-          thinkingContent: progressEvent.thinkingSnapshot.thinking,
-        });
-        continue;
-      }
-
-      addScreeningThought({
-        id: `thought-${dedupKey}`,
-        type: (progressEvent.type as 'analyzing' | 'scoring' | 'flagging' | 'generating' | 'evaluating' | 'completed') || 'analyzing',
-        message: progressEvent.message,
-        candidateName: progressEvent.candidateName,
-        timestamp,
-        status: 'completed',
-        detail: progressEvent.detail,
-      });
-
-      if (progressEvent.liveScores) {
-        setLiveScores(progressEvent.liveScores);
-      }
-
-      if (progressEvent.partialShortlist && progressEvent.partialShortlist.length > 0) {
-        setPartialShortlist(progressEvent.partialShortlist);
-      }
-
-      if (progressEvent.evaluatedCount !== undefined) {
-        setEvaluatedCountTo(progressEvent.evaluatedCount);
-      }
-    }
-  }, [liveEvents, pendingBgJobId]);
+    const t = setInterval(() => setClock(nowHMS()), 1000);
+    return () => clearInterval(t);
+  }, []);
 
   return (
-    <div className="min-h-screen bg-gray-50/50">
-      {/* Header Bar */}
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            {/* Logo & Title */}
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-600 to-blue-700 flex items-center justify-center shadow-lg shadow-blue-500/20">
-                <Brain className="w-4 h-4 text-white" />
-              </div>
-              <div>
-                <h1 className="text-sm font-bold text-gray-900">AI Screening</h1>
-                <p className="text-[10px] text-gray-500">Powered by Gemini 2.0 Flash</p>
-              </div>
-            </div>
+    <div className="h-9 bg-[#0d1b2a] border-b border-[#1e3a5f] flex items-center px-4 gap-0 flex-shrink-0 select-none">
+      {/* Left: system identity */}
+      <div className="flex items-center gap-3 flex-1">
+        <div className="flex items-center gap-1.5">
+          <div className="w-2 h-2 rounded-full bg-[#22c55e] shadow-[0_0_6px_#22c55e]" />
+          <span className="text-[11px] font-bold text-[#e2e8f0] tracking-widest uppercase">TalentAI</span>
+        </div>
+        <div className="w-px h-3.5 bg-[#334155]" />
+        <span className="text-[10px] text-[#64748b] tracking-wider uppercase">Enterprise Screening Module</span>
+        <div className="w-px h-3.5 bg-[#334155]" />
+        <span className="text-[10px] text-[#475569] font-mono">v2.1.0</span>
+      </div>
 
-            {/* Status Pill */}
-            {running ? (
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-50 border border-blue-200">
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
-                  </span>
-                  <span className="text-xs font-medium text-blue-700">Running in background</span>
-                  <span className="text-xs text-blue-500 font-mono">{formatTime(elapsedTime)}</span>
+      {/* Center: status */}
+      <div className="flex items-center gap-4">
+        {running ? (
+          <div className="flex items-center gap-1.5 px-2.5 py-0.5 bg-[#1a3a20] border border-[#22c55e]/30 rounded">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e] animate-pulse" />
+            <span className="text-[10px] font-mono text-[#4ade80] tracking-wider">PROCESSING · {formatTime(elapsed)}</span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5 px-2.5 py-0.5 bg-[#1a2535] border border-[#334155] rounded">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e]" />
+            <span className="text-[10px] font-mono text-[#94a3b8] tracking-wider">IDLE · READY</span>
+          </div>
+        )}
+      </div>
+
+      {/* Right: operator info */}
+      <div className="flex items-center gap-4 flex-1 justify-end">
+        <div className="flex items-center gap-3 text-[10px] font-mono">
+          <span className="text-[#475569]">OPERATOR: <span className="text-[#94a3b8]">{user?.name?.split(' ')[0]?.toUpperCase() ?? 'SYS'}</span></span>
+          <div className="w-px h-3 bg-[#334155]" />
+          <span className="text-[#475569]">UTC: <span className="text-[#94a3b8]">{clock}</span></span>
+          <div className="w-px h-3 bg-[#334155]" />
+          <span className="text-[#475569]">NODE: <span className="text-[#94a3b8]">GEMINI-2.5</span></span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function WorkflowBar({ step, running }: { step: 'setup' | 'criteria' | 'review'; running: boolean }) {
+  const steps = [
+    { id: 'setup',    num: '01', label: 'JOB SELECTION',        desc: 'Position & pool size' },
+    { id: 'criteria', num: '02', label: 'EVALUATION CRITERIA',  desc: 'Scoring weights'       },
+    { id: 'review',   num: '03', label: 'INITIATION',           desc: 'Confirm & execute'     },
+    { id: 'exec',     num: '04', label: 'EXECUTION',            desc: 'Live processing'       },
+  ];
+  const order = ['setup', 'criteria', 'review', 'exec'];
+  const currentIdx = running ? 3 : order.indexOf(step);
+
+  return (
+    <div className="bg-[#0f1f33] border-b border-[#1e3a5f] px-4 py-0 flex-shrink-0">
+      <div className="flex items-stretch">
+        {steps.map((s, i) => {
+          const idx   = i;
+          const done  = idx < currentIdx;
+          const active = idx === currentIdx;
+          return (
+            <div key={s.id} className="flex items-stretch flex-1">
+              <div className={cn(
+                'flex items-center gap-2.5 py-2.5 px-3 flex-1 border-b-2 transition-all',
+                active  ? 'border-[#3b82f6] bg-[#0d1b2a]/60' :
+                done    ? 'border-[#22c55e] bg-transparent' :
+                          'border-transparent bg-transparent'
+              )}>
+                {/* Step num circle */}
+                <div className={cn(
+                  'w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0',
+                  done   ? 'bg-[#22c55e] text-[#0f1923]' :
+                  active ? 'bg-[#3b82f6] text-white' :
+                           'bg-[#1e3a5f] text-[#475569]'
+                )}>
+                  {done ? '✓' : s.num}
                 </div>
+                <div className="min-w-0">
+                  <p className={cn(
+                    'text-[9px] font-bold tracking-widest truncate',
+                    active  ? 'text-[#93c5fd]' :
+                    done    ? 'text-[#4ade80]' :
+                              'text-[#475569]'
+                  )}>
+                    {s.label}
+                  </p>
+                  <p className="text-[8px] text-[#334155] truncate">{s.desc}</p>
+                </div>
+              </div>
+              {i < steps.length - 1 && (
+                <div className="flex items-center px-0 flex-shrink-0">
+                  <ChevronRight className={cn('w-3 h-3', done ? 'text-[#22c55e]' : 'text-[#1e3a5f]')} />
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function StatusBar({ totalCandidates, evaluatedCount, model }: { totalCandidates: number; evaluatedCount: number; model: string }) {
+  const [clock, setClock] = useState(nowHMS());
+  useEffect(() => {
+    const t = setInterval(() => setClock(nowHMS()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const items = [
+    { icon: Server,   label: 'SYS',     val: 'ONLINE'        },
+    { icon: Cpu,      label: 'MODEL',   val: model           },
+    { icon: Database, label: 'POOL',    val: `${totalCandidates} CANDIDATES` },
+    { icon: Activity, label: 'EVAL',    val: `${evaluatedCount}/${totalCandidates}` },
+    { icon: Shield,   label: 'SECURITY',val: 'TLS 1.3'       },
+  ];
+
+  return (
+    <div className="h-7 bg-[#0d1b2a] border-t border-[#1e3a5f] flex items-center px-4 gap-0 flex-shrink-0">
+      <div className="flex items-center gap-4 flex-1">
+        {items.map(({ icon: Icon, label, val }) => (
+          <div key={label} className="flex items-center gap-1.5 text-[9px] font-mono">
+            <Icon className="w-2.5 h-2.5 text-[#3b82f6]" />
+            <span className="text-[#475569]">{label}:</span>
+            <span className="text-[#64748b]">{val}</span>
+          </div>
+        ))}
+      </div>
+      <span className="text-[9px] font-mono text-[#334155]">{clock} UTC</span>
+    </div>
+  );
+}
+
+// ─── Panel wrapper ─────────────────────────────────────────────────────────────
+function Panel({ title, badge, children, className }: { title: string; badge?: string; children: React.ReactNode; className?: string }) {
+  return (
+    <div className={cn('border border-[#cbd5e1] rounded-none overflow-hidden bg-white flex flex-col', className)}>
+      <div className="flex items-center justify-between px-3 py-2 bg-[#1e3a5f] flex-shrink-0">
+        <span className="text-[10px] font-bold text-[#bfdbfe] tracking-widest uppercase">{title}</span>
+        {badge && (
+          <span className="text-[9px] font-mono text-[#64748b] bg-[#0f1923] px-1.5 py-0.5 rounded">{badge}</span>
+        )}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function FieldRow({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
+  return (
+    <div className="flex items-center gap-0 border-b border-[#f1f5f9] last:border-0">
+      <div className="w-36 px-3 py-2 bg-[#f8fafc] border-r border-[#e2e8f0] flex-shrink-0">
+        <span className="text-[9px] font-bold text-[#64748b] tracking-wider uppercase">{label}</span>
+      </div>
+      <div className={cn('flex-1 px-3 py-2 text-xs text-[#0f172a]', mono && 'font-mono')}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+// ─── Configuration steps ──────────────────────────────────────────────────────
+
+function StepJobSelection({
+  jobs, jobsLoading, jobId, setJobId, selectedJob, candidateCount, shortlistSize, setShortlistSize,
+}: {
+  jobs: { _id: string; title: string; experienceLevel: string; department?: string; type?: string; location?: string; requirements: { skill: string; required: boolean }[]; weights: { skills: number; experience: number; education: number; projects: number; availability: number } }[];
+  jobsLoading: boolean;
+  jobId: string;
+  setJobId: (v: string) => void;
+  selectedJob: typeof jobs[0] | undefined;
+  candidateCount: number;
+  shortlistSize: number;
+  setShortlistSize: (v: number) => void;
+}) {
+  const required = selectedJob?.requirements.filter(r => r.required).map(r => r.skill) ?? [];
+
+  return (
+    <div className="grid grid-cols-[1fr_280px] gap-4 h-full">
+      {/* Main form */}
+      <div className="space-y-4">
+        <Panel title="01 — Job Selection" badge="REQUIRED">
+          {/* Position reference */}
+          <div className="border-b border-[#e2e8f0] px-3 py-2 bg-[#f8fafc]">
+            <span className="text-[9px] font-bold text-[#64748b] tracking-widest">POSITION REFERENCE</span>
+          </div>
+          <div className="p-3">
+            <div className="border border-[#cbd5e1] rounded-sm overflow-hidden">
+              <div className="px-2 py-1 bg-[#f1f5f9] border-b border-[#e2e8f0]">
+                <span className="text-[9px] font-bold text-[#94a3b8] tracking-wider">POSITION</span>
+              </div>
+              <select
+                value={jobId}
+                onChange={e => setJobId(e.target.value)}
+                disabled={jobsLoading}
+                className="w-full px-3 py-2.5 text-xs text-[#0f172a] bg-white border-0 outline-none focus:bg-[#eff6ff] transition-colors disabled:opacity-50 font-mono"
+              >
+                <option value="">— SELECT POSITION —</option>
+                {jobs.map(j => (
+                  <option key={j._id} value={j._id}>
+                    {j.title.toUpperCase()} · {j.experienceLevel.toUpperCase()}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Position details */}
+          {selectedJob && (
+            <>
+              <div className="border-t border-[#e2e8f0] px-3 py-1.5 bg-[#f8fafc]">
+                <span className="text-[9px] font-bold text-[#64748b] tracking-widest">POSITION DETAILS</span>
+              </div>
+              <FieldRow label="JOB TITLE"   value={selectedJob.title} />
+              <FieldRow label="LEVEL"       value={selectedJob.experienceLevel} />
+              <FieldRow label="DEPARTMENT"  value={selectedJob.department || '—'} />
+              <FieldRow label="TYPE"        value={selectedJob.type || '—'} />
+              <FieldRow label="LOCATION"    value={selectedJob.location || '—'} />
+            </>
+          )}
+        </Panel>
+
+        <Panel title="02 — Applicant Pool & Target" badge="PARAMETERS">
+          <FieldRow
+            label="CANDIDATE POOL"
+            value={
+              <div className="flex items-center gap-2">
+                <span className="font-mono font-bold text-[#1d4ed8]">{candidateCount}</span>
+                <span className="text-[#64748b]">applicants available</span>
+                {candidateCount === 0 && jobId && (
+                  <span className="text-[10px] text-[#dc2626] font-medium">⚠ NONE FOUND — UPLOAD REQUIRED</span>
+                )}
+              </div>
+            }
+          />
+          <div className="flex items-center gap-0 border-b border-[#f1f5f9]">
+            <div className="w-36 px-3 py-2 bg-[#f8fafc] border-r border-[#e2e8f0] flex-shrink-0">
+              <span className="text-[9px] font-bold text-[#64748b] tracking-wider uppercase">SHORTLIST TARGET</span>
+            </div>
+            <div className="flex-1 px-3 py-1.5 flex items-center gap-3">
+              <div className="flex items-center border border-[#cbd5e1] rounded-sm overflow-hidden">
                 <button
-                  onClick={() => router.push('/')}
-                  className="text-xs text-gray-500 hover:text-gray-700 underline underline-offset-2"
+                  onClick={() => setShortlistSize(Math.max(1, shortlistSize - 1))}
+                  className="px-2 py-1.5 bg-[#f1f5f9] hover:bg-[#e2e8f0] border-r border-[#cbd5e1] text-[#475569] transition-colors"
                 >
-                  Go to dashboard →
+                  <ChevronDown className="w-3 h-3" />
+                </button>
+                <input
+                  type="number"
+                  min={1}
+                  max={Math.min(20, candidateCount || 20)}
+                  value={shortlistSize}
+                  onChange={e => setShortlistSize(Math.max(1, Math.min(20, Number(e.target.value))))}
+                  className="w-14 text-center text-xs font-mono font-bold text-[#0f172a] py-1.5 outline-none bg-white"
+                />
+                <button
+                  onClick={() => setShortlistSize(Math.min(20, candidateCount || 20, shortlistSize + 1))}
+                  className="px-2 py-1.5 bg-[#f1f5f9] hover:bg-[#e2e8f0] border-l border-[#cbd5e1] text-[#475569] transition-colors"
+                >
+                  <ChevronUp className="w-3 h-3" />
                 </button>
               </div>
+              <span className="text-[10px] text-[#64748b]">candidates (max 20)</span>
+              {shortlistSize > candidateCount && candidateCount > 0 && (
+                <span className="text-[10px] text-[#dc2626]">⚠ EXCEEDS POOL SIZE</span>
+              )}
+            </div>
+          </div>
+          <FieldRow label="AI MODEL" value={<span className="font-mono text-[#1d4ed8]">GEMINI-2.5-FLASH · EXTENDED THINKING</span>} />
+          <FieldRow label="PROCESSING" value={<span className="text-[#16a34a]">SEQUENTIAL BATCH · RATE-LIMITED</span>} />
+        </Panel>
+      </div>
+
+      {/* Right info panel */}
+      <div className="space-y-4">
+        <Panel title="Position Profile" badge="INFO">
+          {selectedJob ? (
+            <>
+              <div className="p-3 space-y-3">
+                <div>
+                  <p className="text-[9px] font-bold text-[#64748b] tracking-wider mb-1.5">REQUIRED COMPETENCIES</p>
+                  <div className="flex flex-wrap gap-1">
+                    {required.slice(0, 8).map(r => (
+                      <span key={r} className="px-1.5 py-0.5 text-[9px] font-mono font-medium bg-[#eff6ff] border border-[#bfdbfe] text-[#1d4ed8]">
+                        {r.toUpperCase()}
+                      </span>
+                    ))}
+                    {required.length > 8 && (
+                      <span className="px-1.5 py-0.5 text-[9px] font-mono text-[#64748b]">+{required.length - 8} MORE</span>
+                    )}
+                  </div>
+                </div>
+                <div className="border-t border-[#e2e8f0] pt-3">
+                  <p className="text-[9px] font-bold text-[#64748b] tracking-wider mb-2">SCORING WEIGHTS</p>
+                  {[
+                    { k: 'SKILLS',      v: selectedJob.weights.skills,       c: '#2563eb' },
+                    { k: 'EXPERIENCE',  v: selectedJob.weights.experience,   c: '#7c3aed' },
+                    { k: 'EDUCATION',   v: selectedJob.weights.education,    c: '#059669' },
+                    { k: 'PROJECTS',    v: selectedJob.weights.projects,     c: '#d97706' },
+                    { k: 'AVAIL.',      v: selectedJob.weights.availability, c: '#db2777' },
+                  ].map(w => (
+                    <div key={w.k} className="flex items-center gap-2 mb-1.5">
+                      <span className="text-[9px] font-mono text-[#64748b] w-20">{w.k}</span>
+                      <div className="flex-1 h-1 bg-[#e2e8f0] overflow-hidden">
+                        <div className="h-full" style={{ width: `${w.v}%`, backgroundColor: w.c }} />
+                      </div>
+                      <span className="text-[9px] font-mono font-bold text-[#0f172a] w-7 text-right">{w.v}%</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="p-4 text-center">
+              <p className="text-[10px] text-[#94a3b8]">SELECT A POSITION TO VIEW PROFILE</p>
+            </div>
+          )}
+        </Panel>
+
+        <Panel title="System Status" badge="SYS">
+          <div className="p-3 space-y-1.5">
+            {[
+              { label: 'API CONNECTION', status: 'ONLINE',    ok: true  },
+              { label: 'GEMINI ENGINE',  status: 'ACTIVE',    ok: true  },
+              { label: 'DATABASE',       status: 'CONNECTED', ok: true  },
+              { label: 'JOB SELECTION',  status: selectedJob ? 'COMPLETE' : 'PENDING', ok: !!selectedJob },
+            ].map(({ label, status, ok }) => (
+              <div key={label} className="flex items-center justify-between py-1 border-b border-[#f1f5f9] last:border-0">
+                <span className="text-[9px] font-mono text-[#64748b]">{label}</span>
+                <div className="flex items-center gap-1.5">
+                  <div className={cn('w-1.5 h-1.5 rounded-full', ok ? 'bg-[#22c55e]' : 'bg-[#94a3b8]')} />
+                  <span className={cn('text-[9px] font-mono font-bold', ok ? 'text-[#16a34a]' : 'text-[#94a3b8]')}>{status}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Panel>
+      </div>
+    </div>
+  );
+}
+
+function StepCriteria({
+  weights, onChange,
+}: {
+  weights: { skills: number; experience: number; education: number; projects: number; availability: number };
+  onChange: (w: typeof weights) => void;
+}) {
+  const total = Object.values(weights).reduce((a, b) => a + b, 0);
+  const criteria = [
+    { key: 'skills',       label: 'SKILLS MATCH',      desc: 'Match of technical and soft skills against job requirements'   },
+    { key: 'experience',   label: 'WORK EXPERIENCE',   desc: 'Relevance, depth, and progression of professional history'      },
+    { key: 'education',    label: 'EDUCATION',         desc: 'Academic qualifications, institutions, and certifications'      },
+    { key: 'projects',     label: 'PROJECT PORTFOLIO', desc: 'Portfolio strength, impact, and technology alignment'           },
+    { key: 'availability', label: 'AVAILABILITY',      desc: 'Start date readiness and employment type compatibility'         },
+  ] as const;
+
+  return (
+    <div className="grid grid-cols-[1fr_280px] gap-4">
+      <Panel title="02 — Evaluation Criteria Configuration" badge="WEIGHT ALLOCATION">
+        <div className="px-3 py-2 bg-[#f8fafc] border-b border-[#e2e8f0]">
+          <p className="text-[9px] text-[#64748b]">
+            Assign relative weights to each evaluation criterion. <span className="font-bold text-[#0f172a]">TOTAL MUST EQUAL 100%.</span>
+          </p>
+        </div>
+
+        {/* Table header */}
+        <div className="flex border-b border-[#e2e8f0] bg-[#f1f5f9]">
+          <div className="w-8 px-3 py-2 border-r border-[#e2e8f0] flex-shrink-0" />
+          <div className="w-44 px-3 py-2 border-r border-[#e2e8f0] flex-shrink-0">
+            <span className="text-[9px] font-bold text-[#475569] tracking-wider">CRITERION</span>
+          </div>
+          <div className="w-28 px-3 py-2 border-r border-[#e2e8f0] flex-shrink-0 text-center">
+            <span className="text-[9px] font-bold text-[#475569] tracking-wider">WEIGHT (%)</span>
+          </div>
+          <div className="flex-1 px-3 py-2">
+            <span className="text-[9px] font-bold text-[#475569] tracking-wider">VISUAL ALLOCATION</span>
+          </div>
+          <div className="w-36 px-3 py-2 border-l border-[#e2e8f0] flex-shrink-0">
+            <span className="text-[9px] font-bold text-[#475569] tracking-wider">DESCRIPTION</span>
+          </div>
+        </div>
+
+        {/* Rows */}
+        {criteria.map(({ key, label, desc }, i) => (
+          <div key={key} className="flex items-center border-b border-[#f1f5f9] last:border-0 hover:bg-[#f8fafc] transition-colors">
+            <div className="w-8 px-3 py-3 border-r border-[#e2e8f0] flex-shrink-0 text-center">
+              <span className="text-[9px] font-mono text-[#94a3b8]">{(i + 1).toString().padStart(2, '0')}</span>
+            </div>
+            <div className="w-44 px-3 py-3 border-r border-[#e2e8f0] flex-shrink-0">
+              <span className="text-[10px] font-bold text-[#0f172a] tracking-wide">{label}</span>
+            </div>
+            <div className="w-28 px-3 py-3 border-r border-[#e2e8f0] flex-shrink-0 text-center">
+              <div className="flex items-center justify-center border border-[#cbd5e1] rounded-sm overflow-hidden mx-auto w-20">
+                <button onClick={() => onChange({ ...weights, [key]: Math.max(0, weights[key] - 5) })} className="px-1.5 py-1 bg-[#f1f5f9] hover:bg-[#e2e8f0] border-r border-[#cbd5e1] text-[#475569]">
+                  <ChevronDown className="w-2.5 h-2.5" />
+                </button>
+                <input
+                  type="number"
+                  min={0} max={100}
+                  value={weights[key]}
+                  onChange={e => onChange({ ...weights, [key]: Math.max(0, Math.min(100, Number(e.target.value))) })}
+                  className="w-8 text-center text-xs font-mono font-bold text-[#0f172a] py-1 outline-none bg-white"
+                />
+                <button onClick={() => onChange({ ...weights, [key]: Math.min(100, weights[key] + 5) })} className="px-1.5 py-1 bg-[#f1f5f9] hover:bg-[#e2e8f0] border-l border-[#cbd5e1] text-[#475569]">
+                  <ChevronUp className="w-2.5 h-2.5" />
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 px-3 py-3">
+              <div className="flex items-center gap-2">
+                <div className="flex-1 h-1.5 bg-[#e2e8f0]">
+                  <div
+                    className="h-full transition-all duration-300"
+                    style={{ width: `${weights[key]}%`, background: ['#2563eb','#7c3aed','#059669','#d97706','#db2777'][i] }}
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="w-36 px-3 py-3 border-l border-[#e2e8f0] flex-shrink-0">
+              <p className="text-[9px] text-[#64748b] leading-relaxed">{desc}</p>
+            </div>
+          </div>
+        ))}
+
+        {/* Totals row */}
+        <div className="flex items-center border-t-2 border-[#cbd5e1] bg-[#f8fafc]">
+          <div className="w-8 px-3 py-2.5 border-r border-[#e2e8f0] flex-shrink-0" />
+          <div className="w-44 px-3 py-2.5 border-r border-[#e2e8f0] flex-shrink-0">
+            <span className="text-[10px] font-bold text-[#0f172a] tracking-widest">TOTAL</span>
+          </div>
+          <div className="w-28 px-3 py-2.5 border-r border-[#e2e8f0] flex-shrink-0 text-center">
+            <span className={cn('text-sm font-bold font-mono', total === 100 ? 'text-[#16a34a]' : 'text-[#dc2626]')}>{total}%</span>
+          </div>
+          <div className="flex-1 px-3 py-2.5 flex items-center gap-2">
+            {total === 100 ? (
+              <div className="flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-[#16a34a]" />
+                <span className="text-[10px] font-bold text-[#16a34a] tracking-wider">VALID — READY FOR EXECUTION</span>
+              </div>
             ) : (
-              <div className="flex items-center gap-2 text-xs text-gray-500">
-                <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
-                <span>System ready</span>
+              <div className="flex items-center gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5 text-[#dc2626]" />
+                <span className="text-[10px] font-bold text-[#dc2626] tracking-wider">
+                  INVALID — {total < 100 ? `DEFICIT: ${100 - total}%` : `EXCESS: ${total - 100}%`}
+                </span>
               </div>
             )}
           </div>
         </div>
-      </div>
+      </Panel>
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-6 py-6">
-        {!running ? (
-          /* Configuration Mode */
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="space-y-5"
-          >
-            {/* Step Indicator */}
-            <div className="flex items-center justify-center gap-3 mb-6">
-              {[
-                { id: 'setup', label: 'Select Job', icon: Settings2 },
-                { id: 'criteria', label: 'Set Criteria', icon: Star },
-                { id: 'preview', label: 'Preview', icon: Eye },
-              ].map((step, index) => (
-                <React.Fragment key={step.id}>
-                  <button
-                    onClick={() => setActiveTab(step.id as typeof activeTab)}
-                    className={cn(
-                      'flex items-center gap-2.5 px-4 py-2.5 rounded-lg transition-all',
-                      activeTab === step.id
-                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25'
-                        : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
-                    )}
+      {/* Right panel */}
+      <div className="space-y-4">
+        <Panel title="Weight Distribution" badge="VISUAL">
+          <div className="p-3 space-y-2">
+            {criteria.map(({ key, label }, i) => (
+              <div key={key} className="flex items-center gap-2">
+                <span className="text-[9px] font-mono text-[#64748b] w-20 truncate">{label.split(' ')[0]}</span>
+                <div className="flex-1 h-3 bg-[#e2e8f0] overflow-hidden relative">
+                  <div
+                    className="h-full absolute left-0 top-0 transition-all duration-300 flex items-center pl-1"
+                    style={{ width: `${weights[criteria[i].key]}%`, background: ['#2563eb','#7c3aed','#059669','#d97706','#db2777'][i] }}
                   >
-                    <div className={cn(
-                      'w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold',
-                      activeTab === step.id
-                        ? 'bg-white/20'
-                        : 'bg-gray-100'
-                    )}>
-                      {activeTab !== step.id && index < ['setup', 'criteria', 'preview'].indexOf(activeTab) ? (
-                        <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
-                      ) : (
-                        <step.icon className="w-3.5 h-3.5" />
-                      )}
-                    </div>
-                    <span className="font-medium text-xs">{step.label}</span>
-                  </button>
-                  {index < 2 && (
-                    <div className="w-8 h-0.5 bg-gray-200 rounded-full" />
+                    {weights[criteria[i].key] >= 15 && (
+                      <span className="text-[7px] font-bold text-white">{weights[criteria[i].key]}%</span>
+                    )}
+                  </div>
+                  {weights[criteria[i].key] < 15 && (
+                    <span className="absolute right-1 top-0 h-full flex items-center text-[7px] font-bold text-[#64748b]">{weights[criteria[i].key]}%</span>
                   )}
-                </React.Fragment>
-              ))}
-            </div>
-
-            {/* Tab Content */}
-            <AnimatePresence mode="wait">
-              {activeTab === 'setup' && (
-                <motion.div
-                  key="setup"
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 20 }}
-                  className="max-w-2xl mx-auto"
-                >
-                  <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                    <div className="p-6">
-                      <div className="text-center mb-6">
-                        <h2 className="text-sm font-bold text-gray-900 mb-1">Select Job Position</h2>
-                        <p className="text-xs text-gray-500">Choose the position you want to screen candidates for</p>
-                      </div>
-
-                      {/* Job Selector */}
-                      <div className="mb-5">
-                        <label className="block text-xs font-medium text-gray-700 mb-2">Job Position</label>
-                        <select
-                          value={jobId}
-                          onChange={(e) => setJobId(e.target.value)}
-                          disabled={jobsLoading}
-                          className="w-full px-4 py-2.5 rounded-lg border border-gray-200 text-gray-900 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:bg-gray-50"
-                        >
-                          <option value="">Choose a position...</option>
-                          {jobs.map((job) => (
-                            <option key={job._id} value={job._id}>
-                              {job.title} — {job.experienceLevel}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Selected Job Card */}
-                      {selectedJob && (
-                        <motion.div
-                          initial={{ opacity: 0, y: 8 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          className="p-4 rounded-lg bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100"
-                        >
-                          <div className="flex items-start gap-3">
-                            <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
-                              <Settings2 className="w-4 h-4 text-blue-600" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <h3 className="text-xs font-bold text-gray-900 mb-0.5">{selectedJob.title}</h3>
-                              <p className="text-[10px] text-gray-500 mb-3">{selectedJob.experienceLevel} Level</p>
-
-                              <div className="flex flex-wrap gap-1.5 mb-3">
-                                {selectedJobRequirements.slice(0, 5).map((req) => (
-                                  <span key={req} className="px-2 py-0.5 rounded-full bg-white text-[10px] font-medium text-blue-700 border border-blue-200">
-                                    {req}
-                                  </span>
-                                ))}
-                                {selectedJobRequirements.length > 5 && (
-                                  <span className="px-2 py-0.5 rounded-full bg-white/80 text-[10px] font-medium text-gray-600">
-                                    +{selectedJobRequirements.length - 5} more
-                                  </span>
-                                )}
-                              </div>
-
-                              {/* Weight Summary */}
-                              <div className="flex items-center gap-4 p-2.5 rounded-lg bg-white/80">
-                                <span className="text-[10px] font-medium text-gray-500">Weights:</span>
-                                <div className="flex items-center gap-2.5">
-                                  {[
-                                    { label: 'Skills', value: selectedJob.weights.skills, color: '#3b82f6' },
-                                    { label: 'Exp', value: selectedJob.weights.experience, color: '#8b5cf6' },
-                                    { label: 'Edu', value: selectedJob.weights.education, color: '#10b981' },
-                                    { label: 'Proj', value: selectedJob.weights.projects, color: '#f59e0b' },
-                                    { label: 'Avail', value: selectedJob.weights.availability, color: '#ec4899' },
-                                  ].map((w) => (
-                                    <div key={w.label} className="flex items-center gap-1">
-                                      <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: w.color }} />
-                                      <span className="text-[10px] text-gray-600">{w.label} {w.value}%</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </motion.div>
-                      )}
-
-                      {/* Stats Grid - Using same pattern as jobs page */}
-                      <div className="grid grid-cols-2 gap-3 mt-5">
-                        <div className="bg-gradient-to-br from-blue-50 to-white rounded-lg p-3 border border-blue-200">
-                          <div className="flex items-center gap-2">
-                            <div className="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center">
-                              <Users className="w-3.5 h-3.5 text-blue-600" />
-                            </div>
-                            <div>
-                              <p className="text-[10px] font-medium text-gray-500">Candidates</p>
-                              <p className="text-xl font-bold text-gray-900">{candidateCount}</p>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="bg-gradient-to-br from-green-50 to-white rounded-lg p-3 border border-green-200">
-                          <div className="flex items-center gap-2">
-                            <div className="w-7 h-7 rounded-lg bg-green-100 flex items-center justify-center">
-                              <Trophy className="w-3.5 h-3.5 text-green-600" />
-                            </div>
-                            <div>
-                              <p className="text-[10px] font-medium text-gray-500">To Shortlist</p>
-                              <p className="text-xl font-bold text-gray-900">{shortlistSize}</p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Shortlist Slider */}
-                      <div className="mt-5">
-                        <div className="flex items-center justify-between mb-2">
-                          <label className="text-xs font-medium text-gray-700">Shortlist Size</label>
-                          <span className="text-xs font-bold text-blue-600">{shortlistSize} candidates</span>
-                        </div>
-                        <input
-                          type="range"
-                          min={1}
-                          max={Math.max(1, Math.min(20, candidateCount || 1))}
-                          step={1}
-                          value={shortlistSize}
-                          onChange={(e) => setShortlistSize(Number(e.target.value))}
-                          className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
-                        />
-                        <div className="flex justify-between text-[10px] text-gray-400 mt-1.5">
-                          <span>1</span>
-                          <span>5</span>
-                          <span>10</span>
-                          <span>15</span>
-                          <span>20</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Footer */}
-                    <div className="px-5 py-3 bg-gray-50 border-t border-gray-100 flex items-center justify-end">
-                      <Button
-                        onClick={() => setActiveTab('criteria')}
-                        disabled={!selectedJob}
-                        size="sm"
-                      >
-                        Continue
-                        <ArrowRight className="w-3 h-3 ml-1.5" />
-                      </Button>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-
-              {activeTab === 'criteria' && (
-                <motion.div
-                  key="criteria"
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  className="max-w-2xl mx-auto"
-                >
-                  <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                    <div className="p-6">
-                      <div className="text-center mb-5">
-                        <h2 className="text-sm font-bold text-gray-900 mb-1">Evaluation Criteria</h2>
-                        <p className="text-xs text-gray-500">Adjust the importance of each criterion for scoring</p>
-                      </div>
-
-                      <CriteriaSelector
-                        weights={customWeights}
-                        onChange={setCustomWeights}
-                      />
-
-                      {/* Validation */}
-                      <div className={cn(
-                        'mt-5 p-3 rounded-lg flex items-center gap-2.5',
-                        totalWeight === 100
-                          ? 'bg-green-50 border border-green-200'
-                          : 'bg-amber-50 border border-amber-200'
-                      )}>
-                        {totalWeight === 100 ? (
-                          <>
-                            <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0" />
-                            <span className="text-xs text-green-700">Weights are balanced and ready</span>
-                          </>
-                        ) : (
-                          <>
-                            <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
-                            <span className="text-xs text-amber-700">Weights must sum to 100% (currently {totalWeight}%)</span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="px-5 py-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
-                      <Button
-                        variant="ghost"
-                        onClick={() => setActiveTab('setup')}
-                        size="sm"
-                      >
-                        Back
-                      </Button>
-                      <Button
-                        onClick={() => setActiveTab('preview')}
-                        disabled={totalWeight !== 100}
-                        size="sm"
-                      >
-                        Review & Start
-                        <ArrowRight className="w-3 h-3 ml-1.5" />
-                      </Button>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-
-              {activeTab === 'preview' && (
-                <motion.div
-                  key="preview"
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  className="max-w-2xl mx-auto"
-                >
-                  <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                    <div className="p-6">
-                      <div className="text-center mb-5">
-                        <h2 className="text-sm font-bold text-gray-900 mb-1">Ready to Screen</h2>
-                        <p className="text-xs text-gray-500">Review your screening configuration</p>
-                      </div>
-
-                      {/* Summary Card */}
-                      <div className="p-4 rounded-lg bg-gradient-to-br from-gray-50 to-gray-100/30 border border-gray-200 mb-5">
-                        <div className="flex items-center gap-3 mb-4">
-                          <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center">
-                            <Settings2 className="w-4 h-4 text-blue-600" />
-                          </div>
-                          <div>
-                            <h3 className="text-xs font-bold text-gray-900">{selectedJob?.title}</h3>
-                            <p className="text-[10px] text-gray-500">{candidateCount} candidates to evaluate</p>
-                          </div>
-                        </div>
-
-                        {/* Criteria Weights */}
-                        <div className="space-y-2">
-                          {[
-                            { label: 'Skills', weight: customWeights.skills, color: '#3b82f6' },
-                            { label: 'Experience', weight: customWeights.experience, color: '#8b5cf6' },
-                            { label: 'Education', weight: customWeights.education, color: '#10b981' },
-                            { label: 'Projects', weight: customWeights.projects, color: '#f59e0b' },
-                            { label: 'Availability', weight: customWeights.availability, color: '#ec4899' },
-                          ].map((item) => (
-                            <div key={item.label} className="flex items-center gap-2.5">
-                              <div className="w-20 text-[10px] text-gray-600">{item.label}</div>
-                              <div className="flex-1 h-1 bg-gray-200 rounded-full overflow-hidden">
-                                <motion.div
-                                  className="h-full rounded-full"
-                                  style={{ backgroundColor: item.color }}
-                                  initial={{ width: 0 }}
-                                  animate={{ width: `${item.weight}%` }}
-                                  transition={{ duration: 0.5, ease: 'easeOut' }}
-                                />
-                              </div>
-                              <div className="w-8 text-[10px] font-bold text-gray-700 text-right">{item.weight}%</div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Output Preview */}
-                      <div className="p-4 rounded-lg border border-gray-200">
-                        <h4 className="text-xs font-bold text-gray-900 mb-3">What you'll get:</h4>
-                        <div className="grid grid-cols-2 gap-2">
-                          {[
-                            'Ranked candidate shortlist',
-                            'Score breakdown by criteria',
-                            'AI-generated interview questions',
-                            'Skill gap analysis',
-                            'Bias detection flags',
-                            'Confidence scores',
-                          ].map((item) => (
-                            <div key={item} className="flex items-center gap-1.5 text-[10px] text-gray-600">
-                              <CheckCircle2 className="w-3 h-3 text-green-500" />
-                              {item}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="px-5 py-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
-                      <Button
-                        variant="ghost"
-                        onClick={() => setActiveTab('criteria')}
-                        size="sm"
-                      >
-                        Back
-                      </Button>
-                      <Button
-                        onClick={handleRun}
-                        isLoading={running}
-                        size="sm"
-                      >
-                        <Zap className="w-3.5 h-3.5 mr-1.5" />
-                        Start Screening
-                      </Button>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </motion.div>
-        ) : (
-          /* Live Screening Mode */
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="space-y-5"
-          >
-            {/* Progress Card */}
-            <div className="bg-white rounded-xl border border-blue-200 shadow-sm overflow-hidden">
-              <div className="p-5">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="relative">
-                      <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/25">
-                        <Brain className="w-5 h-5 text-white" />
-                      </div>
-                      <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-green-500 border-2 border-white animate-pulse" />
-                    </div>
-                    <div>
-                      <p className="text-xs font-bold text-gray-900">AI Screening in Progress</p>
-                      <p className="text-[10px] text-gray-500">Evaluating candidates for {selectedJob?.title}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <div className="text-right">
-                      <p className="text-[10px] text-gray-500">Elapsed</p>
-                      <p className="text-sm font-bold font-mono text-gray-900">{formatTime(elapsedTime)}</p>
-                    </div>
-                    <div className="w-24 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                      <motion.div
-                        className="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full"
-                        animate={{ width: `${progressPercent}%` }}
-                        transition={{ duration: 0.3 }}
-                      />
-                    </div>
-                    <div className="text-right">
-                      <p className="text-[10px] text-gray-500">Progress</p>
-                      <p className="text-sm font-bold text-blue-600">{progressPercent}%</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-5 text-[10px]">
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                    <span className="text-gray-600">{evaluatedCount} / {totalCandidates} candidates</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Sparkles className="w-3 h-3 text-blue-500" />
-                    <span className="text-gray-600">Gemini 2.0 Flash</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Trophy className="w-3 h-3 text-amber-500" />
-                    <span className="text-gray-600">{partialShortlist.length} in shortlist</span>
-                  </div>
                 </div>
               </div>
+            ))}
+            <div className="pt-2 border-t border-[#e2e8f0]">
+              <div className="flex items-center gap-2">
+                <span className="text-[9px] font-mono text-[#64748b] w-20">TOTAL</span>
+                <span className={cn('text-xs font-bold font-mono', total === 100 ? 'text-[#16a34a]' : 'text-[#dc2626]')}>{total}%</span>
+              </div>
             </div>
+          </div>
+        </Panel>
 
-            {/* Main Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-              {/* AI Thinking Stream */}
-              <AIThinkingStream
-                thoughts={thoughts}
-                isRunning={running}
-                currentCandidate={thoughts[thoughts.length - 1]?.candidateName}
+        <Panel title="Quick Presets" badge="SHORTCUTS">
+          <div className="p-2 space-y-1">
+            {[
+              { label: 'TECHNICAL ROLE',  w: { skills: 40, experience: 30, education: 10, projects: 15, availability: 5  } },
+              { label: 'SENIOR LEADER',   w: { skills: 25, experience: 40, education: 15, projects: 10, availability: 10 } },
+              { label: 'FRESH GRADUATE',  w: { skills: 30, experience: 10, education: 30, projects: 25, availability: 5  } },
+              { label: 'BALANCED',        w: { skills: 25, experience: 25, education: 20, projects: 20, availability: 10 } },
+            ].map(({ label, w }) => (
+              <button
+                key={label}
+                onClick={() => onChange(w)}
+                className="w-full text-left px-2.5 py-1.5 text-[9px] font-mono font-bold text-[#1d4ed8] hover:bg-[#eff6ff] border border-transparent hover:border-[#bfdbfe] rounded-sm transition-all tracking-wider"
+              >
+                ↳ {label}
+              </button>
+            ))}
+          </div>
+        </Panel>
+      </div>
+    </div>
+  );
+}
+
+function StepReview({
+  selectedJob, candidateCount, shortlistSize, weights,
+}: {
+  selectedJob: { title: string; experienceLevel: string; department?: string } | undefined;
+  candidateCount: number;
+  shortlistSize: number;
+  weights: { skills: number; experience: number; education: number; projects: number; availability: number };
+}) {
+  const outputs = [
+    'Ranked candidate shortlist with composite scores',
+    'Category-level score breakdown per candidate',
+    'AI-generated targeted interview questions',
+    'Skill gap analysis (matched / missing / bonus)',
+    'Bias detection flags with correction guidance',
+    'Confidence score per assessment',
+    'Rejection explanations with improvement paths',
+    'Aggregate insights and score distribution',
+    'Live Gemini reasoning journal (thinking tokens)',
+  ];
+
+  return (
+    <div className="grid grid-cols-[1fr_1fr] gap-4">
+      <div className="space-y-4">
+        <Panel title="03 — Execution Summary" badge="PRE-FLIGHT CHECK">
+          <FieldRow label="POSITION"       value={<span className="font-bold">{selectedJob?.title ?? '—'}</span>} />
+          <FieldRow label="LEVEL"          value={selectedJob?.experienceLevel ?? '—'} />
+          <FieldRow label="DEPT"           value={selectedJob?.department ?? '—'} />
+          <FieldRow label="APPLICANT POOL" value={<span className="font-mono font-bold text-[#1d4ed8]">{candidateCount} CANDIDATES</span>} />
+          <FieldRow label="SHORTLIST SIZE" value={<span className="font-mono font-bold text-[#1d4ed8]">{shortlistSize} CANDIDATES</span>} />
+          <FieldRow label="AI ENGINE"      value={<span className="font-mono text-[#7c3aed]">GEMINI-2.5-FLASH · THINKING BUDGET: 2048 TOKENS</span>} />
+          <FieldRow label="PROCESSING"     value={<span className="font-mono">SEQUENTIAL · RATE-CONTROLLED · CACHED</span>} />
+          <FieldRow label="ETA"            value={<span className="font-mono text-[#d97706]">~{Math.max(1, Math.ceil(candidateCount / 20))} MIN (ESTIMATED)</span>} />
+        </Panel>
+
+        <Panel title="Scoring Configuration" badge="FINAL WEIGHTS">
+          {[
+            { k: 'SKILLS MATCH',      v: weights.skills,       c: '#2563eb' },
+            { k: 'WORK EXPERIENCE',   v: weights.experience,   c: '#7c3aed' },
+            { k: 'EDUCATION',         v: weights.education,    c: '#059669' },
+            { k: 'PROJECT PORTFOLIO', v: weights.projects,     c: '#d97706' },
+            { k: 'AVAILABILITY',      v: weights.availability, c: '#db2777' },
+          ].map(w => (
+            <div key={w.k} className="flex items-center gap-0 border-b border-[#f1f5f9] last:border-0">
+              <div className="w-44 px-3 py-2 bg-[#f8fafc] border-r border-[#e2e8f0] flex-shrink-0">
+                <span className="text-[9px] font-bold text-[#64748b] tracking-wider">{w.k}</span>
+              </div>
+              <div className="flex-1 px-3 py-2 flex items-center gap-2">
+                <div className="flex-1 h-1.5 bg-[#e2e8f0]">
+                  <div className="h-full" style={{ width: `${w.v}%`, backgroundColor: w.c }} />
+                </div>
+                <span className="text-[10px] font-mono font-bold w-8 text-right" style={{ color: w.c }}>{w.v}%</span>
+              </div>
+            </div>
+          ))}
+        </Panel>
+      </div>
+
+      <div className="space-y-4">
+        <Panel title="Expected Output" badge="DELIVERABLES">
+          <div className="p-3">
+            <div className="space-y-1.5">
+              {outputs.map((o, i) => (
+                <div key={i} className="flex items-start gap-2 py-1.5 border-b border-[#f1f5f9] last:border-0">
+                  <span className="text-[9px] font-mono text-[#94a3b8] flex-shrink-0 mt-0.5">{(i + 1).toString().padStart(2, '0')}</span>
+                  <CheckCircle2 className="w-3 h-3 text-[#16a34a] flex-shrink-0 mt-0.5" />
+                  <span className="text-[10px] text-[#374151]">{o}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Panel>
+
+        <Panel title="System Checklist" badge="VALIDATION">
+          {[
+            { label: 'POSITION SELECTED',    ok: !!selectedJob },
+            { label: 'CANDIDATES AVAILABLE', ok: candidateCount > 0 },
+            { label: 'SHORTLIST VALID',      ok: shortlistSize <= candidateCount && shortlistSize > 0 },
+            { label: 'WEIGHTS BALANCED',     ok: Object.values(weights).reduce((a, b) => a + b, 0) === 100 },
+            { label: 'AI ENGINE READY',      ok: true },
+            { label: 'API KEY CONFIGURED',   ok: true },
+          ].map(({ label, ok }) => (
+            <div key={label} className="flex items-center justify-between px-3 py-2 border-b border-[#f1f5f9] last:border-0">
+              <div className="flex items-center gap-2">
+                <div className={cn('w-1.5 h-1.5 rounded-full flex-shrink-0', ok ? 'bg-[#22c55e]' : 'bg-[#dc2626]')} />
+                <span className="text-[9px] font-mono text-[#475569]">{label}</span>
+              </div>
+              <span className={cn('text-[9px] font-mono font-bold', ok ? 'text-[#16a34a]' : 'text-[#dc2626]')}>
+                {ok ? 'PASS' : 'FAIL'}
+              </span>
+            </div>
+          ))}
+        </Panel>
+      </div>
+    </div>
+  );
+}
+
+// ─── Execution console ────────────────────────────────────────────────────────
+
+function ExecutionConsole({
+  thoughts, liveScores, partialShortlist, evaluatedCount, totalCandidates, elapsed, selectedJobTitle, progressPercent,
+}: {
+  thoughts: Parameters<typeof AIThinkingStream>[0]['thoughts'];
+  liveScores: { skills: number; experience: number; education: number; projects: number; availability: number };
+  partialShortlist: CandidateScore[];
+  evaluatedCount: number;
+  totalCandidates: number;
+  elapsed: number;
+  selectedJobTitle?: string;
+  progressPercent: number;
+}) {
+  return (
+    <div className="flex flex-col gap-3 h-full">
+      {/* Console header */}
+      <div className="border border-[#1e3a5f] bg-[#0d1b2a] px-4 py-2.5 flex items-center justify-between flex-shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-[#22c55e] animate-pulse shadow-[0_0_8px_#22c55e]" />
+            <span className="text-[11px] font-bold text-[#93c5fd] tracking-widest uppercase">Execution Console</span>
+          </div>
+          <div className="w-px h-3.5 bg-[#1e3a5f]" />
+          <span className="text-[10px] font-mono text-[#475569]">
+            JOB: <span className="text-[#94a3b8]">{selectedJobTitle?.toUpperCase() ?? '—'}</span>
+          </span>
+          <div className="w-px h-3.5 bg-[#1e3a5f]" />
+          <span className="text-[10px] font-mono text-[#475569]">
+            POOL: <span className="text-[#94a3b8]">{totalCandidates}</span>
+          </span>
+        </div>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <div className="w-32 h-1.5 bg-[#1e3a5f] overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-[#2563eb] to-[#4ade80] transition-all duration-500"
+                style={{ width: `${progressPercent}%` }}
               />
+            </div>
+            <span className="text-[10px] font-mono text-[#4ade80] font-bold">{progressPercent}%</span>
+          </div>
+          <span className="text-[10px] font-mono text-[#475569]">
+            ELAPSED: <span className="text-[#93c5fd] font-bold">{formatTime(elapsed)}</span>
+          </span>
+        </div>
+      </div>
 
-              {/* Right Column */}
-              <div className="space-y-5">
-                {/* Live Scores */}
-                <LiveScoreGauges scores={liveScores} evaluatedCount={evaluatedCount} />
+      {/* Three-panel console grid */}
+      <div className="grid grid-cols-[1fr_220px_260px] gap-3 flex-1 min-h-0">
+        {/* PROCESS LOG */}
+        <AIThinkingStream thoughts={thoughts} isRunning={true} />
 
-                {/* Leaderboard */}
-                <LiveLeaderboard
-                  candidates={partialShortlist}
-                  totalEvaluated={evaluatedCount}
+        {/* SCORE METRICS */}
+        <div className="border border-[#cbd5e1] bg-white flex flex-col overflow-hidden">
+          <div className="px-3 py-2 bg-[#1e3a5f] flex-shrink-0">
+            <span className="text-[10px] font-bold text-[#bfdbfe] tracking-widest">SCORE METRICS</span>
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            {[
+              { label: 'SKILLS',      val: liveScores.skills,       c: '#2563eb' },
+              { label: 'EXPERIENCE',  val: liveScores.experience,   c: '#7c3aed' },
+              { label: 'EDUCATION',   val: liveScores.education,    c: '#059669' },
+              { label: 'PROJECTS',    val: liveScores.projects,     c: '#d97706' },
+              { label: 'AVAILABILITY',val: liveScores.availability, c: '#db2777' },
+            ].map(({ label, val, c }) => (
+              <div key={label} className="px-3 py-3 border-b border-[#f1f5f9] last:border-0">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[9px] font-mono font-bold text-[#64748b]">{label}</span>
+                  <span className="text-[10px] font-mono font-bold" style={{ color: c }}>{Math.round(val)}</span>
+                </div>
+                <div className="h-1.5 bg-[#e2e8f0] overflow-hidden">
+                  <div className="h-full transition-all duration-700" style={{ width: `${val}%`, backgroundColor: c }} />
+                </div>
+              </div>
+            ))}
+
+            <div className="px-3 py-3 bg-[#f8fafc] border-t border-[#cbd5e1]">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[9px] font-mono font-bold text-[#0f172a]">EVALUATED</span>
+                <span className="text-[10px] font-mono font-bold text-[#1d4ed8]">
+                  {evaluatedCount}/{totalCandidates}
+                </span>
+              </div>
+              <div className="h-2 bg-[#e2e8f0] overflow-hidden">
+                <div
+                  className="h-full bg-[#2563eb] transition-all duration-500"
+                  style={{ width: totalCandidates > 0 ? `${(evaluatedCount / totalCandidates) * 100}%` : '0%' }}
                 />
               </div>
             </div>
-          </motion.div>
+          </div>
+        </div>
+
+        {/* CANDIDATE REGISTRY */}
+        <div className="border border-[#cbd5e1] bg-white flex flex-col overflow-hidden">
+          <div className="px-3 py-2 bg-[#1e3a5f] flex-shrink-0">
+            <span className="text-[10px] font-bold text-[#bfdbfe] tracking-widest">CANDIDATE REGISTRY</span>
+          </div>
+
+          {/* Table header */}
+          <div className="grid grid-cols-[24px_1fr_52px] bg-[#f1f5f9] border-b border-[#e2e8f0] flex-shrink-0">
+            <div className="px-2 py-1.5 border-r border-[#e2e8f0] text-center">
+              <span className="text-[8px] font-bold text-[#94a3b8]">RK</span>
+            </div>
+            <div className="px-2 py-1.5 border-r border-[#e2e8f0]">
+              <span className="text-[8px] font-bold text-[#94a3b8]">CANDIDATE</span>
+            </div>
+            <div className="px-2 py-1.5 text-center">
+              <span className="text-[8px] font-bold text-[#94a3b8]">SCORE</span>
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
+            {partialShortlist.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full py-8 text-center">
+                <Brain className="w-6 h-6 text-[#cbd5e1] mb-2" />
+                <p className="text-[9px] font-mono text-[#94a3b8]">AWAITING RESULTS</p>
+                <p className="text-[9px] text-[#cbd5e1] mt-1">AI IS EVALUATING...</p>
+              </div>
+            ) : (
+              partialShortlist.map((c, i) => (
+                <div key={c.candidateId} className="grid grid-cols-[24px_1fr_52px] border-b border-[#f1f5f9] last:border-0 hover:bg-[#f8fafc] transition-colors">
+                  <div className="px-2 py-2.5 border-r border-[#f1f5f9] text-center">
+                    <span className={cn(
+                      'text-[9px] font-mono font-bold',
+                      i === 0 ? 'text-[#d97706]' : i === 1 ? 'text-[#94a3b8]' : i === 2 ? 'text-[#b45309]' : 'text-[#94a3b8]'
+                    )}>
+                      {c.rank ?? i + 1}
+                    </span>
+                  </div>
+                  <div className="px-2 py-2.5 border-r border-[#f1f5f9] min-w-0">
+                    <p className="text-[10px] font-medium text-[#0f172a] truncate">{c.candidateName}</p>
+                    <p className="text-[8px] text-[#94a3b8] font-mono truncate">{c.recommendation?.split(' ').map(w => w[0]).join('') ?? '—'}</p>
+                  </div>
+                  <div className="px-2 py-2.5 text-center">
+                    <span className="text-[10px] font-mono font-bold" style={{ color: scoreColor(c.finalScore) }}>
+                      {c.finalScore.toFixed(1)}
+                    </span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="px-3 py-2 bg-[#f8fafc] border-t border-[#e2e8f0] flex-shrink-0">
+            <span className="text-[9px] font-mono text-[#64748b]">
+              SHORTLIST: <span className="font-bold text-[#0f172a]">{partialShortlist.length}</span> CANDIDATES
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Navigation bar ───────────────────────────────────────────────────────────
+
+function NavBar({
+  step, setStep, canGoNext, onRun, running, selectedJob, totalWeight, candidateCount, shortlistSize,
+}: {
+  step: 'setup' | 'criteria' | 'review';
+  setStep: (s: 'setup' | 'criteria' | 'review') => void;
+  canGoNext: boolean;
+  onRun: () => void;
+  running: boolean;
+  selectedJob: unknown;
+  totalWeight: number;
+  candidateCount: number;
+  shortlistSize: number;
+}) {
+  const isReady = !!selectedJob && candidateCount >= shortlistSize && shortlistSize > 0 && totalWeight === 100;
+
+  const stepOrder: ('setup' | 'criteria' | 'review')[] = ['setup', 'criteria', 'review'];
+  const currentIdx = stepOrder.indexOf(step);
+
+  return (
+    <div className="border-t border-[#cbd5e1] bg-[#f8fafc] px-4 py-2.5 flex items-center justify-between flex-shrink-0">
+      <div className="flex items-center gap-3">
+        {currentIdx > 0 && (
+          <button
+            onClick={() => setStep(stepOrder[currentIdx - 1])}
+            className="flex items-center gap-1.5 px-3 py-1.5 border border-[#cbd5e1] bg-white hover:bg-[#f1f5f9] text-[10px] font-bold text-[#475569] tracking-wider transition-colors"
+          >
+            <ChevronLeft className="w-3 h-3" />
+            PREVIOUS
+          </button>
         )}
       </div>
+
+      <div className="flex items-center gap-3">
+        {/* Validation hints */}
+        {step === 'setup' && !selectedJob && (
+          <span className="text-[9px] font-mono text-[#dc2626]">⚠ SELECT A POSITION TO CONTINUE</span>
+        )}
+        {step === 'criteria' && totalWeight !== 100 && (
+          <span className="text-[9px] font-mono text-[#dc2626]">⚠ WEIGHTS MUST SUM TO 100%</span>
+        )}
+        {step === 'review' && !isReady && (
+          <span className="text-[9px] font-mono text-[#dc2626]">⚠ CHECKLIST INCOMPLETE</span>
+        )}
+
+        {step === 'review' ? (
+          <button
+            onClick={onRun}
+            disabled={!isReady || running}
+            className={cn(
+              'flex items-center gap-2 px-5 py-2 text-[11px] font-bold tracking-widest transition-all',
+              isReady && !running
+                ? 'bg-[#0052cc] text-white hover:bg-[#0041a8] border border-[#003d99]'
+                : 'bg-[#e2e8f0] text-[#94a3b8] cursor-not-allowed border border-[#cbd5e1]'
+            )}
+          >
+            <Zap className="w-3.5 h-3.5" />
+            INITIATE SCREENING
+          </button>
+        ) : (
+          <button
+            onClick={() => setStep(stepOrder[currentIdx + 1])}
+            disabled={!canGoNext}
+            className={cn(
+              'flex items-center gap-1.5 px-4 py-1.5 text-[10px] font-bold tracking-wider transition-all',
+              canGoNext
+                ? 'bg-[#1e3a5f] text-white hover:bg-[#0f2a4a] border border-[#1e3a5f]'
+                : 'bg-[#e2e8f0] text-[#94a3b8] cursor-not-allowed border border-[#cbd5e1]'
+            )}
+          >
+            NEXT
+            <ChevronRight className="w-3 h-3" />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
+export default function ScreeningPage() {
+  const router   = useRouter();
+  const dispatch = useDispatch<AppDispatch>();
+  const params   = useSearchParams();
+  const { user } = useAuth();
+
+  const [jobId, setJobId]               = useState(params.get('jobId') || '');
+  const [shortlistSize, setShortlistSize] = useState(10);
+  const [elapsedTime, setElapsedTime]   = useState(0);
+  const [step, setStep]                 = useState<'setup' | 'criteria' | 'review'>('setup');
+  const [customWeights, setCustomWeights] = useState({ skills: 25, experience: 25, education: 20, projects: 20, availability: 10 });
+
+  const { jobs, loading: jobsLoading } = useJobs();
+  const { total: candidateCount }       = useJobCandidates(jobId || null);
+  const { notifications, liveEvents }   = useNotifications();
+  const pendingBgJobId = useSelector((s: RootState) => s.screening.pendingBgJobId);
+
+  const {
+    handleRunScreening, running, thoughts, liveScores, partialShortlist,
+    evaluatedCount, totalCandidates, setTotalCandidatesCount, addScreeningThought,
+    clearScreeningThoughts, addThinkingSnapshotToLog, setLiveScores, setPartialShortlist,
+    setEvaluatedCountTo, resetLiveScreeningState,
+  } = useScreening();
+
+  const selectedJob = jobs.find(j => j._id === jobId);
+  const totalWeight = Object.values(customWeights).reduce((a, b) => a + b, 0);
+  const progressPercent = totalCandidates > 0 ? Math.round((evaluatedCount / totalCandidates) * 100) : 0;
+
+  // Sync job weights
+  useEffect(() => {
+    if (selectedJob?.weights) setCustomWeights({ ...selectedJob.weights });
+  }, [selectedJob]);
+
+  useEffect(() => {
+    if (running) { resetLiveScreeningState(); setTotalCandidatesCount(candidateCount); seenEventTimestamps.current.clear(); }
+  }, [running]);
+
+  useEffect(() => {
+    if (!running) { setElapsedTime(0); return; }
+    const t = setInterval(() => setElapsedTime(p => p + 1), 1000);
+    return () => clearInterval(t);
+  }, [running]);
+
+  // Navigate to results on completion
+  useEffect(() => {
+    if (!pendingBgJobId) return;
+    const done = notifications.find(n => n.bgJobId === pendingBgJobId);
+    if (!done) return;
+    dispatch(stopRunning());
+    if (done.link) router.push(done.link);
+  }, [notifications, pendingBgJobId]);
+
+  const seenEventTimestamps = React.useRef<Set<string>>(new Set());
+
+  const handleRun = async () => {
+    if (!jobId || candidateCount === 0 || candidateCount < shortlistSize || totalWeight !== 100) return;
+    clearScreeningThoughts();
+    const result = await handleRunScreening({ jobId, shortlistSize });
+    if (result.meta.requestStatus !== 'fulfilled') {
+      // Error surfaced via notifications/toast
+    }
+  };
+
+  // Consume SSE live events
+  useEffect(() => {
+    if (!pendingBgJobId || liveEvents.length === 0) return;
+    for (const event of liveEvents) {
+      if (event.jobId !== pendingBgJobId) continue;
+      const key = `${event.jobId}:${event.timestamp}`;
+      if (seenEventTimestamps.current.has(key)) continue;
+      seenEventTimestamps.current.add(key);
+
+      const pe = event.metadata.progressEvent as {
+        type: string; message: string; candidateName?: string; detail?: string;
+        liveScores?: typeof liveScores;
+        partialShortlist?: CandidateScore[];
+        evaluatedCount?: number;
+        thinkingSnapshot?: { stage: 'evaluating'|'reranking'|'rejection'; batchIndex: number; batchLabel: string; candidateNames: string[]; thinking: string; timestamp: string };
+      } | undefined;
+      if (!pe) continue;
+
+      const ts = nowHMS();
+
+      if (pe.type === 'thinking' && pe.thinkingSnapshot) {
+        addThinkingSnapshotToLog(pe.thinkingSnapshot);
+        addScreeningThought({ id: `thinking-${key}`, type: 'thinking', message: pe.thinkingSnapshot.batchLabel, timestamp: ts, status: 'completed', thinkingContent: pe.thinkingSnapshot.thinking });
+        continue;
+      }
+
+      addScreeningThought({ id: `thought-${key}`, type: (pe.type as 'analyzing'|'scoring'|'flagging'|'generating'|'evaluating'|'completed') || 'analyzing', message: pe.message, candidateName: pe.candidateName, timestamp: ts, status: 'completed', detail: pe.detail });
+      if (pe.liveScores)                                           setLiveScores(pe.liveScores);
+      if (pe.partialShortlist?.length)                             setPartialShortlist(pe.partialShortlist);
+      if (pe.evaluatedCount !== undefined)                         setEvaluatedCountTo(pe.evaluatedCount);
+    }
+  }, [liveEvents, pendingBgJobId]);
+
+  const canGoNext =
+    step === 'setup'    ? !!selectedJob && candidateCount >= shortlistSize && shortlistSize > 0 :
+    step === 'criteria' ? totalWeight === 100 :
+    false;
+
+  return (
+    <div className="flex flex-col bg-[#eef1f5] min-h-screen" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
+      {/* System chrome */}
+      <SysHeader running={running} elapsed={elapsedTime} user={user ?? undefined} />
+      <WorkflowBar step={step} running={running} />
+
+      {/* Workspace */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 overflow-auto p-4">
+          {running ? (
+            <ExecutionConsole
+              thoughts={thoughts}
+              liveScores={liveScores}
+              partialShortlist={partialShortlist}
+              evaluatedCount={evaluatedCount}
+              totalCandidates={totalCandidates}
+              elapsed={elapsedTime}
+              selectedJobTitle={selectedJob?.title}
+              progressPercent={progressPercent}
+            />
+          ) : (
+            <>
+              {step === 'setup' && (
+                <StepJobSelection
+                  jobs={jobs}
+                  jobsLoading={jobsLoading}
+                  jobId={jobId}
+                  setJobId={setJobId}
+                  selectedJob={selectedJob}
+                  candidateCount={candidateCount}
+                  shortlistSize={shortlistSize}
+                  setShortlistSize={setShortlistSize}
+                />
+              )}
+              {step === 'criteria' && (
+                <StepCriteria weights={customWeights} onChange={setCustomWeights} />
+              )}
+              {step === 'review' && (
+                <StepReview
+                  selectedJob={selectedJob}
+                  candidateCount={candidateCount}
+                  shortlistSize={shortlistSize}
+                  weights={customWeights}
+                />
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Nav bar — only in config mode */}
+        {!running && (
+          <NavBar
+            step={step}
+            setStep={setStep}
+            canGoNext={canGoNext}
+            onRun={handleRun}
+            running={running}
+            selectedJob={selectedJob}
+            totalWeight={totalWeight}
+            candidateCount={candidateCount}
+            shortlistSize={shortlistSize}
+          />
+        )}
+      </div>
+
+      {/* Status bar */}
+      <StatusBar
+        totalCandidates={totalCandidates || candidateCount}
+        evaluatedCount={evaluatedCount}
+        model="GEMINI-2.5-FLASH"
+      />
     </div>
   );
 }

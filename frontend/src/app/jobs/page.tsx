@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { AppDispatch, RootState } from '@/store';
 import { deleteJob } from '@/store/jobsSlice';
-import { fetchCandidates, createCandidate, uploadCSV, updateCandidate } from '@/store/candidatesSlice';
+import { fetchCandidates, createCandidate, uploadCSV, updateCandidate, deleteCandidate } from '@/store/candidatesSlice';
 import { fetchResults } from '@/store/screeningSlice';
 import { useJobs } from '@/hooks/useJobs';
 import { Pagination } from '@/components/ui/Pagination';
@@ -23,9 +23,11 @@ import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
 import { Candidate } from '@/types';
 import { Bell } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 export default function JobsPage() {
   const dispatch = useDispatch<AppDispatch>();
+  const router = useRouter();
   const { jobs, loading, searchQuery, page, totalPages, handleSearch, handlePageChange, handleDeleteJob, handleCreateJob, handleUpdateJob } = useJobs();
   const { items: candidates } = useSelector((s: RootState) => s.candidates);
   const screeningResults = useSelector((s: RootState) => s.screening.results);
@@ -48,6 +50,7 @@ export default function JobsPage() {
   // Candidate detail modal
   const [viewingCandidate, setViewingCandidate] = useState<Candidate | null>(null);
   const [viewModalOpen, setViewModalOpen] = useState(false);
+  const [queuedParsingJobId, setQueuedParsingJobId] = useState<string | null>(null);
 
   const handleViewCandidate = (candidate: Candidate) => {
     setViewingCandidate(candidate);
@@ -63,10 +66,42 @@ export default function JobsPage() {
     return result;
   };
 
+  const handleDeleteCandidates = async (candidateIds: string[]) => {
+    try {
+      await Promise.all(candidateIds.map(id => dispatch(deleteCandidate(id)).unwrap()));
+      await dispatch(fetchCandidates());
+    } catch (error) {
+      toast.error('Failed to delete candidates');
+    }
+  };
+
+  const handleScreenCandidates = async (candidateIds: string[], jobId: string) => {
+    toast.success(`Starting screening for ${candidateIds.length} candidate(s)...`);
+    // Navigate to screening page with selected candidates
+    const params = new URLSearchParams({ candidateIds: candidateIds.join(',') });
+    router.push(`/screening?jobId=${jobId}&${params.toString()}`);
+  };
+
   useEffect(() => {
     dispatch(fetchCandidates());
     dispatch(fetchResults());
   }, [dispatch]);
+
+  useEffect(() => {
+    if (!queuedParsingJobId) return;
+
+    let attempts = 0;
+    const maxAttempts = 24; // 24 * 5s = 2 minutes
+    const timer = setInterval(async () => {
+      attempts += 1;
+      await dispatch(fetchCandidates());
+      if (attempts >= maxAttempts) {
+        setQueuedParsingJobId(null);
+      }
+    }, 5000);
+
+    return () => clearInterval(timer);
+  }, [queuedParsingJobId, dispatch]);
 
   const filteredJobs = useMemo(() => {
     return jobs.filter(job => {
@@ -296,6 +331,8 @@ export default function JobsPage() {
                   jobId={selectedJob._id}
                   onViewCandidate={handleViewCandidate}
                   onAddCandidate={() => setShowCandidateModal(true)}
+                  onDeleteCandidates={handleDeleteCandidates}
+                  onScreenCandidates={handleScreenCandidates}
                 />
               )}
               {detailTab === 'screening' && (
@@ -367,6 +404,10 @@ export default function JobsPage() {
           onSave={() => {
             setShowCandidateModal(false);
             toast.success('Candidate added');
+            dispatch(fetchCandidates());
+          }}
+          onResumeQueued={(jobId: string) => {
+            setQueuedParsingJobId(jobId);
             dispatch(fetchCandidates());
           }}
         />
@@ -596,10 +637,11 @@ function OverviewTab({ job }: any) {
 }
 
 // Candidates Tab - Now with Pipeline View and Bulk Actions
-function CandidatesTab({ candidates, jobId, onViewCandidate, onAddCandidate }: any) {
+function CandidatesTab({ candidates, jobId, onViewCandidate, onAddCandidate, onDeleteCandidates, onScreenCandidates }: any) {
   const [selectedCandidates, setSelectedCandidates] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<'list' | 'pipeline'>('list');
   const [sortBy, setSortBy] = useState<'date' | 'name' | 'score'>('date');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Get screening scores for candidates
   const getCandidateScore = (candidate: any) => {
@@ -620,6 +662,36 @@ function CandidatesTab({ candidates, jobId, onViewCandidate, onAddCandidate }: a
     } else {
       setSelectedCandidates(new Set(candidates.map((c: any) => c._id)));
     }
+  };
+
+  const handleBulkScreen = () => {
+    if (selectedCandidates.size === 0) return;
+    onScreenCandidates?.(Array.from(selectedCandidates), jobId);
+    setSelectedCandidates(new Set());
+  };
+
+  const handleBulkShortlist = () => {
+    if (selectedCandidates.size === 0) return;
+    toast.success(`${selectedCandidates.size} candidate(s) shortlisted`);
+    setSelectedCandidates(new Set());
+  };
+
+  const handleBulkReject = () => {
+    if (selectedCandidates.size === 0) return;
+    toast.success(`${selectedCandidates.size} candidate(s) rejected`);
+    setSelectedCandidates(new Set());
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedCandidates.size === 0) return;
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmBulkDelete = () => {
+    onDeleteCandidates?.(Array.from(selectedCandidates));
+    setSelectedCandidates(new Set());
+    setShowDeleteConfirm(false);
+    toast.success('Candidates deleted successfully');
   };
 
   // Pipeline stages
@@ -699,17 +771,34 @@ function CandidatesTab({ candidates, jobId, onViewCandidate, onAddCandidate }: a
               {selectedCandidates.size} selected
             </span>
             <div className="h-4 w-px bg-blue-200" />
-            <button className="text-xs font-medium text-blue-600 hover:text-blue-700 flex items-center gap-1">
+            <button
+              onClick={handleBulkScreen}
+              className="text-xs font-medium text-blue-600 hover:text-blue-700 flex items-center gap-1"
+            >
               <Zap className="w-3 h-3" />
               Screen
             </button>
-            <button className="text-xs font-medium text-blue-600 hover:text-blue-700 flex items-center gap-1">
+            <button
+              onClick={handleBulkShortlist}
+              className="text-xs font-medium text-blue-600 hover:text-blue-700 flex items-center gap-1"
+            >
               <Check className="w-3 h-3" />
               Shortlist
             </button>
-            <button className="text-xs font-medium text-blue-600 hover:text-blue-700 flex items-center gap-1">
+            <button
+              onClick={handleBulkReject}
+              className="text-xs font-medium text-blue-600 hover:text-blue-700 flex items-center gap-1"
+            >
               <X className="w-3 h-3" />
               Reject
+            </button>
+            <div className="h-4 w-px bg-blue-200" />
+            <button
+              onClick={handleBulkDelete}
+              className="text-xs font-medium text-red-600 hover:text-red-700 flex items-center gap-1"
+            >
+              <Trash2 className="w-3 h-3" />
+              Delete
             </button>
           </div>
         )}
@@ -794,11 +883,8 @@ function CandidatesTab({ candidates, jobId, onViewCandidate, onAddCandidate }: a
                           <button onClick={() => onViewCandidate?.(candidate)} className="p-1.5 rounded hover:bg-blue-50 text-gray-500 hover:text-blue-600 transition-all" title="View Profile">
                             <Eye className="w-3 h-3" />
                           </button>
-                          <button onClick={() => onViewCandidate?.(candidate)} className="p-1.5 rounded hover:bg-blue-50 text-gray-500 hover:text-blue-600 transition-all" title="Edit">
+                          <button onClick={() => onViewCandidate?.(candidate)} className="p-1.5 rounded hover:bg-blue-50 text-gray-500 hover:text-blue-600 transition-all" title="Edit Candidate">
                             <Edit2 className="w-3 h-3" />
-                          </button>
-                          <button onClick={() => onAddCandidate?.()} className="p-1.5 rounded hover:bg-green-50 text-gray-500 hover:text-green-600 transition-all" title="Add Candidate">
-                            <Plus className="w-3 h-3" />
                           </button>
                         </div>
                       </td>
@@ -867,6 +953,17 @@ function CandidatesTab({ candidates, jobId, onViewCandidate, onAddCandidate }: a
           ))}
         </div>
       )}
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={confirmBulkDelete}
+        title="Delete Candidates"
+        message={`Delete ${selectedCandidates.size} candidate(s)? This action cannot be undone.`}
+        confirmLabel="Delete"
+        variant="danger"
+      />
     </div>
   );
 }
@@ -1236,7 +1333,7 @@ function JobModal({ job, onClose, onSave, onCreate, onUpdate }: any) {
 }
 
 // Candidate Modal — Three upload methods: Manual, Resume Upload (AI), CSV Upload
-function CandidateModal({ jobId, onClose, onSave }: any) {
+function CandidateModal({ jobId, onClose, onSave, onResumeQueued }: any) {
   const dispatch = useDispatch<AppDispatch>();
   const [uploadMethod, setUploadMethod] = useState<'manual' | 'resume' | 'csv'>('manual');
   const [submitting, setSubmitting] = useState(false);
@@ -1401,6 +1498,7 @@ function CandidateModal({ jobId, onClose, onSave }: any) {
       });
       setSelectedResumes([]);
       setResumeQueued(true);
+      onResumeQueued?.(jobId);
     } catch (err: any) {
       toast.error(err.response?.data?.error || 'Failed to queue resumes');
     } finally {

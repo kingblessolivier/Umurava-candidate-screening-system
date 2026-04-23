@@ -5,9 +5,24 @@ import {
 } from "../types";
 import { rateLimitService } from "./rateLimitService";
 
-// Dual-model configuration: resume parsing uses a fast model, screening uses a thinking-capable model
-const RESUME_PARSER_MODEL = process.env.RESUME_PARSER_MODEL || "gemini-2.0-flash-exp";
-const SCREENING_MODEL = process.env.SCREENING_MODEL || "gemini-2.5-pro";
+// Normalize legacy/deprecated model aliases to currently supported names.
+function normalizeModelName(model: string): string {
+  const normalized = model.trim();
+  const aliases: Record<string, string> = {
+    "gemini-2.0-flash-exp": "gemini-3.1-flash-lite-preview",
+  };
+  return aliases[normalized] ?? normalized;
+}
+
+const LEGACY_GEMINI_MODEL = process.env.GEMINI_MODEL;
+
+// Dual-model configuration: resume parsing uses a fast model, screening uses a thinking-capable model.
+const RESUME_PARSER_MODEL = normalizeModelName(
+  process.env.RESUME_PARSER_MODEL || LEGACY_GEMINI_MODEL || "gemini-3.1-flash-lite-preview"
+);
+const SCREENING_MODEL = normalizeModelName(
+  process.env.SCREENING_MODEL || LEGACY_GEMINI_MODEL || "gemini-3-flash-preview"
+);
 const SCREENING_THINKING_BUDGET = parseInt(process.env.SCREENING_THINKING_BUDGET || "2048", 10);
 
 // ─── System Instruction (set once, applies to all calls) ──────────────────────
