@@ -10,6 +10,7 @@ import * as candidates    from "../controllers/candidateController";
 import * as screening     from "../controllers/screeningController";
 import * as analytics     from "../controllers/analyticsController";
 import * as notifications from "../controllers/notificationController";
+import * as email         from "../controllers/emailController";
 
 const router = Router();
 
@@ -79,6 +80,11 @@ router.get("/screening/:resultId/why/:email", requireAuth, screening.getWhyNotSe
 // ============================================
 router.get("/analytics/dashboard", requireAuth, analytics.getDashboardStats);
 router.get("/analytics/job/:jobId", requireAuth, analytics.getJobAnalytics);
+
+// ============================================
+// Email Routes
+// ============================================
+router.post("/email/send", requireAuth, email.sendEmailHandler);
 
 // ============================================
 // Notification / Background Job Routes

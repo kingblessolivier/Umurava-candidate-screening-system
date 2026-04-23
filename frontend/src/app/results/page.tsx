@@ -4,12 +4,28 @@ import { useDispatch, useSelector } from "react-redux";
 import { AppDispatch, RootState } from "@/store";
 import { fetchResults, deleteResult } from "@/store/screeningSlice";
 import Link from "next/link";
-import { Trophy, Users, Clock, Zap, ArrowRight, BarChart3, Trash2 } from "lucide-react";
+import { Trophy, Users, Clock, Zap, ArrowRight, BarChart3, Trash2, Mail } from "lucide-react";
+import EmailModal from "@/components/email/EmailModal";
 
 export default function ResultsPage() {
   const dispatch = useDispatch<AppDispatch>();
   const { results, loading } = useSelector((s: RootState) => s.screening);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [emailModal, setEmailModal] = useState<{
+    open: boolean;
+    recipients: { name: string; email: string }[];
+    jobTitle: string;
+  }>({ open: false, recipients: [], jobTitle: "" });
+
+  const handleEmailShortlisted = (e: React.MouseEvent, result: typeof results[0]) => {
+    e.preventDefault();
+    if (!result.shortlist?.length) return;
+    const recipients = result.shortlist.map(c => ({
+      name: c.candidateName?.trim() || c.email.split("@")[0],
+      email: c.email,
+    }));
+    setEmailModal({ open: true, recipients, jobTitle: result.jobTitle });
+  };
 
   useEffect(() => { dispatch(fetchResults()); }, [dispatch]);
 
@@ -98,6 +114,15 @@ export default function ResultsPage() {
                     <ArrowRight className="w-3.5 h-3.5 text-gray-400 group-hover:text-blue-600 transition-colors" />
                   </div>
                 </Link>
+                {r.shortlist?.length > 0 && (
+                  <button
+                    onClick={(e) => handleEmailShortlisted(e, r)}
+                    className="p-2 rounded-lg transition-all text-gray-400 hover:text-emerald-600 hover:bg-emerald-50"
+                    title={`Email ${r.shortlist.length} shortlisted candidate${r.shortlist.length !== 1 ? "s" : ""}`}
+                  >
+                    <Mail className="w-3.5 h-3.5" />
+                  </button>
+                )}
                 <button
                   onClick={(e) => handleDelete(r._id || "", e)}
                   disabled={deletingId === r._id}
@@ -111,6 +136,13 @@ export default function ResultsPage() {
           })}
         </div>
       )}
+      <EmailModal
+        isOpen={emailModal.open}
+        onClose={() => setEmailModal({ open: false, recipients: [], jobTitle: "" })}
+        recipients={emailModal.recipients}
+        jobTitle={emailModal.jobTitle}
+        context="shortlist"
+      />
     </div>
   );
 }

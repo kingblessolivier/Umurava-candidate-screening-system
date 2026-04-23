@@ -8,8 +8,9 @@ import {
   Briefcase, Plus, Search, Users, Zap, Edit2, Trash2, Archive,
   MapPin, Clock, Building2, X, Check, FileText, ArrowRight,
   Eye, Share2, MoreVertical, TrendingUp, BarChart3, ChevronLeft,
-  ChevronRight, Filter, Settings, Download, MessageSquare
+  ChevronRight, Filter, Settings, Download, MessageSquare, Mail
 } from 'lucide-react';
+import EmailModal from '@/components/email/EmailModal';
 import { AppDispatch, RootState } from '@/store';
 import { deleteJob } from '@/store/jobsSlice';
 import { fetchCandidates, createCandidate, uploadCSV, updateCandidate, deleteCandidate } from '@/store/candidatesSlice';
@@ -51,6 +52,8 @@ export default function JobsPage() {
   const [viewingCandidate, setViewingCandidate] = useState<Candidate | null>(null);
   const [viewModalOpen, setViewModalOpen] = useState(false);
   const [queuedParsingJobId, setQueuedParsingJobId] = useState<string | null>(null);
+  const [candidateRefreshKey, setCandidateRefreshKey] = useState(0);
+  const [jobCandidateTotal, setJobCandidateTotal] = useState<number | null>(null);
 
   const handleViewCandidate = (candidate: Candidate) => {
     setViewingCandidate(candidate);
@@ -69,6 +72,7 @@ export default function JobsPage() {
   const handleDeleteCandidates = async (candidateIds: string[]) => {
     try {
       await Promise.all(candidateIds.map(id => dispatch(deleteCandidate(id)).unwrap()));
+      setCandidateRefreshKey(k => k + 1);
       await dispatch(fetchCandidates());
     } catch (error) {
       toast.error('Failed to delete candidates');
@@ -112,6 +116,9 @@ export default function JobsPage() {
   }, [jobs, filterStatus]);
 
   const selectedJob = useMemo(() => jobs.find(j => j._id === selectedJobId), [jobs, selectedJobId]);
+
+  // Reset header count when switching jobs
+  useEffect(() => { setJobCandidateTotal(null); }, [selectedJobId]);
 
   const topScoreByJob = useMemo(() => {
     const map: Record<string, number> = {};
@@ -263,7 +270,7 @@ export default function JobsPage() {
               <div className="flex items-center gap-4 mr-2">
                 <div className="text-center">
                   <p className="text-[10px] text-gray-400">Candidates</p>
-                  <p className="text-sm font-bold text-blue-600">{candidates.filter(c => c.jobId === selectedJob._id).length}</p>
+                  <p className="text-sm font-bold text-blue-600">{jobCandidateTotal ?? '—'}</p>
                 </div>
                 {topScoreByJob[selectedJob._id] !== undefined && (
                   <div className="text-center">
@@ -327,12 +334,15 @@ export default function JobsPage() {
               {detailTab === 'overview' && <OverviewTab job={selectedJob} />}
               {detailTab === 'candidates' && (
                 <CandidatesTab
-                  candidates={candidates.filter(c => c.jobId === selectedJob._id)}
                   jobId={selectedJob._id}
+                  jobTitle={selectedJob.title}
+                  refreshKey={candidateRefreshKey}
+                  screeningResult={screeningResults.filter((r: any) => r.jobId === selectedJob._id)[0] ?? null}
                   onViewCandidate={handleViewCandidate}
                   onAddCandidate={() => setShowCandidateModal(true)}
                   onDeleteCandidates={handleDeleteCandidates}
                   onScreenCandidates={handleScreenCandidates}
+                  onTotalChange={setJobCandidateTotal}
                 />
               )}
               {detailTab === 'screening' && (
@@ -404,10 +414,12 @@ export default function JobsPage() {
           onSave={() => {
             setShowCandidateModal(false);
             toast.success('Candidate added');
+            setCandidateRefreshKey(k => k + 1);
             dispatch(fetchCandidates());
           }}
           onResumeQueued={(jobId: string) => {
             setQueuedParsingJobId(jobId);
+            setCandidateRefreshKey(k => k + 1);
             dispatch(fetchCandidates());
           }}
         />
@@ -637,11 +649,67 @@ function OverviewTab({ job }: any) {
 }
 
 // Candidates Tab - Now with Pipeline View and Bulk Actions
-function CandidatesTab({ candidates, jobId, onViewCandidate, onAddCandidate, onDeleteCandidates, onScreenCandidates }: any) {
+function CandidatesTab({ jobId, jobTitle, onViewCandidate, onAddCandidate, onDeleteCandidates, onScreenCandidates, onTotalChange, screeningResult, refreshKey = 0 }: any) {
   const [selectedCandidates, setSelectedCandidates] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<'list' | 'pipeline'>('list');
   const [sortBy, setSortBy] = useState<'date' | 'name' | 'score'>('date');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [emailModal, setEmailModal] = useState<{
+    open: boolean;
+    recipients: { name: string; email: string }[];
+  }>({ open: false, recipients: [] });
+
+  const [localCandidates, setLocalCandidates] = useState<any[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const PAGE_SIZE = 20;
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+
+  const [pipelineCandidates, setPipelineCandidates] = useState<any[]>([]);
+  const [pipelineLoading, setPipelineLoading] = useState(false);
+
+  // Reset state when switching jobs
+  useEffect(() => {
+    setPage(1);
+    setSearchInput('');
+    setSearch('');
+    setSelectedCandidates(new Set());
+    setPipelineCandidates([]);
+  }, [jobId]);
+
+  // Debounce search input → actual search param
+  useEffect(() => {
+    const t = setTimeout(() => { setSearch(searchInput); setPage(1); }, 300);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  // Fetch candidates for this job with pagination + search
+  useEffect(() => {
+    if (!jobId) return;
+    setIsLoading(true);
+    api.get('/candidates', { params: { jobId, page, limit: PAGE_SIZE, search } })
+      .then(res => {
+        const t = res.data.total || 0;
+        setLocalCandidates(res.data.data || []);
+        setTotal(t);
+        onTotalChange?.(t);
+      })
+      .catch(() => toast.error('Failed to load candidates'))
+      .finally(() => setIsLoading(false));
+  }, [jobId, page, search, refreshKey]);
+
+  // Fetch all candidates for pipeline view (no pagination)
+  useEffect(() => {
+    if (!jobId || viewMode !== 'pipeline') return;
+    setPipelineLoading(true);
+    api.get('/candidates', { params: { jobId, page: 1, limit: 100 } })
+      .then(res => setPipelineCandidates(res.data.data || []))
+      .catch(() => {})
+      .finally(() => setPipelineLoading(false));
+  }, [jobId, viewMode, refreshKey]);
 
   // Get screening scores for candidates
   const getCandidateScore = (candidate: any) => {
@@ -657,10 +725,10 @@ function CandidatesTab({ candidates, jobId, onViewCandidate, onAddCandidate, onD
   };
 
   const selectAll = () => {
-    if (selectedCandidates.size === candidates.length) {
+    if (selectedCandidates.size === localCandidates.length) {
       setSelectedCandidates(new Set());
     } else {
-      setSelectedCandidates(new Set(candidates.map((c: any) => c._id)));
+      setSelectedCandidates(new Set(localCandidates.map((c: any) => c._id)));
     }
   };
 
@@ -687,6 +755,25 @@ function CandidatesTab({ candidates, jobId, onViewCandidate, onAddCandidate, onD
     setShowDeleteConfirm(true);
   };
 
+  const handleBulkEmail = () => {
+    if (selectedCandidates.size === 0) return;
+    const selected = localCandidates.filter((c: any) => selectedCandidates.has(c._id));
+    setEmailModal({
+      open: true,
+      recipients: selected.map((c: any) => ({
+        name: `${c.firstName} ${c.lastName}`,
+        email: c.email,
+      })),
+    });
+  };
+
+  const handleEmailSingle = (candidate: any) => {
+    setEmailModal({
+      open: true,
+      recipients: [{ name: `${candidate.firstName} ${candidate.lastName}`, email: candidate.email }],
+    });
+  };
+
   const confirmBulkDelete = () => {
     onDeleteCandidates?.(Array.from(selectedCandidates));
     setSelectedCandidates(new Set());
@@ -694,15 +781,35 @@ function CandidatesTab({ candidates, jobId, onViewCandidate, onAddCandidate, onD
     toast.success('Candidates deleted successfully');
   };
 
-  // Pipeline stages
+  // Build pipeline stage mapping from latest screening result
+  const shortlistedIds   = new Set((screeningResult?.shortlist || []).filter((c: any) => ['Strongly Recommended','Recommended'].includes(c.recommendation)).map((c: any) => c.candidateId));
+  const considerIds      = new Set((screeningResult?.shortlist || []).filter((c: any) => c.recommendation === 'Consider').map((c: any) => c.candidateId));
+  const rejectedIds      = new Set((screeningResult?.rejectedCandidates || []).map((c: any) => c.candidateId));
+  const screenedIds      = new Set([...shortlistedIds, ...considerIds, ...rejectedIds]);
+
+  const getPipelineStage = (candidateId: string) => {
+    if (shortlistedIds.has(candidateId)) return 'shortlisted';
+    if (considerIds.has(candidateId))    return 'consider';
+    if (rejectedIds.has(candidateId))    return 'rejected';
+    return 'applied';
+  };
+
+  const getScoreForCandidate = (candidateId: string) => {
+    const s = (screeningResult?.shortlist || []).find((c: any) => c.candidateId === candidateId);
+    if (s) return s.finalScore;
+    const r = (screeningResult?.rejectedCandidates || []).find((c: any) => c.candidateId === candidateId);
+    if (r) return r.finalScore;
+    return null;
+  };
+
   const pipelineStages = [
-    { id: 'applied', label: 'Applied', color: 'blue', count: candidates.length },
-    { id: 'screened', label: 'Screened', color: 'purple', count: Math.floor(candidates.length * 0.6) },
-    { id: 'shortlisted', label: 'Shortlisted', color: 'green', count: Math.floor(candidates.length * 0.3) },
-    { id: 'interview', label: 'Interview', color: 'amber', count: Math.floor(candidates.length * 0.15) },
+    { id: 'applied',      label: 'Applied',      color: 'blue',   description: 'Not yet screened' },
+    { id: 'shortlisted',  label: 'Shortlisted',  color: 'green',  description: 'Recommended by AI' },
+    { id: 'consider',     label: 'Consider',     color: 'amber',  description: 'Needs further review' },
+    { id: 'rejected',     label: 'Not Selected', color: 'red',    description: 'Did not meet criteria' },
   ];
 
-  if (candidates.length === 0) {
+  if (!isLoading && total === 0 && !search) {
     return (
       <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
         <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-50 to-indigo-50 flex items-center justify-center mx-auto mb-3 border border-blue-100">
@@ -764,6 +871,23 @@ function CandidatesTab({ candidates, jobId, onViewCandidate, onAddCandidate, onD
           </select>
         </div>
 
+        {/* Search */}
+        <div className="relative flex-1 max-w-xs">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" />
+          <input
+            type="text"
+            placeholder="Search candidates…"
+            value={searchInput}
+            onChange={e => setSearchInput(e.target.value)}
+            className="w-full pl-7 pr-8 py-1.5 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400/30"
+          />
+          {searchInput && (
+            <button onClick={() => setSearchInput('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+              <X className="w-3 h-3" />
+            </button>
+          )}
+        </div>
+
         {/* Bulk Actions */}
         {selectedCandidates.size > 0 && (
           <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 rounded-lg border border-blue-200 animate-in fade-in slide-in-from-top-2">
@@ -792,6 +916,13 @@ function CandidatesTab({ candidates, jobId, onViewCandidate, onAddCandidate, onD
               <X className="w-3 h-3" />
               Reject
             </button>
+            <button
+              onClick={handleBulkEmail}
+              className="text-xs font-medium text-emerald-600 hover:text-emerald-700 flex items-center gap-1"
+            >
+              <Mail className="w-3 h-3" />
+              Email
+            </button>
             <div className="h-4 w-px bg-blue-200" />
             <button
               onClick={handleBulkDelete}
@@ -814,7 +945,7 @@ function CandidatesTab({ candidates, jobId, onViewCandidate, onAddCandidate, onD
                   <th className="px-3 py-2 text-left">
                     <input
                       type="checkbox"
-                      checked={selectedCandidates.size === candidates.length}
+                      checked={localCandidates.length > 0 && selectedCandidates.size === localCandidates.length}
                       onChange={selectAll}
                       className="w-3 h-3 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                     />
@@ -828,7 +959,18 @@ function CandidatesTab({ candidates, jobId, onViewCandidate, onAddCandidate, onD
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {candidates.map((candidate: any) => {
+                {isLoading ? (
+                  <tr><td colSpan={7} className="px-3 py-8 text-center">
+                    <div className="flex items-center justify-center gap-2 text-xs text-gray-500">
+                      <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                      Loading candidates…
+                    </div>
+                  </td></tr>
+                ) : localCandidates.length === 0 ? (
+                  <tr><td colSpan={7} className="px-3 py-8 text-center text-xs text-gray-500">
+                    No candidates match your search.
+                  </td></tr>
+                ) : localCandidates.map((candidate: any) => {
                   const score = getCandidateScore(candidate);
                   const isSelected = selectedCandidates.has(candidate._id);
                   return (
@@ -886,6 +1028,9 @@ function CandidatesTab({ candidates, jobId, onViewCandidate, onAddCandidate, onD
                           <button onClick={() => onViewCandidate?.(candidate)} className="p-1.5 rounded hover:bg-blue-50 text-gray-500 hover:text-blue-600 transition-all" title="Edit Candidate">
                             <Edit2 className="w-3 h-3" />
                           </button>
+                          <button onClick={() => handleEmailSingle(candidate)} className="p-1.5 rounded hover:bg-emerald-50 text-gray-500 hover:text-emerald-600 transition-all" title="Send Email">
+                            <Mail className="w-3 h-3" />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -894,64 +1039,185 @@ function CandidatesTab({ candidates, jobId, onViewCandidate, onAddCandidate, onD
               </tbody>
             </table>
           </div>
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-2.5 border-t border-gray-100 bg-gray-50">
+              <p className="text-[10px] text-gray-500">
+                {total} candidate{total !== 1 ? 's' : ''} · page {page} of {totalPages}
+              </p>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  className="p-1 rounded hover:bg-gray-200 text-gray-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                </button>
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  const start = Math.max(1, Math.min(page - 2, totalPages - 4));
+                  const p = start + i;
+                  return (
+                    <button
+                      key={p}
+                      onClick={() => setPage(p)}
+                      className={`w-6 h-6 text-[10px] font-semibold rounded transition-colors ${
+                        p === page ? 'bg-blue-600 text-white' : 'hover:bg-gray-200 text-gray-600'
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  );
+                })}
+                <button
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                  className="p-1 rounded hover:bg-gray-200 text-gray-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         /* Pipeline View */
-        <div className="grid grid-cols-4 gap-4">
-          {pipelineStages.map(stage => (
-            <div key={stage.id} className="bg-gray-50 rounded-2xl border border-gray-200 overflow-hidden">
-              {/* Stage Header */}
-              <div className={`px-4 py-3 border-b border-gray-200 bg-gradient-to-r ${
-                stage.color === 'blue' ? 'from-blue-50 to-white' :
-                stage.color === 'purple' ? 'from-purple-50 to-white' :
-                stage.color === 'green' ? 'from-green-50 to-white' :
-                'from-amber-50 to-white'
-              }`}>
-                <div className="flex items-center justify-between">
-                  <span className={`text-xs font-semibold ${
-                    stage.color === 'blue' ? 'text-blue-700' :
-                    stage.color === 'purple' ? 'text-purple-700' :
-                    stage.color === 'green' ? 'text-green-700' :
-                    'text-amber-700'
-                  }`}>{stage.label}</span>
-                  <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                    stage.color === 'blue' ? 'bg-blue-100 text-blue-700' :
-                    stage.color === 'purple' ? 'bg-purple-100 text-purple-700' :
-                    stage.color === 'green' ? 'bg-green-100 text-green-700' :
-                    'bg-amber-100 text-amber-700'
-                  }`}>{stage.count}</span>
-                </div>
-              </div>
+        pipelineLoading ? (
+          <div className="flex items-center justify-center py-16 gap-2 text-xs text-gray-500">
+            <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            Building pipeline…
+          </div>
+        ) : (
+        <div className="grid grid-cols-4 gap-3">
+          {pipelineStages.map(stage => {
+            const stageCards = pipelineCandidates.filter((c: any) => getPipelineStage(c._id) === stage.id);
+            const colColors: Record<string, { header: string; badge: string; text: string; dot: string }> = {
+              applied:     { header: 'from-blue-50',  badge: 'bg-blue-100 text-blue-700',   text: 'text-blue-700',   dot: 'bg-blue-500'   },
+              shortlisted: { header: 'from-green-50', badge: 'bg-green-100 text-green-700', text: 'text-green-700', dot: 'bg-green-500' },
+              consider:    { header: 'from-amber-50', badge: 'bg-amber-100 text-amber-700', text: 'text-amber-700', dot: 'bg-amber-500' },
+              rejected:    { header: 'from-red-50',   badge: 'bg-red-100 text-red-600',     text: 'text-red-600',   dot: 'bg-red-400'   },
+            };
+            const col = colColors[stage.id];
 
-              {/* Stage Content */}
-              <div className="p-3 space-y-2 min-h-[400px]">
-                {candidates.slice(0, Math.ceil(candidates.length / 4)).map((candidate: any, idx: number) => (
-                  <div
-                    key={idx}
-                    className="bg-white rounded-xl p-3 border border-gray-200 shadow-sm hover:shadow-md transition-all cursor-grab active:cursor-grabbing"
-                  >
-                    <div className="flex items-center gap-2 mb-2">
-                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-xs">
-                        {candidate.firstName[0]}{candidate.lastName[0]}
-                      </div>
-                      <span className="text-xs font-semibold text-gray-900 truncate">{candidate.firstName} {candidate.lastName}</span>
+            return (
+              <div key={stage.id} className="flex flex-col bg-gray-50 rounded-2xl border border-gray-200 overflow-hidden">
+                {/* Column Header */}
+                <div className={`px-3 py-2.5 border-b border-gray-200 bg-gradient-to-r ${col.header} to-white flex-shrink-0`}>
+                  <div className="flex items-center justify-between mb-0.5">
+                    <div className="flex items-center gap-1.5">
+                      <div className={`w-1.5 h-1.5 rounded-full ${col.dot}`} />
+                      <span className={`text-xs font-bold ${col.text}`}>{stage.label}</span>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] text-gray-500">{new Date(candidate.createdAt).toLocaleDateString()}</span>
-                      <button className="p-1 rounded hover:bg-gray-100">
-                        <MoreVertical className="w-3 h-3 text-gray-400" />
-                      </button>
-                    </div>
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${col.badge}`}>
+                      {stageCards.length}
+                    </span>
                   </div>
-                ))}
-                {/* Drop zone indicator */}
-                <div className="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center text-xs text-gray-400">
-                  Drop to move here
+                  <p className="text-[10px] text-gray-400 pl-3">{stage.description}</p>
+                </div>
+
+                {/* Cards */}
+                <div className="flex-1 overflow-y-auto p-2 space-y-2 min-h-[200px] max-h-[520px]">
+                  {stageCards.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-8 text-center">
+                      <div className="w-8 h-8 rounded-xl bg-gray-100 flex items-center justify-center mb-2">
+                        <Users className="w-4 h-4 text-gray-300" />
+                      </div>
+                      <p className="text-[10px] text-gray-400">
+                        {stage.id === 'applied' && !screeningResult ? 'Run screening to distribute candidates' : 'No candidates here'}
+                      </p>
+                    </div>
+                  ) : (
+                    stageCards.map((candidate: any) => {
+                      const score = getScoreForCandidate(candidate._id);
+                      const topSkills = (candidate.skills || []).slice(0, 2);
+                      const sourceColors: Record<string, string> = {
+                        pdf:      'bg-red-50 text-red-600',
+                        csv:      'bg-emerald-50 text-emerald-600',
+                        json:     'bg-violet-50 text-violet-600',
+                        platform: 'bg-blue-50 text-blue-600',
+                      };
+                      return (
+                        <div
+                          key={candidate._id}
+                          className="bg-white rounded-xl p-3 border border-gray-200 shadow-sm hover:shadow-md hover:border-blue-200 transition-all group"
+                        >
+                          {/* Card Header */}
+                          <div className="flex items-start gap-2 mb-2">
+                            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-[11px] flex-shrink-0 shadow-sm">
+                              {candidate.firstName[0]}{candidate.lastName[0]}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[11px] font-semibold text-gray-900 truncate leading-tight">
+                                {candidate.firstName} {candidate.lastName}
+                              </p>
+                              <p className="text-[10px] text-gray-500 truncate">{candidate.email}</p>
+                            </div>
+                            {score !== null && (
+                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-lg flex-shrink-0 ${
+                                score >= 70 ? 'bg-green-100 text-green-700' :
+                                score >= 50 ? 'bg-amber-100 text-amber-700' :
+                                              'bg-red-100 text-red-600'
+                              }`}>
+                                {score}%
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Headline */}
+                          {candidate.headline && (
+                            <p className="text-[10px] text-gray-500 truncate mb-2 italic">{candidate.headline}</p>
+                          )}
+
+                          {/* Skills */}
+                          {topSkills.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mb-2">
+                              {topSkills.map((s: any) => (
+                                <span key={s.name} className="text-[9px] font-medium px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded-full">
+                                  {s.name}
+                                </span>
+                              ))}
+                              {candidate.skills.length > 2 && (
+                                <span className="text-[9px] text-gray-400 px-1 py-0.5">+{candidate.skills.length - 2}</span>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Footer */}
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1">
+                              {candidate.source && (
+                                <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wide ${sourceColors[candidate.source] || 'bg-gray-50 text-gray-500'}`}>
+                                  {candidate.source}
+                                </span>
+                              )}
+                              <span className="text-[9px] text-gray-400">{new Date(candidate.createdAt).toLocaleDateString()}</span>
+                            </div>
+                            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button
+                                onClick={() => onViewCandidate?.(candidate)}
+                                className="p-1 rounded hover:bg-blue-50 text-gray-400 hover:text-blue-600 transition-colors"
+                                title="View profile"
+                              >
+                                <Eye className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={() => handleEmailSingle(candidate)}
+                                className="p-1 rounded hover:bg-emerald-50 text-gray-400 hover:text-emerald-600 transition-colors"
+                                title="Send email"
+                              >
+                                <Mail className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
+        )
       )}
 
       {/* Delete Confirmation Modal */}
@@ -964,12 +1230,29 @@ function CandidatesTab({ candidates, jobId, onViewCandidate, onAddCandidate, onD
         confirmLabel="Delete"
         variant="danger"
       />
+
+      {/* Email Modal */}
+      <EmailModal
+        isOpen={emailModal.open}
+        onClose={() => setEmailModal({ open: false, recipients: [] })}
+        recipients={emailModal.recipients}
+        jobTitle={jobTitle || "the position"}
+        context="general"
+      />
     </div>
   );
 }
 
 // Screening Tab
 function ScreeningTab({ screeningResults, job }: any) {
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [emailModal, setEmailModal] = useState<{
+    open: boolean;
+    recipients: { name: string; email: string }[];
+    context: 'shortlist' | 'rejection' | 'general';
+  }>({ open: false, recipients: [], context: 'general' });
+  const [showRejected, setShowRejected] = useState(true);
+
   const latestResult = screeningResults[0];
 
   if (!latestResult) {
@@ -984,8 +1267,45 @@ function ScreeningTab({ screeningResults, job }: any) {
     );
   }
 
-  const shortlistedCount = latestResult.shortlist?.length || 0;
-  const rejectedCount = latestResult.totalApplicants - shortlistedCount;
+  const shortlisted: any[] = latestResult.shortlist || [];
+  const rejected: any[]    = latestResult.rejectedCandidates || [];
+  const allCandidates      = [...shortlisted, ...rejected];
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  };
+  const toggleSection = (list: any[]) => {
+    const ids = list.map((c: any) => c.candidateId);
+    const allIn = ids.every(id => selectedIds.has(id));
+    setSelectedIds(prev => {
+      const n = new Set(prev);
+      ids.forEach(id => allIn ? n.delete(id) : n.add(id));
+      return n;
+    });
+  };
+
+  const toRecipient = (c: any) => ({
+    name: c.candidateName?.trim() || c.email?.split('@')[0] || 'Candidate',
+    email: c.email,
+  });
+
+  const openEmail = (list: any[], context: 'shortlist' | 'rejection' | 'general') =>
+    setEmailModal({ open: true, recipients: list.map(toRecipient), context });
+
+  const emailAll        = () => openEmail(allCandidates, 'general');
+  const emailShortlisted = () => openEmail(shortlisted, 'shortlist');
+  const emailRejected   = () => openEmail(rejected, 'rejection');
+  const emailSelected   = () => {
+    const list = allCandidates.filter(c => selectedIds.has(c.candidateId));
+    const hasRejected = list.some(c => rejected.includes(c));
+    openEmail(list, hasRejected ? 'general' : 'shortlist');
+  };
+  const emailSingle     = (c: any, context: 'shortlist' | 'rejection') =>
+    openEmail([c], context);
+
+  const selectedCount = selectedIds.size;
+  const allShortlistedSelected = shortlisted.length > 0 && shortlisted.every(c => selectedIds.has(c.candidateId));
+  const allRejectedSelected    = rejected.length > 0 && rejected.every(c => selectedIds.has(c.candidateId));
 
   return (
     <div className="space-y-3">
@@ -998,16 +1318,16 @@ function ScreeningTab({ screeningResults, job }: any) {
             </div>
             <span className="text-[10px] font-medium text-green-700">Shortlisted</span>
           </div>
-          <p className="text-xl font-bold text-green-600">{shortlistedCount}</p>
+          <p className="text-xl font-bold text-green-600">{shortlisted.length}</p>
         </div>
         <div className="bg-gradient-to-br from-red-50 to-white rounded-xl p-3 border border-red-200">
           <div className="flex items-center gap-1.5 mb-1">
             <div className="w-5 h-5 rounded bg-red-100 flex items-center justify-center">
               <X className="w-3 h-3 text-red-600" />
             </div>
-            <span className="text-[10px] font-medium text-red-700">Rejected</span>
+            <span className="text-[10px] font-medium text-red-700">Not Selected</span>
           </div>
-          <p className="text-xl font-bold text-red-600">{rejectedCount}</p>
+          <p className="text-xl font-bold text-red-600">{rejected.length}</p>
         </div>
         <div className="bg-gradient-to-br from-blue-50 to-white rounded-xl p-3 border border-blue-200">
           <div className="flex items-center gap-1.5 mb-1">
@@ -1025,47 +1345,207 @@ function ScreeningTab({ screeningResults, job }: any) {
             </div>
             <span className="text-[10px] font-medium text-violet-700">Top Score</span>
           </div>
-          <p className="text-xl font-bold text-violet-600">{latestResult.shortlist?.[0]?.finalScore || 0}%</p>
+          <p className="text-xl font-bold text-violet-600">{shortlisted[0]?.finalScore || 0}%</p>
         </div>
+      </div>
+
+      {/* Email Action Bar */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs font-semibold text-gray-500 mr-1">Email:</span>
+
+        <button
+          onClick={emailAll}
+          disabled={allCandidates.length === 0}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white border border-gray-200 rounded-lg hover:border-blue-400 hover:text-blue-700 hover:bg-blue-50 transition-all disabled:opacity-40"
+        >
+          <Mail className="w-3.5 h-3.5" />
+          All ({allCandidates.length})
+        </button>
+
+        {shortlisted.length > 0 && (
+          <button
+            onClick={emailShortlisted}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition-all"
+          >
+            <Mail className="w-3.5 h-3.5" />
+            Shortlisted ({shortlisted.length})
+          </button>
+        )}
+
+        {rejected.length > 0 && (
+          <button
+            onClick={emailRejected}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded-lg hover:bg-rose-100 transition-all"
+          >
+            <Mail className="w-3.5 h-3.5" />
+            Not Selected ({rejected.length})
+          </button>
+        )}
+
+        {selectedCount > 0 && (
+          <button
+            onClick={emailSelected}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg hover:from-blue-700 hover:to-indigo-700 shadow-sm shadow-blue-500/20 transition-all"
+          >
+            <Mail className="w-3.5 h-3.5" />
+            Email Selected ({selectedCount})
+          </button>
+        )}
       </div>
 
       {/* Shortlisted Candidates */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-3 py-2 bg-gradient-to-r from-green-50 to-white border-b border-gray-100">
-          <h3 className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
-            <Check className="w-3 h-3 text-green-600" />
-            Shortlisted Candidates ({shortlistedCount})
-          </h3>
+        <div className="px-3 py-2 bg-gradient-to-r from-green-50 to-white border-b border-gray-100 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={allShortlistedSelected}
+              onChange={() => toggleSection(shortlisted)}
+              className="w-3 h-3 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+            />
+            <h3 className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
+              <Check className="w-3 h-3 text-green-600" />
+              Shortlisted Candidates ({shortlisted.length})
+            </h3>
+          </div>
+          {shortlisted.length > 0 && (
+            <button
+              onClick={emailShortlisted}
+              className="flex items-center gap-1 px-2 py-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition-all"
+            >
+              <Mail className="w-3 h-3" /> Email All Shortlisted
+            </button>
+          )}
         </div>
         <div className="divide-y divide-gray-100">
-          {latestResult.shortlist?.map((candidate: any, i: number) => (
-            <div
-              key={i}
-              className="px-3 py-2.5 flex items-center justify-between hover:bg-gray-50 transition-colors"
-            >
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-white font-bold text-[10px]">
-                  {candidate.candidateName?.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
+          {shortlisted.length === 0 ? (
+            <p className="text-xs text-gray-400 text-center py-6">No shortlisted candidates</p>
+          ) : shortlisted.map((candidate: any) => {
+            const isSelected = selectedIds.has(candidate.candidateId);
+            return (
+              <div
+                key={candidate.candidateId}
+                className={`px-3 py-2.5 flex items-center gap-3 hover:bg-gray-50 transition-colors ${isSelected ? 'bg-emerald-50/50' : ''}`}
+              >
+                <input
+                  type="checkbox"
+                  checked={isSelected}
+                  onChange={() => toggleSelect(candidate.candidateId)}
+                  className="w-3 h-3 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer flex-shrink-0"
+                />
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-white font-bold text-[10px] flex-shrink-0">
+                  {candidate.candidateName?.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
                 </div>
-                <div>
-                  <p className="text-xs font-semibold text-gray-900">{candidate.candidateName}</p>
-                  <p className="text-[10px] text-gray-500 truncate max-w-xs">{candidate.summary?.slice(0, 70)}...</p>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs font-semibold text-gray-900 truncate">{candidate.candidateName}</p>
+                    <span className="text-[10px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full flex-shrink-0">
+                      #{candidate.rank}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-gray-500 truncate">{candidate.email}</p>
+                </div>
+                <div className="flex items-center gap-3 flex-shrink-0">
+                  <div className="text-right">
+                    <p className="text-sm font-bold text-green-600">{candidate.finalScore}%</p>
+                    <p className="text-[10px] text-gray-400">{candidate.recommendation}</p>
+                  </div>
+                  <button
+                    onClick={() => emailSingle(candidate, 'shortlist')}
+                    className="p-1.5 rounded-lg hover:bg-emerald-50 text-gray-400 hover:text-emerald-600 transition-all"
+                    title="Send email"
+                  >
+                    <Mail className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <div className="text-right">
-                  <p className="text-[10px] text-gray-500">AI Score</p>
-                  <p className="text-sm font-bold text-green-600">{candidate.finalScore}%</p>
-                </div>
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-50 text-green-700 border border-green-200">
-                  <Check className="w-2.5 h-2.5" />
-                  Recommended
-                </span>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
+
+      {/* Not Selected / Rejected Candidates */}
+      {rejected.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <button
+            onClick={() => setShowRejected(v => !v)}
+            className="w-full px-3 py-2 bg-gradient-to-r from-red-50 to-white border-b border-gray-100 flex items-center justify-between hover:from-red-100 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={allRejectedSelected}
+                onChange={(e) => { e.stopPropagation(); toggleSection(rejected); }}
+                onClick={e => e.stopPropagation()}
+                className="w-3 h-3 rounded border-gray-300 text-rose-600 focus:ring-rose-500 cursor-pointer"
+              />
+              <h3 className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
+                <X className="w-3 h-3 text-red-600" />
+                Not Selected ({rejected.length})
+              </h3>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={(e) => { e.stopPropagation(); emailRejected(); }}
+                className="flex items-center gap-1 px-2 py-1 text-[10px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded-lg hover:bg-rose-100 transition-all"
+              >
+                <Mail className="w-3 h-3" /> Email All Not Selected
+              </button>
+              <ChevronRight className={`w-3.5 h-3.5 text-gray-400 transition-transform ${showRejected ? 'rotate-90' : ''}`} />
+            </div>
+          </button>
+
+          {showRejected && (
+            <div className="divide-y divide-gray-100">
+              {rejected.map((candidate: any) => {
+                const isSelected = selectedIds.has(candidate.candidateId);
+                return (
+                  <div
+                    key={candidate.candidateId}
+                    className={`px-3 py-2.5 flex items-center gap-3 hover:bg-gray-50 transition-colors ${isSelected ? 'bg-rose-50/50' : ''}`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => toggleSelect(candidate.candidateId)}
+                      className="w-3 h-3 rounded border-gray-300 text-rose-600 focus:ring-rose-500 cursor-pointer flex-shrink-0"
+                    />
+                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-gray-400 to-gray-500 flex items-center justify-center text-white font-bold text-[10px] flex-shrink-0">
+                      {candidate.candidateName?.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() || '??'}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-gray-700 truncate">{candidate.candidateName}</p>
+                      <p className="text-[10px] text-gray-500 truncate">{candidate.email}</p>
+                    </div>
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      <div className="text-right">
+                        <p className="text-sm font-bold text-gray-500">{candidate.finalScore}%</p>
+                        <p className="text-[10px] text-gray-400">Not selected</p>
+                      </div>
+                      <button
+                        onClick={() => emailSingle(candidate, 'rejection')}
+                        className="p-1.5 rounded-lg hover:bg-rose-50 text-gray-400 hover:text-rose-600 transition-all"
+                        title="Send email"
+                      >
+                        <Mail className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Email Modal */}
+      <EmailModal
+        isOpen={emailModal.open}
+        onClose={() => setEmailModal({ open: false, recipients: [], context: 'general' })}
+        recipients={emailModal.recipients}
+        jobTitle={job?.title || 'the position'}
+        context={emailModal.context}
+      />
     </div>
   );
 }

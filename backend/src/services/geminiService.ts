@@ -749,9 +749,12 @@ export async function runScreeningPipeline(
   }
 
   // ── Step 3: Sort, re-number ranks, split shortlist / rejected ─────────────
+  // Build email lookup from source data — AI may omit or hallucinate emails
+  const candidateEmailMap = new Map(preprocessed.map(p => [p.candidateId, p.email]));
+
   allEvaluations = allEvaluations
     .sort((a, b) => b.finalScore - a.finalScore)
-    .map((e, i) => ({ ...e, rank: i + 1 }));
+    .map((e, i) => ({ ...e, rank: i + 1, email: candidateEmailMap.get(e.candidateId) || e.email || "" }));
 
   const shortlist = allEvaluations.slice(0, shortlistSize);
   const lowestShortlistScore = shortlist[shortlist.length - 1]?.finalScore ?? 0;
@@ -808,7 +811,10 @@ export async function runScreeningPipeline(
       { prompt: rankingPrompt, model: SCREENING_MODEL, temperature: 0.3, maxOutputTokens: 8192, thinkingBudget: SCREENING_THINKING_BUDGET, onThinking: rejectionOnThinking },
       { rejectedCandidates: [] }
     );
-    rejectedCandidates = rankResult.rejectedCandidates || [];
+    rejectedCandidates = (rankResult.rejectedCandidates || []).map(r => ({
+      ...r,
+      email: candidateEmailMap.get(r.candidateId) || r.email || "",
+    }));
   }
 
   // ── Step 5: Aggregate insights ────────────────────────────────────────────

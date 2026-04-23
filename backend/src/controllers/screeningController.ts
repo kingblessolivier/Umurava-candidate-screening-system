@@ -159,7 +159,7 @@ export const listScreeningResults = async (req: Request, res: Response) => {
     const results = await ScreeningResultModel
       .find(query)
       .sort({ createdAt: -1 })
-      .select("-shortlist.reasoning -rejectedCandidates")
+      .select("-shortlist.reasoning -rejectedCandidates.whyNotSelected -rejectedCandidates.improvementSuggestions -rejectedCandidates.topMissingSkills -rejectedCandidates.closestShortlistScore")
       .lean();
     res.json({ success: true, data: results, total: results.length });
   } catch (err) {

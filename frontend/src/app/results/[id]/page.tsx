@@ -12,9 +12,10 @@ import {
   MessageSquare, CheckCircle, XCircle, AlertTriangle, Shield, Eye,
   TrendingDown, Lightbulb, BarChart3, Download, Check,
   CheckSquare, Square, Sparkles, Filter, Brain, Activity,
-  Database, Trophy, FileText, Server,
+  Database, Trophy, FileText, Server, Mail,
 } from "lucide-react";
 import { AIThinkingReviewModal } from "@/components/screening/AIThinkingReviewModal";
+import EmailModal from "@/components/email/EmailModal";
 import {
   RadarChart, PolarGrid, PolarAngleAxis, Radar, ResponsiveContainer,
   Tooltip, BarChart, Bar, XAxis, YAxis, Cell,
@@ -314,7 +315,7 @@ async function exportPDF(
 // ─── System chrome components ─────────────────────────────────────────────────
 
 function SysHeader({
-  result, selectedIds, onExport, exporting, thinkingLog, onShowThinking,
+  result, selectedIds, onExport, exporting, thinkingLog, onShowThinking, onEmailSelected,
 }: {
   result: ScreeningResult;
   selectedIds: Set<string>;
@@ -322,6 +323,7 @@ function SysHeader({
   exporting: boolean;
   thinkingLog: { length: number };
   onShowThinking: () => void;
+  onEmailSelected: () => void;
 }) {
   const [clock, setClock] = useState(nowClock());
   useEffect(() => {
@@ -359,15 +361,23 @@ function SysHeader({
         )}
 
         {selectedIds.size > 0 && (
-          <button
-            onClick={onExport}
-            disabled={exporting}
-            className="flex items-center gap-1.5 px-2.5 py-1 border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[10px] font-mono tracking-wider uppercase transition-colors rounded-sm"
-          >
-            {exporting
-              ? <><Sparkles className="w-3 h-3 animate-spin" /> GENERATING...</>
-              : <><Download className="w-3 h-3" /> EXPORT {selectedIds.size} PDF</>}
-          </button>
+          <>
+            <button
+              onClick={onEmailSelected}
+              className="flex items-center gap-1.5 px-2.5 py-1 border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[10px] font-mono tracking-wider uppercase transition-colors rounded-sm"
+            >
+              <Mail className="w-3 h-3" /> EMAIL {selectedIds.size}
+            </button>
+            <button
+              onClick={onExport}
+              disabled={exporting}
+              className="flex items-center gap-1.5 px-2.5 py-1 border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[10px] font-mono tracking-wider uppercase transition-colors rounded-sm"
+            >
+              {exporting
+                ? <><Sparkles className="w-3 h-3 animate-spin" /> GENERATING...</>
+                : <><Download className="w-3 h-3" /> EXPORT {selectedIds.size} PDF</>}
+            </button>
+          </>
         )}
       </div>
 
@@ -751,11 +761,12 @@ function CandidateDetail({ candidate }: { candidate: CandidateScore }) {
 
 // ─── Candidate table row ───────────────────────────────────────────────────────
 function CandidateRow({
-  candidate, isSelected, onSelect, stage, onStageChange, isExpanded, onToggle, index,
+  candidate, isSelected, onSelect, stage, onStageChange, isExpanded, onToggle, index, onEmail,
 }: {
   candidate: CandidateScore; isSelected: boolean; onSelect: (id: string) => void;
   stage: PipelineStage; onStageChange: (id: string, s: PipelineStage) => void;
   isExpanded: boolean; onToggle: (id: string) => void; index: number;
+  onEmail: (c: CandidateScore) => void;
 }) {
   const isTop3  = candidate.rank <= 3;
   const rowBg   = isExpanded ? "#eff6ff" : isSelected ? "#f0f9ff" : index % 2 === 0 ? "#ffffff" : "#f9fafb";
@@ -812,12 +823,22 @@ function CandidateRow({
           <StageSelect stage={stage} onChange={s => onStageChange(candidate.candidateId, s)} />
         </td>
 
-        {/* Expand */}
-        <td className="pl-2 pr-4 py-3 w-8">
-          <ChevronRight
-            className="w-3.5 h-3.5 transition-transform"
-            style={{ color: "#9ca3af", transform: isExpanded ? "rotate(90deg)" : "none" }}
-          />
+        {/* Actions */}
+        <td className="pl-2 pr-4 py-3 w-16" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => onEmail(candidate)}
+              className="p-1 rounded hover:bg-emerald-50 text-gray-400 hover:text-emerald-600 transition-colors"
+              title="Send email"
+            >
+              <Mail className="w-3 h-3" />
+            </button>
+            <ChevronRight
+              className="w-3.5 h-3.5 transition-transform cursor-pointer"
+              style={{ color: "#9ca3af", transform: isExpanded ? "rotate(90deg)" : "none" }}
+              onClick={() => onToggle(candidate.candidateId)}
+            />
+          </div>
         </td>
       </tr>
 
@@ -1027,6 +1048,10 @@ export default function ResultDetailPage() {
   const [sortBy, setSortBy]             = useState<SortBy>("score");
   const [stages, setStages]             = useState<Record<string, PipelineStage>>({});
   const [showThinkingModal, setShowThinkingModal] = useState(false);
+  const [emailModal, setEmailModal] = useState<{
+    open: boolean;
+    recipients: { name: string; email: string }[];
+  }>({ open: false, recipients: [] });
 
   useEffect(() => {
     if (!id) return;
@@ -1056,6 +1081,18 @@ export default function ResultDetailPage() {
       return b.finalScore - a.finalScore;
     });
   }, [result, filter, sortBy]);
+
+  const handleEmailSelected = () => {
+    if (!result) return;
+    const selected = result.shortlist.filter(c => selectedIds.has(c.candidateId));
+    const recipients = selected.map(c => ({ name: displayName(c), email: c.email }));
+    setEmailModal({ open: true, recipients });
+  };
+
+  const handleEmailSingle = (c: { candidateName?: string; email: string }) => {
+    const name = c.candidateName?.trim() || c.email.split("@")[0];
+    setEmailModal({ open: true, recipients: [{ name, email: c.email }] });
+  };
 
   const handleExport = async () => {
     if (!result) return;
@@ -1107,6 +1144,7 @@ export default function ResultDetailPage() {
         exporting={exporting}
         thinkingLog={effectiveThinkingLog}
         onShowThinking={() => setShowThinkingModal(true)}
+        onEmailSelected={handleEmailSelected}
       />
 
       {/* Report banner */}
@@ -1178,7 +1216,7 @@ export default function ResultDetailPage() {
                     <th className="px-3 py-2.5 w-32 text-left text-[9px] font-bold uppercase tracking-widest text-gray-500 font-mono">SCORE</th>
                     <th className="px-3 py-2.5 w-40 text-left text-[9px] font-bold uppercase tracking-widest text-gray-500 font-mono">DECISION</th>
                     <th className="px-3 py-2.5 w-32 text-left text-[9px] font-bold uppercase tracking-widest text-gray-500 font-mono">PIPELINE</th>
-                    <th className="pl-2 pr-4 py-2.5 w-8" />
+                    <th className="pl-2 pr-4 py-2.5 w-16" />
                   </tr>
                 </thead>
                 <tbody>
@@ -1193,6 +1231,7 @@ export default function ResultDetailPage() {
                       onStageChange={updateStage}
                       isExpanded={expandedId === c.candidateId}
                       onToggle={toggleExpand}
+                      onEmail={handleEmailSingle}
                     />
                   ))}
                 </tbody>
@@ -1273,6 +1312,15 @@ export default function ResultDetailPage() {
         jobTitle={result.jobTitle}
         screeningDate={result.screeningDate}
         totalApplicants={result.totalApplicants}
+      />
+
+      {/* Email Modal */}
+      <EmailModal
+        isOpen={emailModal.open}
+        onClose={() => setEmailModal({ open: false, recipients: [] })}
+        recipients={emailModal.recipients}
+        jobTitle={result.jobTitle}
+        context="shortlist"
       />
     </div>
   );

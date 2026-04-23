@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -27,26 +27,94 @@ const navItems = [
   { href: '/analytics', icon: BarChart3, label: 'Analytics' },
 ];
 
+function SidebarSkeleton({ isCollapsed }: { isCollapsed: boolean }) {
+  return (
+    <aside
+      className={cn(
+        'fixed left-0 top-0 h-screen flex flex-col z-40 transition-all duration-300 ease-out',
+        'bg-blue-600 text-white',
+        isCollapsed ? 'w-[72px]' : 'w-[240px]'
+      )}
+    >
+      {/* Logo skeleton */}
+      <div className="px-4 py-5 border-b border-blue-500">
+        <div className={cn(
+          'flex items-center gap-3 px-2 py-2 rounded-lg',
+          isCollapsed && 'justify-center'
+        )}>
+          <div className="w-10 h-10 rounded-lg bg-blue-500 animate-pulse flex-shrink-0" />
+          {!isCollapsed && (
+            <div className="flex flex-col gap-2">
+              <div className="w-20 h-3 bg-blue-400 rounded animate-pulse" />
+              <div className="w-28 h-2 bg-blue-400 rounded animate-pulse" />
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Navigation skeleton */}
+      <nav className="flex-1 px-3 py-4 space-y-2 overflow-y-auto">
+        {[1, 2, 3, 4, 5, 6].map((i) => (
+          <div key={i} className={cn(
+            'flex items-center gap-3 px-3 py-2.5 rounded-lg',
+            isCollapsed && 'justify-center px-2'
+          )}>
+            <div className="w-8 h-8 rounded-lg bg-blue-500 animate-pulse flex-shrink-0" />
+            {!isCollapsed && <div className="flex-1 h-4 bg-blue-400 rounded animate-pulse" />}
+          </div>
+        ))}
+      </nav>
+
+      {/* User & Logout skeleton */}
+      <div className="px-3 py-4 border-t border-blue-500">
+        {!isCollapsed ? (
+          <div className="mb-3 p-3 rounded-lg bg-blue-500 animate-pulse">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-blue-400 animate-pulse" />
+              <div className="flex-1 space-y-2">
+                <div className="w-24 h-3 bg-blue-300 rounded animate-pulse" />
+                <div className="w-32 h-2 bg-blue-300 rounded animate-pulse" />
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="mb-3 flex justify-center">
+            <div className="w-8 h-8 rounded-full bg-blue-400 animate-pulse" />
+          </div>
+        )}
+        <div className={cn(
+          'flex items-center gap-3 px-3 py-2.5 rounded-lg',
+          isCollapsed && 'justify-center px-2'
+        )}>
+          <div className="w-8 h-8 rounded-lg bg-blue-500 animate-pulse flex-shrink-0" />
+          {!isCollapsed && <div className="flex-1 h-4 bg-blue-400 rounded animate-pulse" />}
+        </div>
+      </div>
+    </aside>
+  );
+}
+
 export function Sidebar({ isCollapsed }: { isCollapsed: boolean }) {
   const pathname = usePathname();
-  const { user, handleLogout } = useAuth();
-  const [hoveredItem, setHoveredItem] = useState<string | null>(null);
+  const { user, handleLogout, loading: authLoading } = useAuth();
 
   const onLogout = () => {
     handleLogout();
   };
 
+  // Show skeleton while auth is loading
+  if (authLoading) {
+    return <SidebarSkeleton isCollapsed={isCollapsed} />;
+  }
+
   return (
-    <motion.aside
-        initial={{ x: -20, opacity: 0 }}
-        animate={{ x: 0, opacity: 1 }}
-        transition={{ duration: 0.3, ease: 'easeOut' }}
-        className={cn(
-          'fixed left-0 top-0 h-screen flex flex-col z-40 transition-all duration-300 ease-out',
-          'bg-blue-600 text-white',
-          isCollapsed ? 'w-[72px]' : 'w-[240px]'
-        )}
-      >
+    <aside
+      className={cn(
+        'fixed left-0 top-0 h-screen flex flex-col z-40 transition-all duration-300 ease-out',
+        'bg-blue-600 text-white',
+        isCollapsed ? 'w-[72px]' : 'w-[240px]'
+      )}
+    >
         {/* Logo */}
         <div className="px-4 py-5 border-b border-blue-500">
           <Link
@@ -76,28 +144,23 @@ export function Sidebar({ isCollapsed }: { isCollapsed: boolean }) {
               Menu
             </p>
           )}
-          {navItems.map(({ href, icon: Icon, label }) => {
-            const isActive =
-              href === '/' ? pathname === '/' : pathname.startsWith(href);
-            const isHovered = hoveredItem === href;
+           {navItems.map(({ href, icon: Icon, label }) => {
+             const isActive =
+               href === '/' ? pathname === '/' : pathname.startsWith(href);
 
-            return (
-              <Link
-                key={href}
-                href={href}
-                onMouseEnter={() => setHoveredItem(href)}
-                onMouseLeave={() => setHoveredItem(null)}
-                className={cn(
-                  'relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-200',
-                  isActive
-                    ? 'bg-blue-500 text-white font-semibold'
-                    : isHovered
-                    ? 'bg-blue-500 text-white'
-                    : 'text-blue-100',
-                  isCollapsed && 'justify-center px-2'
-                )}
-                title={isCollapsed ? label : undefined}
-              >
+             return (
+               <Link
+                 key={href}
+                 href={href}
+                 className={cn(
+                   'relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-200',
+                   isActive
+                     ? 'bg-blue-500 text-white font-semibold'
+                     : 'text-blue-100',
+                   isCollapsed && 'justify-center px-2'
+                 )}
+                 title={isCollapsed ? label : undefined}
+               >
                 {isActive && (
                   <motion.div
                     layoutId="activeIndicator"
@@ -108,7 +171,7 @@ export function Sidebar({ isCollapsed }: { isCollapsed: boolean }) {
 
                 <div className={cn(
                   'w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 transition-all duration-200',
-                  isActive || isHovered
+                  isActive
                     ? 'bg-blue-400'
                     : 'bg-blue-500'
                 )}>
@@ -166,6 +229,6 @@ export function Sidebar({ isCollapsed }: { isCollapsed: boolean }) {
             {!isCollapsed && <span className="text-xs">Log out</span>}
           </button>
         </div>
-      </motion.aside>
+      </aside>
   );
 }
