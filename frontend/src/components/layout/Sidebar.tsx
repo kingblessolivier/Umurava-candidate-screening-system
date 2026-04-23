@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -97,6 +97,11 @@ function SidebarSkeleton({ isCollapsed }: { isCollapsed: boolean }) {
 export function Sidebar({ isCollapsed }: { isCollapsed: boolean }) {
   const pathname = usePathname();
   const { user, handleLogout, loading: authLoading } = useAuth();
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   const onLogout = () => {
     handleLogout();
@@ -194,7 +199,7 @@ export function Sidebar({ isCollapsed }: { isCollapsed: boolean }) {
 
         {/* User & Logout */}
         <div className="px-3 py-4 border-t border-blue-500">
-          {user && (
+          {isMounted && user && (
             <div className={cn(
               'mb-3 p-3 rounded-lg bg-blue-500',
               isCollapsed && 'p-2 flex justify-center'

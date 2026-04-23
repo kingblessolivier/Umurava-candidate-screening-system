@@ -20,7 +20,7 @@ const initialState: CandidatesState = {
   error: null,
   searchQuery: "",
   page: 1,
-  limit: 50,
+  limit: 20,
 };
 
 export const fetchCandidates = createAsyncThunk("candidates/list",

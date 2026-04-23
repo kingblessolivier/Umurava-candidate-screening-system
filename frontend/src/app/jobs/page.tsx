@@ -1819,7 +1819,7 @@ function CandidateModal({ jobId, onClose, onSave, onResumeQueued }: any) {
   const [submitting, setSubmitting] = useState(false);
 
   // Manual form state
-  const [activeTab, setActiveTab] = useState<'basic' | 'skills' | 'experience' | 'education' | 'projects' | 'extras'>('basic');
+  const [activeTab] = useState<'basic' | 'skills' | 'experience' | 'education' | 'projects' | 'extras'>('basic');
   const [fd, setFd] = useState({
     firstName: '', lastName: '', email: '', headline: '', location: '', bio: '',
     skills: [{ name: '', level: 'Intermediate', yearsOfExperience: 1 }] as Array<{ name: string; level: string; yearsOfExperience: number }>,
@@ -1896,44 +1896,28 @@ function CandidateModal({ jobId, onClose, onSave, onResumeQueued }: any) {
   // Manual form submit
   const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!fd.firstName.trim() || !fd.lastName.trim() || !fd.email.trim()) {
+      toast.error('First name, last name, and email are required');
+      return;
+    }
     setSubmitting(true);
     try {
-      const payload: any = {
+      const payload = {
         jobId,
-        firstName: fd.firstName,
-        lastName: fd.lastName,
-        email: fd.email,
-        headline: fd.headline,
-        location: fd.location,
-        bio: fd.bio || undefined,
-        skills: fd.skills.filter(s => s.name).map(s => ({ name: s.name, level: s.level, yearsOfExperience: Number(s.yearsOfExperience) })),
-        languages: fd.languages.filter(l => l.name),
-        experience: fd.experience.filter(e => e.company).map(e => ({
-          company: e.company, role: e.role, startDate: e.startDate,
-          endDate: e.isCurrent ? 'Present' : e.endDate,
-          description: e.description, isCurrent: e.isCurrent,
-          technologies: e.technologies.split(',').map((t: string) => t.trim()).filter(Boolean),
-        })),
-        education: fd.education.filter(e => e.institution).map(e => ({
-          institution: e.institution, degree: e.degree,
-          fieldOfStudy: e.fieldOfStudy, startYear: e.startYear, endYear: e.endYear,
-        })),
-        certifications: fd.certifications.filter(c => c.name),
-        projects: fd.projects.filter(p => p.name).map(p => ({
-          name: p.name, description: p.description, role: p.role, link: p.link || undefined,
-          startDate: p.startDate || undefined, endDate: p.endDate || undefined,
-          technologies: p.technologies.split(',').map((t: string) => t.trim()).filter(Boolean),
-        })),
+        firstName: fd.firstName.trim(),
+        lastName: fd.lastName.trim(),
+        email: fd.email.trim().toLowerCase(),
+        headline: fd.headline.trim(),
+        location: fd.location.trim(),
+        phone: undefined,
+        skills: [],
+        experience: [],
+        education: [],
         availability: {
           status: fd.availability.status,
           type: fd.availability.type,
-          startDate: fd.availability.startDate || undefined,
         },
-        socialLinks: {
-          linkedin: fd.socialLinks.linkedin || undefined,
-          github: fd.socialLinks.github || undefined,
-          portfolio: fd.socialLinks.portfolio || undefined,
-        },
+        source: 'platform' as const,
       };
       await dispatch(createCandidate(payload));
       await dispatch(fetchCandidates());
@@ -2041,21 +2025,12 @@ function CandidateModal({ jobId, onClose, onSave, onResumeQueued }: any) {
   const lCls = "block text-xs font-medium text-gray-700 mb-1";
   const req  = <span className="text-red-500"> *</span>;
 
-  const manualTabs = [
-    { id: 'basic',      label: '1. Basic Info'  },
-    { id: 'skills',     label: '2. Skills'      },
-    { id: 'experience', label: '3. Experience'  },
-    { id: 'education',  label: '4. Education'   },
-    { id: 'projects',   label: '5. Projects'    },
-    { id: 'extras',     label: '6. More'        },
-  ] as const;
-
   return (
     <Modal
       isOpen={true}
       onClose={onClose}
       title="Add Candidate"
-      subtitle={jobId ? `Job ID: ${jobId.slice(-8)}` : "Choose how you want to add candidates"}
+      subtitle={jobId ? `Job ID: ${jobId.slice(-8)} · Quick add form` : "Choose how you want to add candidates"}
       size="xl"
       headerAccent="violet"
       showCloseButton={true}
@@ -2123,28 +2098,9 @@ function CandidateModal({ jobId, onClose, onSave, onResumeQueued }: any) {
         <div className="flex-1 overflow-y-auto p-5">
 
           {/* ── MANUAL METHOD ── */}
-          {uploadMethod === 'manual' && (
-            <>
-              {/* Tabs for manual entry */}
-              <div className="px-0 bg-gray-50 border-b border-gray-100 overflow-x-auto mb-4">
-                <div className="flex gap-0.5 min-w-max">
-                  {manualTabs.map(tab => (
-                    <button key={tab.id} type="button" onClick={() => setActiveTab(tab.id)}
-                      className={`py-2.5 px-3 text-xs font-medium whitespace-nowrap border-b-2 transition-all ${
-                        activeTab === tab.id
-                          ? 'border-blue-600 text-blue-700 bg-white'
-                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                      }`}>
-                      {tab.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
 
           {/* ── 3.1 Basic Info ── */}
-          {uploadMethod === 'manual' && activeTab === 'basic' && (
+          {uploadMethod === 'manual' && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -2164,20 +2120,23 @@ function CandidateModal({ jobId, onClose, onSave, onResumeQueued }: any) {
                   value={fd.email} onChange={e => setFd(p => ({ ...p, email: e.target.value }))} />
               </div>
               <div>
-                <label className={lCls}>Headline{req}</label>
-                <input type="text" className={iCls} placeholder='e.g., "Backend Engineer – Node.js & AI Systems"' required
+                <label className={lCls}>Headline</label>
+                <input type="text" className={iCls} placeholder='e.g., Backend Engineer'
                   value={fd.headline} onChange={e => setFd(p => ({ ...p, headline: e.target.value }))} />
               </div>
               <div>
-                <label className={lCls}>Location{req}</label>
-                <input type="text" className={iCls} placeholder="City, Country (e.g., Kigali, Rwanda)" required
+                <label className={lCls}>Location</label>
+                <input type="text" className={iCls} placeholder="City, Country"
                   value={fd.location} onChange={e => setFd(p => ({ ...p, location: e.target.value }))} />
               </div>
               <div>
-                <label className={lCls}>Bio</label>
-                <textarea className={`${iCls} resize-none`} rows={4}
-                  placeholder="Detailed professional biography..."
-                  value={fd.bio} onChange={e => setFd(p => ({ ...p, bio: e.target.value }))} />
+                <label className={lCls}>Availability</label>
+                <select className={`${iCls} bg-white`} value={fd.availability.type}
+                  onChange={e => setFd(p => ({ ...p, availability: { ...p.availability, type: e.target.value as any } }))}>
+                  <option>Full-time</option>
+                  <option>Part-time</option>
+                  <option>Contract</option>
+                </select>
               </div>
             </div>
           )}
@@ -2706,14 +2665,9 @@ function CandidateModal({ jobId, onClose, onSave, onResumeQueued }: any) {
 
         {/* Footer */}
         <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-between bg-gray-50/80 backdrop-blur-sm">
-          {uploadMethod === 'manual' && (
-            <div className="flex items-center gap-1">
-              {manualTabs.map(tab => (
-                <div key={tab.id} className={`h-1.5 rounded-full transition-all ${activeTab === tab.id ? 'w-6 bg-blue-600' : 'w-1.5 bg-gray-300'}`} />
-              ))}
-            </div>
-          )}
-          {uploadMethod !== 'manual' && <div />}
+          <div className="text-[11px] text-gray-500">
+            {uploadMethod === 'manual' ? 'Quick add: basic profile only' : 'Upload will attach candidates to this job'}
+          </div>
           <div className="flex gap-2">
             <button type="button" onClick={onClose}
               className="px-4 py-2 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all">

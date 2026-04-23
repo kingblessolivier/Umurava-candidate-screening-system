@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   Users, Search, Upload, Trash2, MapPin, Briefcase,
-  Mail, LayoutList, LayoutGrid, Eye, Table2, UserPlus,
+  Mail, LayoutGrid, Eye, Table2, UserPlus, X,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
@@ -14,6 +14,7 @@ import { fetchJobs } from '@/store/jobsSlice';
 import { useCandidates } from '@/hooks/useCandidates';
 import { CandidateDetailModal } from '@/components/candidates/CandidateDetailModal';
 import { CreateCandidateModal } from '@/components/candidates/CreateCandidateModal';
+import { CandidateUploadModal } from '@/components/candidates/CandidateUploadModal';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -37,14 +38,28 @@ export default function CandidatesPage() {
   const router = useRouter();
   const dispatch = useDispatch<AppDispatch>();
   const [filterJobId, setFilterJobId] = useState<string>('');
-  const { candidates, total, loading, page, totalPages, handleSearch, handlePageChange, handleDeleteCandidate, handleUpdateCandidate } =
-    useCandidates(filterJobId || undefined);
+  const {
+    candidates,
+    total,
+    loading,
+    searchQuery,
+    page,
+    limit,
+    totalPages,
+    handleSearch,
+    handlePageChange,
+    handleLimitChange,
+    refreshCandidates,
+    handleDeleteCandidate,
+    handleUpdateCandidate,
+  } = useCandidates(filterJobId || undefined);
   const { items: jobs } = useSelector((state: RootState) => state.jobs);
   const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'list' | 'card' | 'table'>('card');
+  const [viewMode, setViewMode] = useState<'card' | 'table'>('table');
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showUploadModal, setShowUploadModal] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string } | null>(null);
 
   useEffect(() => {
@@ -130,7 +145,7 @@ export default function CandidatesPage() {
           <Button variant="ghost" onClick={() => setShowCreateModal(true)} leftIcon={<UserPlus className="w-3.5 h-3.5" />} size="sm">
             Add Candidate
           </Button>
-          <Button href="/candidates/upload" leftIcon={<Upload className="w-3.5 h-3.5" />} size="sm">
+          <Button onClick={() => setShowUploadModal(true)} leftIcon={<Upload className="w-3.5 h-3.5" />} size="sm">
             Upload Candidates
           </Button>
         </div>
@@ -142,12 +157,16 @@ export default function CandidatesPage() {
           <Input
             placeholder="Search by name, email, or skill..."
             leftIcon={<Search className="w-3.5 h-3.5" />}
+            value={searchQuery}
             onChange={(e) => handleSearch(e.target.value)}
             className="flex-1 max-w-lg text-xs"
           />
           <select
             value={filterJobId}
-            onChange={(e) => setFilterJobId(e.target.value)}
+            onChange={(e) => {
+              setFilterJobId(e.target.value);
+              handlePageChange(1);
+            }}
             className="px-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white"
           >
             <option value="">All Jobs</option>
@@ -157,11 +176,24 @@ export default function CandidatesPage() {
               </option>
             ))}
           </select>
+          {(searchQuery || filterJobId) && (
+            <button
+              onClick={() => {
+                handleSearch('');
+                setFilterJobId('');
+                handlePageChange(1);
+              }}
+              className="inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-gray-200 text-xs text-gray-600 hover:bg-gray-50 transition"
+              title="Clear filters"
+            >
+              <X className="w-3 h-3" />
+              Clear
+            </button>
+          )}
         </div>
         <div className="flex gap-1 bg-gray-100 p-0.5 rounded-lg w-fit">
           {([
             { mode: 'card',  Icon: LayoutGrid, title: 'Card View'  },
-            { mode: 'list',  Icon: LayoutList, title: 'List View'  },
             { mode: 'table', Icon: Table2,     title: 'Table View' },
           ] as const).map(({ mode, Icon, title }) => (
             <button
@@ -185,7 +217,7 @@ export default function CandidatesPage() {
             icon={Users}
             title={filterJobId ? "No candidates for this job" : "No candidates yet"}
             description={filterJobId ? "Try selecting a different job or assign candidates to this job" : "Upload candidates from CSV, PDF, or JSON files to get started"}
-            action={{ label: "Upload Candidates", onClick: () => router.push('/candidates/upload') }}
+            action={{ label: "Upload Candidates", onClick: () => setShowUploadModal(true) }}
           />
         </Card>
       ) : viewMode === 'card' ? (
@@ -251,50 +283,6 @@ export default function CandidatesPage() {
                     <Button size="sm" variant="ghost" onClick={() => onDeleteRequest(candidate._id, `${candidate.firstName} ${candidate.lastName}`)} isLoading={deleteLoading === candidate._id} className="text-gray-400 hover:text-red-500">
                       <Trash2 className="w-3.5 h-3.5" />
                     </Button>
-                  </div>
-                </div>
-              </Card>
-            </motion.div>
-          ))}
-        </div>
-      ) : viewMode === 'list' ? (
-        <div className="space-y-2">
-          {candidates.map((candidate, index) => (
-            <motion.div
-              key={candidate._id}
-              initial={{ opacity: 0, x: -8 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: index * 0.02 }}
-            >
-              <Card isHoverable className="overflow-hidden">
-                <div className="p-3 flex items-center gap-3">
-                  <Avatar name={`${candidate.firstName} ${candidate.lastName}`} size="sm" />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-1.5">
-                      <div>
-                        <p className="text-xs font-semibold text-gray-900 truncate">
-                          {candidate.firstName} {candidate.lastName}
-                        </p>
-                        <div className="flex flex-wrap items-center gap-2 text-[10px] text-gray-500 mt-0.5">
-                          <span className="flex items-center gap-0.5"><Mail className="w-2.5 h-2.5" />{candidate.email}</span>
-                          {candidate.location && <span className="flex items-center gap-0.5"><MapPin className="w-2.5 h-2.5" />{candidate.location}</span>}
-                          <span className="flex items-center gap-0.5"><Briefcase className="w-2.5 h-2.5" />{candidate.availability.type}</span>
-                          <Badge variant="primary" size="sm">{jobMap[candidate.jobId] || 'Job not found'}</Badge>
-                        </div>
-                      </div>
-                      <div className="flex flex-wrap gap-1">
-                        {candidate.skills.slice(0, 4).map((skill) => (
-                          <Badge key={skill.name} variant={SKILL_LEVEL_VARIANTS[skill.level]} size="sm">{skill.name}</Badge>
-                        ))}
-                        {candidate.skills.length > 4 && <Badge variant="neutral" size="sm">+{candidate.skills.length - 4}</Badge>}
-                      </div>
-                      <div className="flex gap-1.5">
-                        <Button size="sm" variant="primary" onClick={() => handleViewDetails(candidate)} leftIcon={<Eye className="w-3 h-3" />}>View</Button>
-                        <Button size="sm" variant="ghost" onClick={() => onDeleteRequest(candidate._id, `${candidate.firstName} ${candidate.lastName}`)} isLoading={deleteLoading === candidate._id} className="text-gray-400 hover:text-red-500">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
-                    </div>
                   </div>
                 </div>
               </Card>
@@ -367,12 +355,42 @@ export default function CandidatesPage() {
       ) : null}
 
       {candidates.length > 0 && (
-        <Pagination currentPage={page} totalPages={totalPages} onPageChange={handlePageChange} isLoading={loading} itemsPerPage={50} totalItems={total} />
+        <div className="space-y-3">
+          <div className="flex items-center justify-end gap-2">
+            <label htmlFor="candidate-page-size" className="text-xs text-gray-600">Rows per page</label>
+            <select
+              id="candidate-page-size"
+              value={limit}
+              onChange={(e) => handleLimitChange(Number(e.target.value))}
+              className="px-2 py-1.5 rounded-lg border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white"
+            >
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+          </div>
+          <Pagination
+            currentPage={page}
+            totalPages={totalPages}
+            onPageChange={handlePageChange}
+            isLoading={loading}
+            itemsPerPage={limit}
+            totalItems={total}
+          />
+        </div>
       )}
 
       <CandidateDetailModal candidate={selectedCandidate} isOpen={modalOpen} onClose={() => setModalOpen(false)} onUpdate={handleUpdateModal} />
 
       <CreateCandidateModal isOpen={showCreateModal} onClose={() => setShowCreateModal(false)} />
+
+      <CandidateUploadModal
+        isOpen={showUploadModal}
+        onClose={() => setShowUploadModal(false)}
+        jobs={jobs}
+        defaultJobId={filterJobId || undefined}
+        onUploaded={refreshCandidates}
+      />
 
       <ConfirmModal
         isOpen={!!confirmDelete}

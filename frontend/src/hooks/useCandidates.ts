@@ -61,8 +61,8 @@ export function useCandidates(jobId?: string) {
   );
 
   const refreshCandidates = useCallback(() => {
-    dispatch(fetchCandidates({ page, limit }));
-  }, [dispatch, page, limit]);
+    dispatch(fetchCandidates({ page, limit, search: searchQuery || undefined, jobId }));
+  }, [dispatch, page, limit, searchQuery, jobId]);
 
   const totalPages = Math.ceil(total / limit);
 

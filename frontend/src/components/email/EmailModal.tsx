@@ -172,15 +172,20 @@ export default function EmailModal({
     context === "rejection"  ? TEMPLATES[3] :
     TEMPLATES[0];
 
-  function resolveVar(str: string, title: string) {
-    return str.replace(/\{jobTitle\}/gi, title);
+  function resolveJobVars(str: string, title: string) {
+    return str
+      .replace(/\{\s*jobTitle\s*\}/gi, title)
+      .replace(/\{\s*job\s*title\s*\}/gi, title)
+      .replace(/\{\s*jobId\s*\}/gi, title)
+      .replace(/\{\s*job\s*id\s*\}/gi, title)
+      .replace(/\{\s*job_id\s*\}/gi, title);
   }
 
   const [tab, setTab] = useState<"compose" | "preview">("compose");
   const [selectedTemplate, setSelectedTemplate] = useState<EmailTemplate>(defaultTemplate);
   const [showTemplateDropdown, setShowTemplateDropdown] = useState(false);
-  const [subject, setSubject] = useState(() => resolveVar(defaultTemplate.subject, jobTitle));
-  const [body, setBody] = useState(defaultTemplate.body);
+  const [subject, setSubject] = useState(() => resolveJobVars(defaultTemplate.subject, jobTitle));
+  const [body, setBody] = useState(() => resolveJobVars(defaultTemplate.body, jobTitle));
   const [cc, setCc] = useState("");
   const [recipients, setRecipients] = useState<EmailRecipient[]>(initialRecipients);
   const [sending, setSending] = useState(false);
@@ -199,16 +204,16 @@ export default function EmailModal({
         context === "rejection" ? TEMPLATES[3] :
         TEMPLATES[0];
       setSelectedTemplate(tpl);
-      setSubject(tpl.subject.replace(/\{jobTitle\}/gi, jobTitle));
-      setBody(tpl.body);
+      setSubject(resolveJobVars(tpl.subject, jobTitle));
+      setBody(resolveJobVars(tpl.body, jobTitle));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
   const applyTemplate = useCallback((t: EmailTemplate) => {
     setSelectedTemplate(t);
-    setSubject(resolveVar(t.subject, jobTitle));
-    setBody(t.body);
+    setSubject(resolveJobVars(t.subject, jobTitle));
+    setBody(resolveJobVars(t.body, jobTitle));
     setShowTemplateDropdown(false);
   }, [jobTitle]);
 
@@ -226,7 +231,15 @@ export default function EmailModal({
         ? cc.split(",").map(e => e.trim()).filter(Boolean)
         : undefined;
 
-      const res = await api.post("/email/send", { recipients, subject, body, cc: ccList });
+      const resolvedSubject = resolveJobVars(subject, jobTitle);
+      const resolvedBody = resolveJobVars(body, jobTitle);
+
+      const res = await api.post("/email/send", {
+        recipients,
+        subject: resolvedSubject,
+        body: resolvedBody,
+        cc: ccList,
+      });
       setResults(res.data.results as SendResult[]);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to send emails";
@@ -243,7 +256,9 @@ export default function EmailModal({
   };
 
   const getPreviewBody = (recipientName: string) =>
-    body.replace(/\{name\}/gi, recipientName).replace(/\{candidateName\}/gi, recipientName);
+    resolveJobVars(body, jobTitle)
+      .replace(/\{name\}/gi, recipientName)
+      .replace(/\{candidateName\}/gi, recipientName);
 
   const sentCount   = results?.filter(r => r.success).length ?? 0;
   const failedCount = results?.filter(r => !r.success).length ?? 0;
