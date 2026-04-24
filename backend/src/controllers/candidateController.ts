@@ -207,6 +207,111 @@ export const bulkImportJSON = async (req: Request, res: Response) => {
   }
 };
 
+// ─── CSV field parsers ────────────────────────────────────────────────────────
+
+const SKILL_LEVELS   = ["Beginner", "Intermediate", "Advanced", "Expert"] as const;
+const LANG_LEVELS    = ["Basic", "Conversational", "Fluent", "Native"] as const;
+const AVAIL_STATUSES = ["Available", "Open to Opportunities", "Not Available"] as const;
+const AVAIL_TYPES    = ["Full-time", "Part-time", "Contract", "Freelance"] as const;
+
+function matchEnum<T extends string>(val: string | undefined, opts: readonly T[], fallback: T): T {
+  if (!val) return fallback;
+  const v = val.toLowerCase().trim();
+  return opts.find(o => o.toLowerCase() === v) ?? fallback;
+}
+
+function tryParseJSON<T>(raw: string, fallback: T): T {
+  const t = raw?.trim();
+  if (!t || (!t.startsWith("[") && !t.startsWith("{"))) return fallback;
+  try { return JSON.parse(t) as T; } catch { return fallback; }
+}
+
+// Skills: "Python:Expert:5; JS:Advanced:3"  OR  JSON array
+function parseSkills(raw: string) {
+  if (!raw?.trim()) return [];
+  const arr = tryParseJSON<unknown[]>(raw, []);
+  if (arr.length) return arr;
+  return raw.split(/[;|]/).map(s => s.trim()).filter(Boolean).map(s => {
+    const [name, level, yrs] = s.split(":").map(p => p.trim());
+    return { name, level: matchEnum(level, SKILL_LEVELS, "Intermediate"), yearsOfExperience: parseInt(yrs) || 1 };
+  });
+}
+
+// Languages: "English:Native; French:Conversational"  OR  JSON array
+function parseLanguages(raw: string) {
+  if (!raw?.trim()) return [];
+  const arr = tryParseJSON<unknown[]>(raw, []);
+  if (arr.length) return arr;
+  return raw.split(/[;|]/).map(s => s.trim()).filter(Boolean).map(s => {
+    const [name, proficiency] = s.split(":").map(p => p.trim());
+    return { name, proficiency: matchEnum(proficiency, LANG_LEVELS, "Fluent") };
+  });
+}
+
+// Experience / Education / Certifications / Projects — expect JSON array in cell
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function parseExperience(raw: string): any[] {
+  const arr = tryParseJSON<unknown[]>(raw, []);
+  if (!Array.isArray(arr)) return [];
+  return arr.map((e: any) => ({
+    company:      e.company || "",
+    role:         e.role || "",
+    startDate:    e.startDate || e["Start Date"] || "",
+    endDate:      e.endDate   || e["End Date"]   || "",
+    isCurrent:    !!(e.isCurrent ?? e["Is Current"] ?? false),
+    description:  e.description || "",
+    technologies: Array.isArray(e.technologies)
+      ? e.technologies
+      : typeof e.technologies === "string"
+        ? e.technologies.split(",").map((t: string) => t.trim()).filter(Boolean)
+        : [],
+  }));
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function parseEducation(raw: string): any[] {
+  const arr = tryParseJSON<unknown[]>(raw, []);
+  if (!Array.isArray(arr)) return [];
+  return arr.map((e: any) => ({
+    institution:  e.institution || "",
+    degree:       e.degree || "",
+    fieldOfStudy: e.fieldOfStudy || e["Field of Study"] || "",
+    startYear:    parseInt(e.startYear || e["Start Year"]) || undefined,
+    endYear:      parseInt(e.endYear   || e["End Year"])   || undefined,
+    gpa:          parseFloat(e.gpa) || undefined,
+  }));
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function parseCertifications(raw: string): any[] {
+  const arr = tryParseJSON<unknown[]>(raw, []);
+  if (!Array.isArray(arr)) return [];
+  return arr.map((c: any) => ({
+    name:      c.name || "",
+    issuer:    c.issuer || "",
+    issueDate: c.issueDate || c["Issue Date"] || "",
+  }));
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function parseProjects(raw: string): any[] {
+  const arr = tryParseJSON<unknown[]>(raw, []);
+  if (!Array.isArray(arr)) return [];
+  return arr.map((p: any) => ({
+    name:         p.name || "",
+    description:  p.description || "",
+    technologies: Array.isArray(p.technologies)
+      ? p.technologies
+      : typeof p.technologies === "string"
+        ? p.technologies.split(",").map((t: string) => t.trim()).filter(Boolean)
+        : [],
+    role:      p.role || "",
+    link:      p.link || "",
+    startDate: p.startDate || p["Start Date"] || "",
+    endDate:   p.endDate   || p["End Date"]   || "",
+  }));
+}
+
 // ─── CSV Upload ───────────────────────────────────────────────────────────────
 
 export const uploadCSV = async (req: Request, res: Response) => {
@@ -276,26 +381,38 @@ export const uploadCSV = async (req: Request, res: Response) => {
           }
 
           try {
-            const skills = (row.skills || row.Skills || "")
-              .split(",")
-              .map((s) => s.trim())
-              .filter(Boolean)
-              .map((s) => ({ name: s, level: "Intermediate" as const, yearsOfExperience: 1 }));
+            const r = row; // alias for brevity
 
             await Candidate.create({
-              firstName: row.firstName || row.first_name || row["First Name"] || "Unknown",
-              lastName: row.lastName || row.last_name || row["Last Name"] || "Unknown",
-              email: email.toLowerCase().trim(),
-              headline: row.headline || row.Headline || "",
-              location: row.location || row.Location || "",
-              bio: row.bio || row.Bio || "",
+              firstName:  r.firstName  || r.first_name  || r["First Name"]  || "Unknown",
+              lastName:   r.lastName   || r.last_name   || r["Last Name"]   || "Unknown",
+              email:      email.toLowerCase().trim(),
+              phone:      r.phone      || r.Phone       || undefined,
+              headline:   r.headline   || r.Headline    || "",
+              bio:        r.bio        || r.Bio         || "",
+              location:   r.location   || r.Location    || "",
               jobId,
-              skills,
-              experience: [],
-              education: [],
+              skills:         parseSkills(r.skills        || r.Skills        || ""),
+              languages:      parseLanguages(r.languages   || r.Languages    || ""),
+              experience:     parseExperience(r.experience || r.Experience   || ""),
+              education:      parseEducation(r.education   || r.Education    || ""),
+              certifications: parseCertifications(r.certifications || r.Certifications || ""),
+              projects:       parseProjects(r.projects     || r.Projects     || ""),
               availability: {
-                status: "Available",
-                type: (row.availabilityType || row.type || "Full-time") as "Full-time",
+                status: matchEnum(
+                  r.availabilityStatus || r["Availability Status"] || r.availability_status,
+                  AVAIL_STATUSES, "Available"
+                ),
+                type: matchEnum(
+                  r.availabilityType || r["Availability Type"] || r.availability_type || r.type,
+                  AVAIL_TYPES, "Full-time"
+                ),
+                startDate: r.availabilityStartDate || r["Availability Start Date"] || undefined,
+              },
+              socialLinks: {
+                linkedin:  r.linkedin  || r.LinkedIn  || undefined,
+                github:    r.github    || r.GitHub    || undefined,
+                portfolio: r.portfolio || r.Portfolio || undefined,
               },
               source: "csv",
             });

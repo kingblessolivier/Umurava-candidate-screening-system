@@ -13,6 +13,8 @@ import {
   Loader2,
   Bell,
   RotateCcw,
+  Download,
+  Info,
 } from 'lucide-react';
 import { AppDispatch, RootState } from '@/store';
 import { bulkImportJSON, uploadCSV, uploadPDFs, UploadOutcome } from '@/store/candidatesSlice';
@@ -31,6 +33,43 @@ interface CandidateUploadModalProps {
   onUploaded?: () => void;
   jobs: JobOption[];
   defaultJobId?: string;
+}
+
+// ── CSV template ──────────────────────────────────────────────────────────────
+// Headers match every column the backend parser accepts.
+// skills/languages  → "Name:Level:Years" pairs separated by semicolons
+// experience / education / certifications / projects → JSON array in one cell
+const CSV_HEADERS = [
+  'firstName','lastName','email','phone','headline','bio','location',
+  'skills','languages',
+  'experience','education','certifications','projects',
+  'availabilityStatus','availabilityType','availabilityStartDate',
+  'linkedin','github','portfolio',
+].join(',');
+
+const CSV_EXAMPLE_ROW = [
+  'Alice','Uwimana','alice@example.com','+250700000000',
+  'Senior React Developer','Passionate frontend engineer.','Kigali, Rwanda',
+  'React:Expert:5;TypeScript:Advanced:4;Node.js:Intermediate:2',
+  'English:Native;French:Conversational',
+  '[{"company":"TechCorp","role":"Frontend Engineer","startDate":"2021-03","endDate":"2023-06","isCurrent":false,"description":"Led UI development","technologies":"React,TypeScript"}]',
+  '[{"institution":"University of Rwanda","degree":"Bachelor\'s","fieldOfStudy":"Computer Science","startYear":2017,"endYear":2021}]',
+  '[{"name":"AWS Certified Developer","issuer":"Amazon","issueDate":"2022-05"}]',
+  '[{"name":"E-Commerce Platform","description":"Built full-stack app","technologies":"Next.js,Node.js","role":"Lead Developer","link":"https://github.com/alice/shop","startDate":"2022-01","endDate":"2022-06"}]',
+  'Available','Full-time','2024-07-01',
+  'https://linkedin.com/in/alice','https://github.com/alice','https://alice.dev',
+].map(v => `"${v}"`).join(',');
+
+const CSV_TEMPLATE = `${CSV_HEADERS}\n${CSV_EXAMPLE_ROW}\n`;
+
+function downloadCSVTemplate() {
+  const blob = new Blob([CSV_TEMPLATE], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'talentai_candidates_template.csv';
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 const SAMPLE_JSON = JSON.stringify(
@@ -238,6 +277,36 @@ export function CandidateUploadModal({
           </select>
           <p className="text-xs text-gray-500">All imported candidates will be linked to the selected job.</p>
         </div>
+
+        {/* CSV template download + column reference */}
+        {tab === 'csv' && (
+          <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-700">
+                <Info className="w-3.5 h-3.5" /> CSV Format Guide
+              </div>
+              <button
+                type="button"
+                onClick={downloadCSVTemplate}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 transition"
+              >
+                <Download className="w-3 h-3" /> Download Template
+              </button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-[11px] text-blue-800">
+              <div><span className="font-semibold">firstName, lastName, email</span> — required</div>
+              <div><span className="font-semibold">headline, location</span> — required</div>
+              <div><span className="font-semibold">skills</span> — <code className="bg-blue-100 px-1 rounded">React:Expert:5; TS:Advanced:3</code></div>
+              <div><span className="font-semibold">languages</span> — <code className="bg-blue-100 px-1 rounded">English:Native; French:Fluent</code></div>
+              <div><span className="font-semibold">experience, education</span> — JSON array in cell</div>
+              <div><span className="font-semibold">certifications, projects</span> — JSON array in cell</div>
+              <div><span className="font-semibold">availabilityStatus</span> — Available / Open to Opportunities / Not Available</div>
+              <div><span className="font-semibold">availabilityType</span> — Full-time / Part-time / Contract / Freelance</div>
+              <div><span className="font-semibold">linkedin, github, portfolio</span> — optional URLs</div>
+              <div><span className="font-semibold">phone, bio</span> — optional</div>
+            </div>
+          </div>
+        )}
 
         {tab !== 'json' && (
           <div
