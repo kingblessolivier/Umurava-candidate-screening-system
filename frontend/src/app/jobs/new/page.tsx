@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useDispatch } from "react-redux";
 import { AppDispatch } from "@/store";
 import { createJob, enhanceJob } from "@/store/jobsSlice";
@@ -28,6 +28,7 @@ interface FormState {
 export default function NewJobPage() {
   const dispatch = useDispatch<AppDispatch>();
   const router = useRouter();
+  const formRef = useRef<HTMLFormElement | null>(null);
 
   const [form, setForm] = useState<FormState>({
     title: "", description: "", department: "", location: "",
@@ -68,7 +69,7 @@ export default function NewJobPage() {
     if (draft?.data) {
       setShowDraftRecovery(true);
     }
-  }, []);
+  }, [getDraft]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -83,8 +84,7 @@ export default function NewJobPage() {
 
       if (event.key === "Enter" && event.shiftKey) {
         event.preventDefault();
-        const formEl = document.querySelector("form");
-        if (formEl) formEl.requestSubmit();
+        if (formRef.current) formRef.current.requestSubmit();
       }
     };
 
@@ -237,7 +237,7 @@ export default function NewJobPage() {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <form ref={formRef} onSubmit={handleSubmit} className="space-y-5">
           <div className="text-[11px]" style={{ color: "var(--text-muted)" }}>
             Shortcuts: <span className="font-medium">Ctrl/Cmd+S</span> save draft, <span className="font-medium">Ctrl/Cmd+Shift+Enter</span> submit
           </div>

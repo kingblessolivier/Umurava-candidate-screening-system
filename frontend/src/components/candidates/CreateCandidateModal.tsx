@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '@/store';
 import { createCandidate } from '@/store/candidatesSlice';
@@ -16,35 +16,38 @@ interface Props {
   onClose: () => void;
 }
 
+const createInitialCandidateForm = () => ({
+  firstName: '',
+  lastName: '',
+  email: '',
+  jobId: '',
+  headline: '',
+  bio: '',
+  location: '',
+  skills: [{ name: '', level: 'Intermediate', yearsOfExperience: 1 }] as Array<{ name: string; level: string; yearsOfExperience: number }>,
+  languages: [] as Array<{ name: string; proficiency: string }>,
+  experience: [{ company: '', role: '', startDate: '', endDate: '', isCurrent: false, description: '', technologies: '' }] as Array<{ company: string; role: string; startDate: string; endDate: string; isCurrent: boolean; description: string; technologies: string }>,
+  education: [{ institution: '', degree: '', fieldOfStudy: '', startYear: 2020, endYear: 2024 }] as Array<{ institution: string; degree: string; fieldOfStudy: string; startYear: number; endYear: number }>,
+  certifications: [] as Array<{ name: string; issuer: string; issueDate: string }>,
+  projects: [{ name: '', description: '', technologies: '', role: '', link: '', startDate: '', endDate: '' }] as Array<{ name: string; description: string; technologies: string; role: string; link: string; startDate: string; endDate: string }>,
+  availabilityStatus: 'Available' as 'Available' | 'Open to Opportunities' | 'Not Available',
+  availabilityType: 'Full-time' as 'Full-time' | 'Part-time' | 'Contract' | 'Freelance',
+  availabilityStartDate: '',
+  linkedin: '',
+  github: '',
+  portfolio: '',
+});
+
 export function CreateCandidateModal({ isOpen, onClose }: Props) {
   const dispatch = useDispatch<AppDispatch>();
   const { items: jobs } = useSelector((s: RootState) => s.jobs);
+  const formRef = useRef<HTMLFormElement | null>(null);
 
   const [saving, setSaving] = useState(false);
   const [showDraftRecovery, setShowDraftRecovery] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [section, setSection] = useState<'basic' | 'skills' | 'experience' | 'education' | 'projects' | 'extras'>('basic');
-  const [form, setForm] = useState({
-    firstName: '',
-    lastName: '',
-    email: '',
-    jobId: '',
-    headline: '',
-    bio: '',
-    location: '',
-    skills: [{ name: '', level: 'Intermediate', yearsOfExperience: 1 }] as Array<{ name: string; level: string; yearsOfExperience: number }>,
-    languages: [] as Array<{ name: string; proficiency: string }>,
-    experience: [{ company: '', role: '', startDate: '', endDate: '', isCurrent: false, description: '', technologies: '' }] as Array<{ company: string; role: string; startDate: string; endDate: string; isCurrent: boolean; description: string; technologies: string }>,
-    education: [{ institution: '', degree: '', fieldOfStudy: '', startYear: 2020, endYear: 2024 }] as Array<{ institution: string; degree: string; fieldOfStudy: string; startYear: number; endYear: number }>,
-    certifications: [] as Array<{ name: string; issuer: string; issueDate: string }>,
-    projects: [{ name: '', description: '', technologies: '', role: '', link: '', startDate: '', endDate: '' }] as Array<{ name: string; description: string; technologies: string; role: string; link: string; startDate: string; endDate: string }>,
-    availabilityStatus: 'Available' as 'Available' | 'Open to Opportunities' | 'Not Available',
-    availabilityType: 'Full-time' as 'Full-time' | 'Part-time' | 'Contract' | 'Freelance',
-    availabilityStartDate: '',
-    linkedin: '',
-    github: '',
-    portfolio: '',
-  });
+  const [form, setForm] = useState(createInitialCandidateForm);
 
   const { getDraft, clearDraft, save } = useAutoSave({
     key: 'candidate-draft',
@@ -96,27 +99,7 @@ export function CreateCandidateModal({ isOpen, onClose }: Props) {
   const removeProj = (i: number) => setForm((p) => ({ ...p, projects: p.projects.filter((_, idx) => idx !== i) }));
 
   const handleClose = () => {
-    setForm({
-      firstName: '',
-      lastName: '',
-      email: '',
-      jobId: '',
-      headline: '',
-      bio: '',
-      location: '',
-      skills: [{ name: '', level: 'Intermediate', yearsOfExperience: 1 }],
-      languages: [],
-      experience: [{ company: '', role: '', startDate: '', endDate: '', isCurrent: false, description: '', technologies: '' }],
-      education: [{ institution: '', degree: '', fieldOfStudy: '', startYear: 2020, endYear: 2024 }],
-      certifications: [],
-      projects: [{ name: '', description: '', technologies: '', role: '', link: '', startDate: '', endDate: '' }],
-      availabilityStatus: 'Available',
-      availabilityType: 'Full-time',
-      availabilityStartDate: '',
-      linkedin: '',
-      github: '',
-      portfolio: '',
-    });
+    setForm(createInitialCandidateForm());
     setSection('basic');
     onClose();
   };
@@ -160,9 +143,8 @@ export function CreateCandidateModal({ isOpen, onClose }: Props) {
 
       if (event.key === 'Enter' && event.shiftKey) {
         event.preventDefault();
-        const formEl = document.querySelector('form');
-        if (formEl) {
-          formEl.requestSubmit();
+        if (formRef.current) {
+          formRef.current.requestSubmit();
         }
       }
     };
@@ -284,7 +266,7 @@ export function CreateCandidateModal({ isOpen, onClose }: Props) {
         subtitle="For JSON/CSV/Resume import, use Upload Candidates."
         size="xl"
       >
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form ref={formRef} onSubmit={handleSubmit} className="space-y-4">
         <div className="flex items-center justify-between">
           <div className="text-[11px] text-gray-500">
             Shortcuts: <span className="font-medium">Ctrl/Cmd+S</span> save draft, <span className="font-medium">Ctrl/Cmd+Shift+Enter</span> submit

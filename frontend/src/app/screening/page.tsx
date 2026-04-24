@@ -40,11 +40,18 @@ function scoreColor(s: number) {
 // ─── System chrome components ─────────────────────────────────────────────────
 
 function SysHeader({ running, elapsed, user }: { running: boolean; elapsed: number; user?: { name?: string } }) {
-  const [clock, setClock] = useState(nowHMS());
+  const [clock, setClock] = useState('00:00:00');
+  const [isMounted, setIsMounted] = useState(false);
   useEffect(() => {
+    setIsMounted(true);
+    setClock(nowHMS());
     const t = setInterval(() => setClock(nowHMS()), 1000);
     return () => clearInterval(t);
   }, []);
+
+  const operatorLabel = isMounted
+    ? (user?.name?.split(' ')[0]?.toUpperCase() ?? 'SYS')
+    : 'SYS';
 
   return (
     <div className="h-9 bg-white border-b border-gray-200 flex items-center px-4 gap-0 flex-shrink-0 select-none">
@@ -78,7 +85,7 @@ function SysHeader({ running, elapsed, user }: { running: boolean; elapsed: numb
       {/* Right: operator info */}
       <div className="flex items-center gap-4 flex-1 justify-end">
         <div className="flex items-center gap-3 text-[10px] font-mono">
-          <span className="text-gray-400">OPERATOR: <span className="text-gray-600">{user?.name?.split(' ')[0]?.toUpperCase() ?? 'SYS'}</span></span>
+          <span className="text-gray-400">OPERATOR: <span className="text-gray-600">{operatorLabel}</span></span>
           <div className="w-px h-3 bg-gray-200" />
           <span className="text-gray-400">UTC: <span className="text-gray-600">{clock}</span></span>
           <div className="w-px h-3 bg-gray-200" />
@@ -932,11 +939,14 @@ function ScreeningContent() {
   }, [selectedJob]);
 
   useEffect(() => {
-    if (running) { resetLiveScreeningState(); setTotalCandidatesCount(candidateCount); seenEventTimestamps.current.clear(); }
-  }, [running]);
+    if (!running) return;
+    if (candidateCount > 0 && totalCandidates === 0) {
+      setTotalCandidatesCount(candidateCount);
+    }
+  }, [running, candidateCount, totalCandidates, setTotalCandidatesCount]);
 
   useEffect(() => {
-    if (!running) { setElapsedTime(0); return; }
+    if (!running) return;
     const t = setInterval(() => setElapsedTime(p => p + 1), 1000);
     return () => clearInterval(t);
   }, [running]);
@@ -963,9 +973,9 @@ function ScreeningContent() {
       .filter(job => job.jobType === 'screening')
       .map(job => job.bgJobId);
 
-    const hasPersistedActiveJob = !!(persisted?.bgJobId && activeScreeningIds.includes(persisted.bgJobId));
+    const hasPersistedBgJob = !!persisted?.bgJobId;
     const fallbackActiveBgJobId = activeScreeningIds[0];
-    const bgJobIdToRestore = hasPersistedActiveJob ? persisted!.bgJobId : fallbackActiveBgJobId;
+    const bgJobIdToRestore = hasPersistedBgJob ? persisted!.bgJobId : fallbackActiveBgJobId;
 
     if (!bgJobIdToRestore || running) return;
 
@@ -996,6 +1006,10 @@ function ScreeningContent() {
 
   const handleRun = async () => {
     if (!jobId || candidateCount === 0 || candidateCount < shortlistSize || totalWeight !== 100) return;
+    resetLiveScreeningState();
+    setTotalCandidatesCount(candidateCount);
+    seenEventTimestamps.current.clear();
+    setElapsedTime(0);
     clearScreeningThoughts();
     const result = await handleRunScreening({ jobId, shortlistSize });
     if (result.meta.requestStatus !== 'fulfilled') {

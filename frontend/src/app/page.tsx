@@ -510,6 +510,7 @@ export default function DashboardPage() {
   const [lastUpdated, setLastUpdated]   = useState(new Date());
   const [refreshing, setRefreshing]     = useState(false);
   const [skillTab, setSkillTab]         = useState<'demand' | 'gaps'>('demand');
+  const [isMounted, setIsMounted]       = useState(false);
 
   const stats        = dashboard?.overview;
   const scoreStats   = dashboard?.scoreStats;
@@ -533,6 +534,10 @@ export default function DashboardPage() {
 
   const skillData = skillTab === 'demand' ? topSkills : commonGaps;
 
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
   useEffect(() => { setLastUpdated(new Date()); }, [dashboard]);
 
   const handleRefresh = async () => {
@@ -553,7 +558,7 @@ export default function DashboardPage() {
           <div>
             <h1 className="text-base font-bold text-gray-900 tracking-tight">Hiring Overview</h1>
             <p className="text-[11px] text-gray-500 mt-0.5">
-              Updated {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              Updated {isMounted ? lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
             </p>
           </div>
           <div className="flex items-center gap-2.5">
