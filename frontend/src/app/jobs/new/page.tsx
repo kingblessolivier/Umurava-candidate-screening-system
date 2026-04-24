@@ -70,8 +70,8 @@ export default function NewJobPage() {
     }
   }, []);
 
-  const handleRestoreDraft = (data: FormState) => {
-    setForm(data);
+  const handleRestoreDraft = (data: Record<string, any>) => {
+    setForm(data as FormState);
     setShowDraftRecovery(false);
     toast.success("Draft restored!");
   };

@@ -10,6 +10,7 @@ import {
   Database, Activity, FileText, Sparkles, Filter, Server, Brain,
 } from "lucide-react";
 import EmailModal from "@/components/email/EmailModal";
+import { ScreeningResult } from "@/types";
 
 function scoreColor(s: number): string {
   if (s >= 70) return "#22c55e";
@@ -58,7 +59,7 @@ function SysHeader({ count }: { count: number }) {
 }
 
 // ─── Stats Bar ────────────────────────────────────────────────────────────────
-function StatsBar({ results }: { results: typeof results }) {
+function StatsBar({ results }: { results: ScreeningResult[] }) {
   const totalScreened = results.reduce((a, r) => a + (r.totalApplicants || 0), 0);
   const totalShortlisted = results.reduce((a, r) => a + (r.shortlistSize || 0), 0);
   const avgDuration = results.length
@@ -96,9 +97,9 @@ function StatsBar({ results }: { results: typeof results }) {
 function ResultCard({
   result, onDelete, onEmail,
 }: {
-  result: typeof results[0];
+  result: ScreeningResult;
   onDelete: (id: string, e: React.MouseEvent) => void;
-  onEmail: (e: React.MouseEvent, r: typeof results[0]) => void;
+  onEmail: (e: React.MouseEvent, r: ScreeningResult) => void;
 }) {
   const avgScore = result.shortlist?.length
     ? Math.round(result.shortlist.reduce((a, c) => a + c.finalScore, 0) / result.shortlist.length)
@@ -250,7 +251,7 @@ export default function ResultsPage() {
     jobTitle: string;
   }>({ open: false, recipients: [], jobTitle: "" });
 
-  const handleEmailShortlisted = (e: React.MouseEvent, result: typeof results[0]) => {
+  const handleEmailShortlisted = (e: React.MouseEvent, result: ScreeningResult) => {
     e.preventDefault();
     if (!result.shortlist?.length) return;
     const recipients = result.shortlist.map(c => ({

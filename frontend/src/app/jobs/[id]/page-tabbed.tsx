@@ -297,7 +297,7 @@ export default function JobDetailPageTabbed() {
               <>
                 {candidates.length === 0 ? (
                   <EmptyState
-                    icon="👥"
+                    icon={Users}
                     title="No Candidates Yet"
                     description="Add candidates to this job to start screening. You can upload CSV, JSON, or add manually."
                     action={{
@@ -402,9 +402,9 @@ export default function JobDetailPageTabbed() {
         {/* Screening Tab */}
         {activeTab === "screening" && (
           <EmptyState
-            icon="🔍"
-            title="AI Screening"
-            description="Run AI screening on added candidates to get intelligent rankings and insights."
+            icon={Zap}
+            title="Candidate Screening"
+            description="Run screening on added candidates to get intelligent rankings and insights."
             action={{
               label: candidates.length > 0 ? "Run Screening" : "Add Candidates First",
               href: candidates.length > 0 ? undefined : undefined,
@@ -421,9 +421,9 @@ export default function JobDetailPageTabbed() {
         {/* Analytics Tab */}
         {activeTab === "analytics" && (
           <EmptyState
-            icon="📊"
+            icon={BarChart3}
             title="Analytics"
-            description="Screening analytics and insights will appear here after you run AI screening."
+            description="Screening analytics and insights will appear here after you run screening."
             tips={[
               "Track shortlist diversity metrics",
               "Monitor screening progress and results",
