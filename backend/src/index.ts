@@ -96,7 +96,7 @@ app.use(errorHandler);
 const startServer = async () => {
   try {
     // Validate required environment variables
-    const requiredEnvVars = ["JWT_SECRET", "MONGODB_URI"];
+    const requiredEnvVars = ["JWT_SECRET", "MONGODB_URI", "GEMINI_API_KEY"];
     const missing = requiredEnvVars.filter((key) => !process.env[key]);
 
     if (missing.length > 0) {
@@ -111,7 +111,7 @@ const startServer = async () => {
 
     // Start server
     app.listen(PORT, () => {
-      console.log(`🚀 TalentAI API running on http://localhost:${PORT}`);
+      console.log(`🚀 TalentAI API running on port ${PORT}`);
       console.log(`📊 Environment: ${process.env.NODE_ENV || "development"}`);
     });
   } catch (error) {
