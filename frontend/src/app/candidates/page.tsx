@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   Users, Search, Upload, Trash2, MapPin, Briefcase,
-  Mail, LayoutGrid, Eye, Table2, UserPlus, X,
+  Mail, LayoutGrid, Eye, Table2, UserPlus, X, Phone, ExternalLink,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
@@ -404,8 +404,23 @@ export default function CandidatesPage() {
                     {candidate.location && (
                       <span className="flex items-center gap-0.5"><MapPin className="w-2.5 h-2.5" />{candidate.location}</span>
                     )}
+                    {candidate.phone && (
+                      <span className="flex items-center gap-0.5"><Phone className="w-2.5 h-2.5" />{candidate.phone}</span>
+                    )}
                     <span className="flex items-center gap-0.5"><Briefcase className="w-2.5 h-2.5" />{candidate.availability.type}</span>
                   </div>
+
+                  {candidate.socialLinks?.linkedin && (
+                    <a
+                      href={candidate.socialLinks.linkedin}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 text-[10px] text-blue-600 hover:underline mb-2"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <ExternalLink className="w-2.5 h-2.5" /> LinkedIn
+                    </a>
+                  )}
 
                   <div className="flex flex-wrap gap-1 mb-2">
                     {candidate.skills.slice(0, 3).map((skill) => (
@@ -454,18 +469,21 @@ export default function CandidatesPage() {
                       aria-label="Select all candidates on this page"
                     />
                   </th>
-                  <th className="px-3 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider">Name</th>
+                  <th className="px-3 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider">Full Name</th>
                   <th className="px-3 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider">Email</th>
+                  <th className="px-3 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider">Phone</th>
+                  <th className="px-3 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider max-w-[180px]">Headline</th>
                   <th className="px-3 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider">Location</th>
                   <th className="px-3 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider">Skills</th>
-                  <th className="px-3 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider">Availability</th>
+                  <th className="px-3 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider">LinkedIn</th>
                   <th className="px-3 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {candidates.map((candidate, index) => (
                   <tr key={candidate._id} className={cn('border-b border-gray-100 hover:bg-gray-50 transition', index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50')}>
-                    <td className="px-3 py-2 align-middle">
+                    {/* Checkbox */}
+                    <td className="px-3 py-2.5 align-middle">
                       <input
                         type="checkbox"
                         checked={selectedCandidateIds.has(candidate._id)}
@@ -474,42 +492,98 @@ export default function CandidatesPage() {
                         aria-label={`Select ${candidate.firstName} ${candidate.lastName}`}
                       />
                     </td>
-                    <td className="px-3 py-2">
+
+                    {/* Full Name */}
+                    <td className="px-3 py-2.5">
                       <div className="flex items-center gap-2">
                         <Avatar name={`${candidate.firstName} ${candidate.lastName}`} size="sm" />
-                        <div className="min-w-0">
-                          <p className="text-xs font-semibold text-gray-900 truncate">{candidate.firstName} {candidate.lastName}</p>
-                          <p className="text-[10px] text-gray-500">{candidate.headline || 'No headline'}</p>
-                        </div>
+                        <p className="text-xs font-semibold text-gray-900 whitespace-nowrap">
+                          {candidate.firstName} {candidate.lastName}
+                        </p>
                       </div>
                     </td>
-                    <td className="px-3 py-2 text-xs text-gray-700 truncate">{candidate.email}</td>
-                    <td className="px-3 py-2">
-                      {candidate.location ? (
-                        <span className="flex items-center gap-1 text-xs text-gray-700">
-                          <MapPin className="w-3 h-3 flex-shrink-0 text-gray-400" />{candidate.location}
-                        </span>
-                      ) : <span className="text-xs text-gray-400">—</span>}
+
+                    {/* Email */}
+                    <td className="px-3 py-2.5">
+                      <a href={`mailto:${candidate.email}`}
+                         className="flex items-center gap-1 text-xs text-gray-700 hover:text-blue-600 transition">
+                        <Mail className="w-3 h-3 flex-shrink-0 text-gray-400" />
+                        <span className="truncate max-w-[160px]">{candidate.email}</span>
+                      </a>
                     </td>
-                    <td className="px-3 py-2">
+
+                    {/* Phone */}
+                    <td className="px-3 py-2.5">
+                      {candidate.phone ? (
+                        <a href={`tel:${candidate.phone}`}
+                           className="flex items-center gap-1 text-xs text-gray-700 hover:text-blue-600 transition whitespace-nowrap">
+                          <Phone className="w-3 h-3 flex-shrink-0 text-gray-400" />
+                          {candidate.phone}
+                        </a>
+                      ) : <span className="text-xs text-gray-300">—</span>}
+                    </td>
+
+                    {/* Headline */}
+                    <td className="px-3 py-2.5 max-w-[180px]">
+                      <p className="text-xs text-gray-600 truncate" title={candidate.headline}>
+                        {candidate.headline || <span className="text-gray-300">—</span>}
+                      </p>
+                    </td>
+
+                    {/* Location */}
+                    <td className="px-3 py-2.5">
+                      {candidate.location ? (
+                        <span className="flex items-center gap-1 text-xs text-gray-700 whitespace-nowrap">
+                          <MapPin className="w-3 h-3 flex-shrink-0 text-gray-400" />
+                          {candidate.location}
+                        </span>
+                      ) : <span className="text-xs text-gray-300">—</span>}
+                    </td>
+
+                    {/* Skills */}
+                    <td className="px-3 py-2.5">
                       <div className="flex flex-wrap gap-1">
                         {candidate.skills.slice(0, 2).map((skill) => (
                           <Badge key={skill.name} variant={SKILL_LEVEL_VARIANTS[skill.level]} size="sm">{skill.name}</Badge>
                         ))}
-                        {candidate.skills.length > 2 && <Badge variant="neutral" size="sm">+{candidate.skills.length - 2}</Badge>}
+                        {candidate.skills.length > 2 && (
+                          <Badge variant="neutral" size="sm">+{candidate.skills.length - 2}</Badge>
+                        )}
                       </div>
                     </td>
-                    <td className="px-3 py-2">
-                      <Badge variant={candidate.availability.status === 'Available' ? 'success' : 'warning'} size="sm">
-                        {candidate.availability.type}
-                      </Badge>
+
+                    {/* LinkedIn */}
+                    <td className="px-3 py-2.5">
+                      {candidate.socialLinks?.linkedin ? (
+                        <a
+                          href={candidate.socialLinks.linkedin}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 hover:underline whitespace-nowrap"
+                          title={candidate.socialLinks.linkedin}
+                        >
+                          <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                          LinkedIn
+                        </a>
+                      ) : <span className="text-xs text-gray-300">—</span>}
                     </td>
-                    <td className="px-3 py-2">
+
+                    {/* Actions */}
+                    <td className="px-3 py-2.5">
                       <div className="flex gap-1">
-                        <button onClick={() => handleViewDetails(candidate)} className="p-1 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded transition" title="View">
+                        <button
+                          onClick={() => handleViewDetails(candidate)}
+                          className="p-1 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded transition"
+                          title="View details"
+                        >
                           <Eye className="w-3.5 h-3.5" />
                         </button>
-                        <button onClick={() => onDeleteRequest(candidate._id, `${candidate.firstName} ${candidate.lastName}`)} disabled={deleteLoading === candidate._id} className="p-1 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded transition disabled:opacity-50" title="Delete">
+                        <button
+                          onClick={() => onDeleteRequest(candidate._id, `${candidate.firstName} ${candidate.lastName}`)}
+                          disabled={deleteLoading === candidate._id}
+                          className="p-1 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded transition disabled:opacity-50"
+                          title="Delete"
+                        >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
