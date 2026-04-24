@@ -75,7 +75,7 @@ export default function LoginPage() {
               </div>
               <div>
                 <span className="text-xl font-bold text-gray-900 block">TalentAI</span>
-                <span className="text-[9px] text-gray-500 tracking-widest uppercase">Auth Terminal</span>
+                <span className="text-[9px] text-gray-500 tracking-widest uppercase">Login</span>
               </div>
             </div>
 
@@ -83,7 +83,7 @@ export default function LoginPage() {
             <div className="mb-8">
               <div className="flex items-center gap-2 mb-3">
                 <div className="h-px flex-1 bg-[#e2e8f0]" />
-                <span className="text-[9px] font-bold text-[#64748b] tracking-widest px-3">CREDENTIALS REQUIRED</span>
+                <span className="text-[9px] font-bold text-[#64748b] tracking-widest px-3">LOGIN</span>
                 <div className="h-px flex-1 bg-[#e2e8f0]" />
               </div>
             </div>
@@ -143,9 +143,9 @@ export default function LoginPage() {
                 className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold tracking-widest uppercase transition-all disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {loading ? (
-                  <><Loader2 className="w-4 h-4 animate-spin" /> AUTHENTICATING...</>
+                  <><Loader2 className="w-4 h-4 animate-spin" /> LOGGING IN...</>
                 ) : (
-                  <>AUTHENTICATE</>
+                  <>LOGIN</>
                 )}
               </button>
             </form>
@@ -159,7 +159,7 @@ export default function LoginPage() {
               </div>
               <div className="mt-4 text-center">
                 <Link href="/signup" className="text-[10px] font-bold text-blue-600 hover:text-blue-700 tracking-wider uppercase">
-                  Request Access →
+                  Create Account →
                 </Link>
               </div>
             </div>

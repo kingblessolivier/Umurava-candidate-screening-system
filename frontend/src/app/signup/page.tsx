@@ -77,7 +77,7 @@ export default function SignupPage() {
               </div>
               <div>
                 <span className="text-xl font-bold text-gray-900 block">TalentAI</span>
-                <span className="text-[9px] text-gray-500 tracking-widest uppercase">Registration Terminal</span>
+                <span className="text-[9px] text-gray-500 tracking-widest uppercase">Signup</span>
               </div>
             </div>
 
@@ -85,7 +85,7 @@ export default function SignupPage() {
             <div className="mb-8">
               <div className="flex items-center gap-2 mb-3">
                 <div className="h-px flex-1 bg-[#e2e8f0]" />
-                <span className="text-[9px] font-bold text-[#64748b] tracking-widest px-3">NEW OPERATOR REGISTRATION</span>
+                <span className="text-[9px] font-bold text-[#64748b] tracking-widest px-3">CREATE ACCOUNT</span>
                 <div className="h-px flex-1 bg-[#e2e8f0]" />
               </div>
             </div>
@@ -164,9 +164,9 @@ export default function SignupPage() {
                 className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold tracking-widest uppercase transition-all disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {loading ? (
-                  <><Loader2 className="w-4 h-4 animate-spin" /> PROVISIONING...</>
+                  <><Loader2 className="w-4 h-4 animate-spin" /> CREATING ACCOUNT...</>
                 ) : (
-                  <>PROVISION ACCOUNT</>
+                  <>CREATE ACCOUNT</>
                 )}
               </button>
             </form>
@@ -180,7 +180,7 @@ export default function SignupPage() {
               </div>
               <div className="mt-4 text-center">
                 <Link href="/login" className="text-[10px] font-bold text-blue-600 hover:text-blue-700 tracking-wider uppercase">
-                  Access Terminal →
+                  Login →
                 </Link>
               </div>
             </div>
@@ -201,7 +201,7 @@ export default function SignupPage() {
           </div>
         </div>
         <div className="flex-1" />
-        <span className="text-[9px] font-mono text-blue-300">NEW OPERATOR REGISTRATION</span>
+        <span className="text-[9px] font-mono text-blue-300">CREATE ACCOUNT</span>
       </div>
     </div>
   );
