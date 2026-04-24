@@ -5,6 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import { AppDispatch, RootState } from "@/store";
 import { fetchJob, deleteJob, clearSelected } from "@/store/jobsSlice";
 import { fetchCandidates, updateCandidate, uploadCSV, uploadPDFs, bulkImportJSON } from "@/store/candidatesSlice";
+import { fetchLatestForJob } from "@/store/screeningSlice";
+import { CandidateScore, RejectedCandidate } from "@/types";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import toast from "react-hot-toast";
@@ -15,6 +17,7 @@ import { CandidateDetailModal } from "@/components/candidates/CandidateDetailMod
 import {
   ArrowLeft, Briefcase, MapPin, Clock, DollarSign, Award, CheckCircle,
   AlertCircle, Edit, Trash2, Zap, Users, BarChart3, Plus, FileText,
+  XCircle, ChevronDown, ChevronUp, RotateCw,
 } from "lucide-react";
 import { Candidate } from "@/types";
 
@@ -40,6 +43,9 @@ export default function JobDetailPageTabbed() {
   const [selectedCandidate, setSelectedCandidate] = useState<typeof candidates[0] | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [pdfQueued, setPdfQueued] = useState(false);
+  const [screeningLoading, setScreeningLoading] = useState(false);
+  const [expandedRejected, setExpandedRejected] = useState<Set<string>>(new Set());
+  const screeningResult = useSelector((s: RootState) => s.screening.current);
 
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
 
@@ -52,6 +58,12 @@ export default function JobDetailPageTabbed() {
       dispatch(clearSelected());
     };
   }, [id, dispatch]);
+
+  useEffect(() => {
+    if (activeTab !== "screening" || !id) return;
+    setScreeningLoading(true);
+    dispatch(fetchLatestForJob(id)).finally(() => setScreeningLoading(false));
+  }, [activeTab, id, dispatch]);
 
   useEffect(() => {
     if (!pdfQueued || !id) return;
@@ -401,21 +413,259 @@ export default function JobDetailPageTabbed() {
 
         {/* Screening Tab */}
         {activeTab === "screening" && (
-          <EmptyState
-            icon={Zap}
-            title="Candidate Screening"
-            description="Run screening on added candidates to get intelligent rankings and insights."
-            action={{
-              label: candidates.length > 0 ? "Run Screening" : "Add Candidates First",
-              href: candidates.length > 0 ? undefined : undefined,
-              onClick: candidates.length > 0 ? () => router.push(`/screening?jobId=${job._id}`) : undefined,
-            }}
-            tips={[
-              "At least one candidate required to start screening",
-              "Results include skills match, experience fit, and recommendations",
-              "Process takes 1-2 minutes for typical job openings",
-            ]}
-          />
+          <div className="space-y-6">
+            {screeningLoading ? (
+              <div className="flex items-center justify-center py-20">
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500" />
+              </div>
+            ) : screeningResult && screeningResult.jobId === id ? (
+              <>
+                {/* Meta row */}
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="space-y-0.5">
+                    <p className="text-white font-semibold">
+                      Screening Results
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      {new Date(screeningResult.screeningDate).toLocaleDateString(undefined, { dateStyle: "medium" })}
+                      {" · "}{screeningResult.totalApplicants} applicants
+                      {" · "}{screeningResult.aiModel}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => router.push(`/screening?jobId=${job._id}`)}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white transition"
+                    style={{ backgroundColor: "rgba(59,130,246,0.2)", border: "1px solid rgba(59,130,246,0.3)" }}
+                  >
+                    <RotateCw className="w-4 h-4" /> Re-screen
+                  </button>
+                </div>
+
+                {/* ── Shortlisted ── */}
+                <section>
+                  <div className="flex items-center gap-2 mb-3">
+                    <CheckCircle className="w-5 h-5 text-emerald-400" />
+                    <h2 className="text-white font-semibold">
+                      Shortlisted
+                      <span className="ml-2 px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-400">
+                        {screeningResult.shortlist.length}
+                      </span>
+                    </h2>
+                  </div>
+                  <div className="space-y-3">
+                    {screeningResult.shortlist.map((c: CandidateScore) => {
+                      const score = Math.round(c.finalScore);
+                      const scoreColor = score >= 80 ? "#10b981" : score >= 60 ? "#3b82f6" : score >= 40 ? "#f59e0b" : "#ef4444";
+                      const recColors: Record<string, { bg: string; color: string }> = {
+                        "Strongly Recommended": { bg: "rgba(16,185,129,0.15)", color: "#10b981" },
+                        "Recommended":          { bg: "rgba(59,130,246,0.15)",  color: "#3b82f6" },
+                        "Consider":             { bg: "rgba(245,158,11,0.15)",  color: "#f59e0b" },
+                        "Not Recommended":      { bg: "rgba(239,68,68,0.15)",   color: "#ef4444" },
+                      };
+                      const rec = recColors[c.recommendation] ?? recColors["Consider"];
+                      return (
+                        <div
+                          key={c.candidateId}
+                          className="rounded-xl p-4 space-y-3"
+                          style={{ background: "rgba(30,41,59,0.6)", border: "1px solid rgba(148,163,184,0.15)" }}
+                        >
+                          {/* Top row */}
+                          <div className="flex items-start justify-between gap-3 flex-wrap">
+                            <div className="flex items-center gap-3">
+                              <span
+                                className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                                style={{ background: scoreColor + "25", color: scoreColor }}
+                              >
+                                #{c.rank}
+                              </span>
+                              <div>
+                                <p className="text-white font-semibold text-sm">{c.candidateName}</p>
+                                <p className="text-xs text-gray-400">{c.email}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3 flex-shrink-0">
+                              <span
+                                className="px-2.5 py-1 rounded-full text-[11px] font-bold"
+                                style={{ backgroundColor: rec.bg, color: rec.color }}
+                              >
+                                {c.recommendation}
+                              </span>
+                              <span className="text-2xl font-bold" style={{ color: scoreColor }}>
+                                {score}
+                                <span className="text-sm font-normal text-gray-500">%</span>
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Score breakdown bars */}
+                          <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                            {(
+                              [
+                                ["Skills",      c.breakdown.skillsScore],
+                                ["Experience",  c.breakdown.experienceScore],
+                                ["Education",   c.breakdown.educationScore],
+                                ["Projects",    c.breakdown.projectsScore],
+                                ["Availability",c.breakdown.availabilityScore],
+                              ] as [string, number][]
+                            ).map(([label, val]) => (
+                              <div key={label}>
+                                <div className="flex justify-between text-[10px] text-gray-400 mb-1">
+                                  <span>{label}</span>
+                                  <span className="font-semibold">{Math.round(val)}</span>
+                                </div>
+                                <div className="h-1.5 rounded-full bg-gray-700 overflow-hidden">
+                                  <div
+                                    className="h-full rounded-full transition-all"
+                                    style={{ width: `${val}%`, backgroundColor: val >= 70 ? "#10b981" : val >= 50 ? "#3b82f6" : "#f59e0b" }}
+                                  />
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Strengths & Gaps */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                            {c.strengths.length > 0 && (
+                              <div className="space-y-1">
+                                <p className="font-semibold text-emerald-400 flex items-center gap-1">
+                                  <CheckCircle className="w-3 h-3" /> Strengths
+                                </p>
+                                <ul className="space-y-0.5 text-gray-300">
+                                  {c.strengths.slice(0, 3).map((s, i) => (
+                                    <li key={i} className="truncate">· {s}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                            {c.gaps.length > 0 && (
+                              <div className="space-y-1">
+                                <p className="font-semibold text-amber-400 flex items-center gap-1">
+                                  <AlertCircle className="w-3 h-3" /> Gaps
+                                </p>
+                                <ul className="space-y-0.5 text-gray-300">
+                                  {c.gaps.slice(0, 3).map((g, i) => (
+                                    <li key={i} className="truncate">· {g}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+
+                {/* ── Not Shortlisted ── */}
+                {screeningResult.rejectedCandidates.length > 0 && (
+                  <section>
+                    <div className="flex items-center gap-2 mb-3">
+                      <XCircle className="w-5 h-5 text-gray-500" />
+                      <h2 className="text-white font-semibold">
+                        Not Shortlisted
+                        <span className="ml-2 px-2 py-0.5 rounded-full text-xs font-bold bg-gray-700 text-gray-400">
+                          {screeningResult.rejectedCandidates.length}
+                        </span>
+                      </h2>
+                    </div>
+                    <div className="space-y-2">
+                      {screeningResult.rejectedCandidates.map((c: RejectedCandidate) => {
+                        const isExpanded = expandedRejected.has(c.candidateId);
+                        const score = Math.round(c.finalScore);
+                        return (
+                          <div
+                            key={c.candidateId}
+                            className="rounded-xl overflow-hidden"
+                            style={{ background: "rgba(30,41,59,0.4)", border: "1px solid rgba(148,163,184,0.1)" }}
+                          >
+                            {/* Header row — always visible */}
+                            <button
+                              className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-white/5 transition"
+                              onClick={() => setExpandedRejected(prev => {
+                                const next = new Set(prev);
+                                next.has(c.candidateId) ? next.delete(c.candidateId) : next.add(c.candidateId);
+                                return next;
+                              })}
+                            >
+                              <div className="flex items-center gap-3 min-w-0">
+                                <span className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 bg-gray-700 text-gray-400 text-xs font-bold">
+                                  {score}
+                                </span>
+                                <div className="min-w-0">
+                                  <p className="text-white text-sm font-medium truncate">{c.candidateName}</p>
+                                  <p className="text-xs text-gray-500 truncate">{c.email}</p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-3 flex-shrink-0">
+                                {c.topMissingSkills.slice(0, 2).map(skill => (
+                                  <span key={skill} className="hidden sm:block px-2 py-0.5 rounded text-[10px] font-semibold bg-red-500/10 text-red-400">
+                                    {skill}
+                                  </span>
+                                ))}
+                                {isExpanded
+                                  ? <ChevronUp className="w-4 h-4 text-gray-500" />
+                                  : <ChevronDown className="w-4 h-4 text-gray-500" />}
+                              </div>
+                            </button>
+
+                            {/* Expanded detail */}
+                            {isExpanded && (
+                              <div className="px-4 pb-4 space-y-3 border-t border-white/5 pt-3">
+                                <div>
+                                  <p className="text-[11px] font-semibold text-red-400 mb-1">Why not selected</p>
+                                  <p className="text-xs text-gray-300">{c.whyNotSelected}</p>
+                                </div>
+                                {c.topMissingSkills.length > 0 && (
+                                  <div>
+                                    <p className="text-[11px] font-semibold text-gray-400 mb-1.5">Missing skills</p>
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {c.topMissingSkills.map(skill => (
+                                        <span key={skill} className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-red-500/10 text-red-400 border border-red-500/20">
+                                          {skill}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                                {c.improvementSuggestions.length > 0 && (
+                                  <div>
+                                    <p className="text-[11px] font-semibold text-blue-400 mb-1">Improvement suggestions</p>
+                                    <ul className="space-y-0.5">
+                                      {c.improvementSuggestions.map((s, i) => (
+                                        <li key={i} className="text-xs text-gray-300">· {s}</li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+                                <p className="text-[10px] text-gray-600">
+                                  Closest shortlist score: {Math.round(c.closestShortlistScore)}%
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </section>
+                )}
+              </>
+            ) : (
+              <EmptyState
+                icon={Zap}
+                title="Candidate Screening"
+                description="Run screening on added candidates to get intelligent rankings and insights."
+                action={{
+                  label: candidates.length > 0 ? "Run Screening" : "Add Candidates First",
+                  onClick: candidates.length > 0 ? () => router.push(`/screening?jobId=${job._id}`) : undefined,
+                }}
+                tips={[
+                  "At least one candidate required to start screening",
+                  "Results include skills match, experience fit, and recommendations",
+                  "Process takes 1-2 minutes for typical job openings",
+                ]}
+              />
+            )}
+          </div>
         )}
 
         {/* Analytics Tab */}
