@@ -89,7 +89,7 @@ export default function JobDetailPageTabbed() {
       if (file.name.endsWith('.csv') || file.name.endsWith('.xlsx')) {
         const result = await dispatch(uploadCSV({ file, jobId })).unwrap();
         toast.dismiss();
-        toast.success(`${result.created} candidates imported!`);
+        toast.success('created' in result ? `${result.created} candidates imported!` : result.message);
         await dispatch(fetchCandidates());
         setShowAddCandidates(false);
       } else if (file.name.endsWith('.pdf')) {
