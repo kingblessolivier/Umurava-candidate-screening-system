@@ -1,4 +1,5 @@
 "use client";
+export const dynamic = "force-dynamic";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useDispatch, useSelector }       from "react-redux";
 import { AppDispatch, RootState }         from "@/store";
