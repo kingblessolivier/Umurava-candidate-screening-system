@@ -153,7 +153,7 @@ function ResultRow({
 
       {/* Actions */}
       <td className="px-5 py-4 whitespace-nowrap">
-        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex items-center justify-end gap-1 opacity-100 transition-opacity">
           {result.shortlist?.length > 0 && (
             <button
               onClick={(e) => onEmail(e, result)}

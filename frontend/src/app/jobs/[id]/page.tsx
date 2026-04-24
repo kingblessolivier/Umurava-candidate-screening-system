@@ -18,7 +18,7 @@ import { Badge } from "@/components/ui/Badge";
 const LEVEL_STYLES: Record<string, { bg: string; text: string; border: string }> = {
   Junior: { bg: "bg-green-50", text: "text-green-700", border: "border-green-200" },
   "Mid-level": { bg: "bg-blue-50", text: "text-blue-700", border: "border-blue-200" },
-  Senior: { bg: "bg-purple-50", text: "text-purple-700", border: "border-purple-200" },
+  Senior: { bg: "bg-slate-100", text: "text-slate-700", border: "border-slate-200" },
   Lead: { bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200" },
   Executive: { bg: "bg-red-50", text: "text-red-700", border: "border-red-200" },
 };
@@ -93,7 +93,7 @@ export default function JobDetailPage() {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
       {/* Header Section */}
-      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
         {/* Header Top */}
         <div className="p-6">
           <div className="flex items-start justify-between gap-4 mb-4">
@@ -155,7 +155,7 @@ export default function JobDetailPage() {
               onClick={() => setActiveTab(tabId)}
               className={`relative px-4 py-3 text-sm font-medium flex items-center gap-2 transition-colors ${
                 activeTab === tabId
-                  ? "text-blue-600"
+                  ? "text-slate-900"
                   : "text-gray-500 hover:text-gray-700"
               }`}
             >
@@ -163,13 +163,13 @@ export default function JobDetailPage() {
               {label}
               {count !== undefined && (
                 <span className={`ml-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-                  activeTab === tabId ? "bg-blue-100 text-blue-600" : "bg-gray-100 text-gray-500"
+                  activeTab === tabId ? "bg-slate-200 text-slate-700" : "bg-gray-100 text-gray-500"
                 }`}>
                   {count}
                 </span>
               )}
               {activeTab === tabId && (
-                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600" />
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-slate-900" />
               )}
             </button>
           ))}
@@ -180,9 +180,9 @@ export default function JobDetailPage() {
       <div className="min-h-[400px]">
         {/* Details Tab */}
         {activeTab === "details" && (
-          <div className="space-y-5">
+          <div className="space-y-5 bg-slate-50/40 p-1 rounded-xl">
             {/* Description */}
-            <div className="bg-white border border-gray-200 rounded-xl">
+            <div className="bg-white border border-gray-200 rounded-xl shadow-sm">
               <div className="px-5 py-4 border-b border-gray-100">
                 <h2 className="text-sm font-semibold text-gray-900">Job Description</h2>
               </div>
@@ -193,7 +193,7 @@ export default function JobDetailPage() {
 
             {/* Responsibilities */}
             {job.responsibilities?.length > 0 && (
-              <div className="bg-white border border-gray-200 rounded-xl">
+              <div className="bg-white border border-gray-200 rounded-xl shadow-sm">
                 <div className="px-5 py-4 border-b border-gray-100">
                   <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
                     <CheckCircle className="w-4 h-4 text-green-500" /> Responsibilities
@@ -215,7 +215,7 @@ export default function JobDetailPage() {
 
             {/* Skills */}
             {job.requirements?.length > 0 && (
-              <div className="bg-white border border-gray-200 rounded-xl">
+              <div className="bg-white border border-gray-200 rounded-xl shadow-sm">
                 <div className="px-5 py-4 border-b border-gray-100">
                   <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
                     <Award className="w-4 h-4 text-blue-500" /> Required Skills
@@ -225,10 +225,10 @@ export default function JobDetailPage() {
                 <div className="p-5">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {job.requirements.map((req, i) => (
-                      <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-gray-50 border border-gray-100">
+                      <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-slate-50 border border-gray-200 transition-colors hover:bg-slate-100">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
-                            <span className="text-sm font-semibold text-blue-600">{i + 1}</span>
+                          <div className="w-8 h-8 rounded-lg bg-slate-200 flex items-center justify-center">
+                            <span className="text-sm font-semibold text-slate-700">{i + 1}</span>
                           </div>
                           <div>
                             <p className="text-sm font-medium text-gray-900">{req.skill}</p>
@@ -248,9 +248,39 @@ export default function JobDetailPage() {
               </div>
             )}
 
+            {/* Compensation */}
+            <div className="bg-white border border-gray-200 rounded-xl shadow-sm">
+              <div className="px-5 py-4 border-b border-gray-100">
+                <h2 className="text-sm font-semibold text-gray-900">Compensation</h2>
+              </div>
+              <div className="p-5">
+                {job.salaryRange?.min !== undefined && job.salaryRange?.max !== undefined ? (
+                  <p className="text-sm text-gray-700">
+                    {job.salaryRange.currency || 'USD'} {job.salaryRange.min.toLocaleString()} - {job.salaryRange.max.toLocaleString()}
+                  </p>
+                ) : (
+                  <p className="text-sm text-gray-400">No salary range provided.</p>
+                )}
+              </div>
+            </div>
+
+            {/* Scoring Weights */}
+            <div className="bg-white border border-gray-200 rounded-xl shadow-sm">
+              <div className="px-5 py-4 border-b border-gray-100">
+                <h2 className="text-sm font-semibold text-gray-900">AI Scoring Weights</h2>
+              </div>
+              <div className="p-5 grid grid-cols-2 md:grid-cols-3 gap-2 text-xs text-gray-700">
+                <span>Skills: {job.weights?.skills ?? 35}%</span>
+                <span>Experience: {job.weights?.experience ?? 30}%</span>
+                <span>Education: {job.weights?.education ?? 15}%</span>
+                <span>Projects: {job.weights?.projects ?? 15}%</span>
+                <span>Availability: {job.weights?.availability ?? 5}%</span>
+              </div>
+            </div>
+
             {/* Nice to Have */}
             {(job.niceToHave?.length ?? 0) > 0 && (
-              <div className="bg-white border border-gray-200 rounded-xl">
+              <div className="bg-white border border-gray-200 rounded-xl shadow-sm">
                 <div className="px-5 py-4 border-b border-gray-100">
                   <h2 className="text-sm font-semibold text-gray-900">Nice to Have</h2>
                 </div>

@@ -37,18 +37,7 @@ function getInitials(name: string): string {
 }
 
 function stringToColor(name: string): string {
-  const colors = [
-    'bg-blue-500',
-    'bg-blue-600',
-    'bg-blue-400',
-    'bg-blue-700',
-    'bg-blue-300',
-  ];
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return colors[Math.abs(hash) % colors.length];
+  return 'bg-blue-600';
 }
 
 export function Avatar({

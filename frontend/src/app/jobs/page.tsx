@@ -13,7 +13,7 @@ import {
 import EmailModal from '@/components/email/EmailModal';
 import { AppDispatch, RootState } from '@/store';
 import { deleteJob } from '@/store/jobsSlice';
-import { fetchCandidates, createCandidate, uploadCSV, updateCandidate, deleteCandidate } from '@/store/candidatesSlice';
+import { fetchCandidates, createCandidate, uploadCSV, updateCandidate, deleteCandidate, bulkImportJSON } from '@/store/candidatesSlice';
 import { fetchResults } from '@/store/screeningSlice';
 import { useJobs } from '@/hooks/useJobs';
 import { Pagination } from '@/components/ui/Pagination';
@@ -510,51 +510,82 @@ function JobListItem({
 // Overview Tab
 function OverviewTab({ job }: any) {
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {/* Job Info Cards */}
       <div className="grid grid-cols-4 gap-2">
-        <div className="bg-gradient-to-br from-blue-50 to-white rounded-xl p-2.5 border border-blue-100">
+        <div className="rounded-xl p-3 border border-gray-200 bg-white shadow-sm">
           <div className="flex items-center gap-1.5 mb-1">
-            <div className="w-5 h-5 rounded bg-blue-100 flex items-center justify-center">
-              <Building2 className="w-3 h-3 text-blue-600" />
+            <div className="w-6 h-6 rounded-md bg-slate-100 flex items-center justify-center">
+              <Building2 className="w-3.5 h-3.5 text-slate-700" />
             </div>
-            <span className="text-[10px] font-medium text-blue-700">Department</span>
+            <span className="text-[10px] font-medium text-gray-500">Department</span>
           </div>
           <p className="text-xs font-bold text-gray-900 truncate">{job.department || '—'}</p>
         </div>
-        <div className="bg-gradient-to-br from-purple-50 to-white rounded-xl p-2.5 border border-purple-100">
+        <div className="rounded-xl p-3 border border-gray-200 bg-white shadow-sm">
           <div className="flex items-center gap-1.5 mb-1">
-            <div className="w-5 h-5 rounded bg-purple-100 flex items-center justify-center">
-              <MapPin className="w-3 h-3 text-purple-600" />
+            <div className="w-6 h-6 rounded-md bg-slate-100 flex items-center justify-center">
+              <MapPin className="w-3.5 h-3.5 text-slate-700" />
             </div>
-            <span className="text-[10px] font-medium text-purple-700">Location</span>
+            <span className="text-[10px] font-medium text-gray-500">Location</span>
           </div>
           <p className="text-xs font-bold text-gray-900 truncate">{job.location}</p>
         </div>
-        <div className="bg-gradient-to-br from-amber-50 to-white rounded-xl p-2.5 border border-amber-100">
+        <div className="rounded-xl p-3 border border-gray-200 bg-white shadow-sm">
           <div className="flex items-center gap-1.5 mb-1">
-            <div className="w-5 h-5 rounded bg-amber-100 flex items-center justify-center">
-              <Clock className="w-3 h-3 text-amber-600" />
+            <div className="w-6 h-6 rounded-md bg-slate-100 flex items-center justify-center">
+              <Clock className="w-3.5 h-3.5 text-slate-700" />
             </div>
-            <span className="text-[10px] font-medium text-amber-700">Type</span>
+            <span className="text-[10px] font-medium text-gray-500">Type</span>
           </div>
           <p className="text-xs font-bold text-gray-900">{job.type}</p>
         </div>
-        <div className="bg-gradient-to-br from-emerald-50 to-white rounded-xl p-2.5 border border-emerald-100">
+        <div className="rounded-xl p-3 border border-gray-200 bg-white shadow-sm">
           <div className="flex items-center gap-1.5 mb-1">
-            <div className="w-5 h-5 rounded bg-emerald-100 flex items-center justify-center">
-              <Users className="w-3 h-3 text-emerald-600" />
+            <div className="w-6 h-6 rounded-md bg-slate-100 flex items-center justify-center">
+              <Users className="w-3.5 h-3.5 text-slate-700" />
             </div>
-            <span className="text-[10px] font-medium text-emerald-700">Level</span>
+            <span className="text-[10px] font-medium text-gray-500">Level</span>
           </div>
           <p className="text-xs font-bold text-gray-900">{job.experienceLevel}</p>
+        </div>
+      </div>
+
+      {/* Compensation + Scoring Weights */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="px-3 py-2 bg-slate-50 border-b border-gray-100">
+            <h2 className="text-xs font-bold text-gray-900">Compensation</h2>
+          </div>
+          <div className="px-3 py-2.5">
+            {job.salaryRange?.min !== undefined && job.salaryRange?.max !== undefined ? (
+              <p className="text-xs text-gray-700">
+                {job.salaryRange.currency || 'USD'} {job.salaryRange.min.toLocaleString()} - {job.salaryRange.max.toLocaleString()}
+              </p>
+            ) : (
+              <p className="text-xs text-gray-400">Not specified</p>
+            )}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="px-3 py-2 bg-slate-50 border-b border-gray-100">
+            <h2 className="text-xs font-bold text-gray-900">Scoring Weights</h2>
+          </div>
+          <div className="px-3 py-2.5 grid grid-cols-2 gap-1.5 text-[11px] text-gray-700">
+            <span>Skills: {job.weights?.skills ?? 35}%</span>
+            <span>Experience: {job.weights?.experience ?? 30}%</span>
+            <span>Education: {job.weights?.education ?? 15}%</span>
+            <span>Projects: {job.weights?.projects ?? 15}%</span>
+            <span>Availability: {job.weights?.availability ?? 5}%</span>
+          </div>
         </div>
       </div>
 
       {/* Description */}
       {job.description && (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-3 py-2 bg-gradient-to-r from-gray-50 to-white border-b border-gray-100">
+          <div className="px-3 py-2 bg-slate-50 border-b border-gray-100">
             <h2 className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
               <FileText className="w-3 h-3 text-gray-400" />
               Job Description
@@ -570,7 +601,7 @@ function OverviewTab({ job }: any) {
       <div className="grid grid-cols-2 gap-3">
         {/* Responsibilities */}
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-3 py-2 bg-gradient-to-r from-blue-50 to-white border-b border-gray-100">
+          <div className="px-3 py-2 bg-slate-50 border-b border-gray-100">
             <h2 className="text-xs font-bold text-gray-900">Key Responsibilities</h2>
           </div>
           <div className="px-3 py-2.5">
@@ -591,7 +622,7 @@ function OverviewTab({ job }: any) {
 
         {/* Requirements */}
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-3 py-2 bg-gradient-to-r from-violet-50 to-white border-b border-gray-100">
+          <div className="px-3 py-2 bg-slate-50 border-b border-gray-100">
             <h2 className="text-xs font-bold text-gray-900">Requirements</h2>
           </div>
           <div className="px-3 py-2.5">
@@ -605,6 +636,7 @@ function OverviewTab({ job }: any) {
                     <div>
                       <span className="font-medium text-gray-700">{req.skill}</span>
                       {req.level && <span className="ml-1.5 text-[10px] text-gray-400">{req.level}</span>}
+                      {req.yearsRequired !== undefined && <span className="ml-1.5 text-[10px] text-gray-400">{req.yearsRequired}+ yrs</span>}
                     </div>
                     {req.required && (
                       <span className="text-[10px] font-semibold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">
@@ -624,9 +656,9 @@ function OverviewTab({ job }: any) {
       {/* Nice to Have */}
       {job.niceToHave?.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-3 py-2 bg-gradient-to-r from-amber-50 to-white border-b border-gray-100">
+          <div className="px-3 py-2 bg-slate-50 border-b border-gray-100">
             <h2 className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
-              <Zap className="w-3 h-3 text-amber-500" />
+              <Zap className="w-3 h-3 text-gray-500" />
               Nice to Have
             </h2>
           </div>
@@ -635,7 +667,7 @@ function OverviewTab({ job }: any) {
               {job.niceToHave.map((skill: string, i: number) => (
                 <span
                   key={i}
-                  className="px-2 py-0.5 rounded-lg text-xs bg-amber-50 text-amber-700 border border-amber-200 font-medium"
+                  className="px-2 py-0.5 rounded-lg text-xs bg-slate-100 text-slate-700 border border-slate-200 font-medium"
                 >
                   {skill}
                 </span>
@@ -1663,7 +1695,7 @@ function JobModal({ job, onClose, onSave, onCreate, onUpdate }: any) {
       isOpen={true}
       onClose={onClose}
       title={job ? 'Edit Job' : 'Create Job'}
-      subtitle="Skill requirements use the Talent Profile Schema levels"
+      subtitle="Define a structured role profile for better screening quality"
       size="xl"
       showCloseButton={true}
       className="p-0"
@@ -1737,7 +1769,7 @@ function JobModal({ job, onClose, onSave, onCreate, onUpdate }: any) {
                 <p className="text-[10px] text-gray-400 mt-0.5">Levels: Beginner · Intermediate · Advanced · Expert</p>
               </div>
               <button type="button" onClick={addRequirement}
-                className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 font-medium">
+                className="flex items-center gap-1 rounded-md border border-blue-100 bg-blue-50 px-2 py-1 text-xs text-blue-700 transition-colors hover:bg-blue-100 font-medium">
                 <Plus className="w-3.5 h-3.5" /> Add Skill
               </button>
             </div>
@@ -1797,11 +1829,11 @@ function JobModal({ job, onClose, onSave, onCreate, onUpdate }: any) {
         {/* Footer */}
         <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-end gap-2 bg-gray-50/80 backdrop-blur-sm">
           <button type="button" onClick={onClose}
-            className="px-4 py-2 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all">
+            className="px-4 py-2 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-colors">
             Cancel
           </button>
           <button type="submit" onClick={handleSubmit} disabled={submitting}
-            className="px-4 py-2 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-all disabled:opacity-50 flex items-center gap-2">
+            className="px-4 py-2 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center gap-2">
             {submitting ? (
               <><div className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Saving...</>
             ) : (job ? 'Save Changes' : 'Create Job')}
@@ -1811,94 +1843,94 @@ function JobModal({ job, onClose, onSave, onCreate, onUpdate }: any) {
   );
 }
 
-// Candidate Modal — Three upload methods: Manual, Resume Upload (AI), CSV Upload
+// Candidate Modal — Manual, Resume (AI), CSV/Excel, and JSON modes
 function CandidateModal({ jobId, onClose, onSave, onResumeQueued }: any) {
   const dispatch = useDispatch<AppDispatch>();
-  const [uploadMethod, setUploadMethod] = useState<'manual' | 'resume' | 'csv'>('manual');
+  const [mode, setMode] = useState<'manual' | 'resume' | 'csv' | 'json'>('manual');
   const [submitting, setSubmitting] = useState(false);
 
-  // Manual form state
-  const [activeTab] = useState<'basic' | 'skills' | 'experience' | 'education' | 'projects' | 'extras'>('basic');
   const [fd, setFd] = useState({
-    firstName: '', lastName: '', email: '', headline: '', location: '', bio: '',
+    firstName: '',
+    lastName: '',
+    email: '',
+    headline: '',
+    bio: '',
+    location: '',
     skills: [{ name: '', level: 'Intermediate', yearsOfExperience: 1 }] as Array<{ name: string; level: string; yearsOfExperience: number }>,
     languages: [] as Array<{ name: string; proficiency: string }>,
-    experience: [] as Array<{ company: string; role: string; startDate: string; endDate: string; description: string; technologies: string; isCurrent: boolean }>,
+    experience: [{ company: '', role: '', startDate: '', endDate: '', isCurrent: false, description: '', technologies: '' }] as Array<{ company: string; role: string; startDate: string; endDate: string; isCurrent: boolean; description: string; technologies: string }>,
     education: [{ institution: '', degree: '', fieldOfStudy: '', startYear: 2020, endYear: 2024 }] as Array<{ institution: string; degree: string; fieldOfStudy: string; startYear: number; endYear: number }>,
     certifications: [] as Array<{ name: string; issuer: string; issueDate: string }>,
-    projects: [] as Array<{ name: string; description: string; technologies: string; role: string; link: string; startDate: string; endDate: string }>,
+    projects: [{ name: '', description: '', technologies: '', role: '', link: '', startDate: '', endDate: '' }] as Array<{ name: string; description: string; technologies: string; role: string; link: string; startDate: string; endDate: string }>,
     availability: { status: 'Available' as const, type: 'Full-time' as const, startDate: '' },
     socialLinks: { linkedin: '', github: '', portfolio: '' },
   });
 
-  // Resume upload state
   const [selectedResumes, setSelectedResumes] = useState<File[]>([]);
   const [resumeParsing, setResumeParsing] = useState(false);
   const [resumeQueued, setResumeQueued] = useState(false);
 
-  // CSV upload state
   const [selectedCsv, setSelectedCsv] = useState<File | null>(null);
   const [csvPreview, setCsvPreview] = useState<any[]>([]);
 
-  const dedupeFiles = (files: File[]) => {
-    const seen = new Set<string>();
-    return files.filter((file) => {
-      const key = `${file.name}|${file.size}|${file.lastModified}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-  };
+  const [jsonText, setJsonText] = useState('[\n  {\n    "firstName": "Alice",\n    "lastName": "Uwimana",\n    "email": "alice@example.com",\n    "headline": "Backend Engineer",\n    "location": "Kigali, Rwanda",\n    "skills": [{ "name": "Node.js", "level": "Advanced", "yearsOfExperience": 3 }],\n    "experience": [{ "company": "Acme", "role": "Engineer", "startDate": "2022-01", "isCurrent": true, "description": "Built APIs", "technologies": ["Node.js"] }],\n    "education": [{ "institution": "University", "degree": "Bachelor\'s", "fieldOfStudy": "Computer Science", "startYear": 2019, "endYear": 2023 }],\n    "projects": [{ "name": "Screening Platform", "technologies": ["Next.js", "Node.js"] }],\n    "availability": { "status": "Available", "type": "Full-time" }\n  }\n]');
 
-  const dedupeCandidatesByEmail = (candidates: any[]) => {
-    const seen = new Set<string>();
-    return candidates.filter((candidate) => {
-      const email = String(candidate?.email || '').trim().toLowerCase();
-      const key = email || `${candidate?.firstName || ''}|${candidate?.lastName || ''}`.toLowerCase();
-      if (!key) return true;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-  };
+  const iCls = 'w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white';
+  const lCls = 'block text-xs font-medium text-gray-700 mb-1';
+  const req = <span className="text-red-500"> *</span>;
 
-  // ── Skills
-  const addSkill    = () => setFd(p => ({ ...p, skills: [...p.skills, { name: '', level: 'Intermediate', yearsOfExperience: 1 }] }));
-  const removeSkill = (i: number) => setFd(p => ({ ...p, skills: p.skills.filter((_, idx) => idx !== i) }));
-  const updateSkill = (i: number, f: string, v: any) => setFd(p => ({ ...p, skills: p.skills.map((s, idx) => idx === i ? { ...s, [f]: v } : s) }));
+  const splitCsv = (value: string) => value.split(',').map((v) => v.trim()).filter(Boolean);
 
-  // ── Languages
-  const addLang    = () => setFd(p => ({ ...p, languages: [...p.languages, { name: '', proficiency: 'Fluent' }] }));
-  const removeLang = (i: number) => setFd(p => ({ ...p, languages: p.languages.filter((_, idx) => idx !== i) }));
-  const updateLang = (i: number, f: string, v: any) => setFd(p => ({ ...p, languages: p.languages.map((l, idx) => idx === i ? { ...l, [f]: v } : l) }));
+  const addSkill = () => setFd((p) => ({ ...p, skills: [...p.skills, { name: '', level: 'Intermediate', yearsOfExperience: 1 }] }));
+  const removeSkill = (i: number) => setFd((p) => ({ ...p, skills: p.skills.filter((_, idx) => idx !== i) }));
+  const updateSkill = (i: number, field: string, value: any) => setFd((p) => ({ ...p, skills: p.skills.map((s, idx) => (idx === i ? { ...s, [field]: value } : s)) }));
 
-  // ── Experience
-  const addExp    = () => setFd(p => ({ ...p, experience: [...p.experience, { company: '', role: '', startDate: '', endDate: '', description: '', technologies: '', isCurrent: false }] }));
-  const removeExp = (i: number) => setFd(p => ({ ...p, experience: p.experience.filter((_, idx) => idx !== i) }));
-  const updateExp = (i: number, f: string, v: any) => setFd(p => ({ ...p, experience: p.experience.map((e, idx) => idx === i ? { ...e, [f]: v } : e) }));
+  const addLang = () => setFd((p) => ({ ...p, languages: [...p.languages, { name: '', proficiency: 'Fluent' }] }));
+  const removeLang = (i: number) => setFd((p) => ({ ...p, languages: p.languages.filter((_, idx) => idx !== i) }));
+  const updateLang = (i: number, field: string, value: any) => setFd((p) => ({ ...p, languages: p.languages.map((l, idx) => (idx === i ? { ...l, [field]: value } : l)) }));
 
-  // ── Education
-  const addEdu    = () => setFd(p => ({ ...p, education: [...p.education, { institution: '', degree: '', fieldOfStudy: '', startYear: 2020, endYear: 2024 }] }));
-  const removeEdu = (i: number) => setFd(p => ({ ...p, education: p.education.filter((_, idx) => idx !== i) }));
-  const updateEdu = (i: number, f: string, v: any) => setFd(p => ({ ...p, education: p.education.map((e, idx) => idx === i ? { ...e, [f]: v } : e) }));
+  const addExp = () => setFd((p) => ({ ...p, experience: [...p.experience, { company: '', role: '', startDate: '', endDate: '', isCurrent: false, description: '', technologies: '' }] }));
+  const removeExp = (i: number) => setFd((p) => ({ ...p, experience: p.experience.filter((_, idx) => idx !== i) }));
+  const updateExp = (i: number, field: string, value: any) => setFd((p) => ({ ...p, experience: p.experience.map((e, idx) => (idx === i ? { ...e, [field]: value } : e)) }));
 
-  // ── Projects
-  const addProj    = () => setFd(p => ({ ...p, projects: [...p.projects, { name: '', description: '', technologies: '', role: '', link: '', startDate: '', endDate: '' }] }));
-  const removeProj = (i: number) => setFd(p => ({ ...p, projects: p.projects.filter((_, idx) => idx !== i) }));
-  const updateProj = (i: number, f: string, v: any) => setFd(p => ({ ...p, projects: p.projects.map((pr, idx) => idx === i ? { ...pr, [f]: v } : pr) }));
+  const addEdu = () => setFd((p) => ({ ...p, education: [...p.education, { institution: '', degree: '', fieldOfStudy: '', startYear: 2020, endYear: 2024 }] }));
+  const removeEdu = (i: number) => setFd((p) => ({ ...p, education: p.education.filter((_, idx) => idx !== i) }));
+  const updateEdu = (i: number, field: string, value: any) => setFd((p) => ({ ...p, education: p.education.map((e, idx) => (idx === i ? { ...e, [field]: value } : e)) }));
 
-  // ── Certifications
-  const addCert    = () => setFd(p => ({ ...p, certifications: [...p.certifications, { name: '', issuer: '', issueDate: '' }] }));
-  const removeCert = (i: number) => setFd(p => ({ ...p, certifications: p.certifications.filter((_, idx) => idx !== i) }));
-  const updateCert = (i: number, f: string, v: any) => setFd(p => ({ ...p, certifications: p.certifications.map((c, idx) => idx === i ? { ...c, [f]: v } : c) }));
+  const addProj = () => setFd((p) => ({ ...p, projects: [...p.projects, { name: '', description: '', technologies: '', role: '', link: '', startDate: '', endDate: '' }] }));
+  const removeProj = (i: number) => setFd((p) => ({ ...p, projects: p.projects.filter((_, idx) => idx !== i) }));
+  const updateProj = (i: number, field: string, value: any) => setFd((p) => ({ ...p, projects: p.projects.map((pr, idx) => (idx === i ? { ...pr, [field]: value } : pr)) }));
 
-  // Manual form submit
-  const handleManualSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!fd.firstName.trim() || !fd.lastName.trim() || !fd.email.trim()) {
-      toast.error('First name, last name, and email are required');
-      return;
+  const addCert = () => setFd((p) => ({ ...p, certifications: [...p.certifications, { name: '', issuer: '', issueDate: '' }] }));
+  const removeCert = (i: number) => setFd((p) => ({ ...p, certifications: p.certifications.filter((_, idx) => idx !== i) }));
+  const updateCert = (i: number, field: string, value: any) => setFd((p) => ({ ...p, certifications: p.certifications.map((c, idx) => (idx === i ? { ...c, [field]: value } : c)) }));
+
+  const validateManual = () => {
+    if (!fd.firstName.trim() || !fd.lastName.trim() || !fd.email.trim() || !fd.headline.trim() || !fd.location.trim()) {
+      toast.error('Basic info is incomplete: first name, last name, email, headline, and location are required');
+      return false;
     }
+    if (!fd.skills.some((s) => s.name.trim())) {
+      toast.error('At least one skill is required');
+      return false;
+    }
+    if (!fd.experience.some((e) => e.company.trim() && e.role.trim() && e.startDate.trim())) {
+      toast.error('At least one experience entry is required');
+      return false;
+    }
+    if (!fd.education.some((e) => e.institution.trim() && e.degree.trim())) {
+      toast.error('At least one education entry is required');
+      return false;
+    }
+    if (!fd.projects.some((p) => p.name.trim())) {
+      toast.error('At least one project is required');
+      return false;
+    }
+    return true;
+  };
+
+  const handleManualSubmit = async () => {
+    if (!validateManual()) return;
     setSubmitting(true);
     try {
       const payload = {
@@ -1907,18 +1939,74 @@ function CandidateModal({ jobId, onClose, onSave, onResumeQueued }: any) {
         lastName: fd.lastName.trim(),
         email: fd.email.trim().toLowerCase(),
         headline: fd.headline.trim(),
+        bio: fd.bio.trim() || undefined,
         location: fd.location.trim(),
-        phone: undefined,
-        skills: [],
-        experience: [],
-        education: [],
+        skills: fd.skills
+          .filter((s) => s.name.trim())
+          .map((s) => ({
+            name: s.name.trim(),
+            level: s.level as 'Beginner' | 'Intermediate' | 'Advanced' | 'Expert',
+            yearsOfExperience: Number.isFinite(s.yearsOfExperience) ? s.yearsOfExperience : 0,
+          })),
+        languages: fd.languages
+          .filter((l) => l.name.trim())
+          .map((l) => ({ name: l.name.trim(), proficiency: l.proficiency as 'Basic' | 'Conversational' | 'Fluent' | 'Native' })),
+        experience: fd.experience
+          .filter((e) => e.company.trim() && e.role.trim() && e.startDate.trim())
+          .map((e) => ({
+            company: e.company.trim(),
+            role: e.role.trim(),
+            startDate: e.startDate,
+            endDate: e.isCurrent ? undefined : (e.endDate || undefined),
+            isCurrent: e.isCurrent,
+            description: e.description.trim(),
+            technologies: splitCsv(e.technologies),
+          })),
+        education: fd.education
+          .filter((e) => e.institution.trim() && e.degree.trim())
+          .map((e) => ({
+            institution: e.institution.trim(),
+            degree: e.degree.trim(),
+            fieldOfStudy: e.fieldOfStudy.trim(),
+            startYear: e.startYear || undefined,
+            endYear: e.endYear || undefined,
+          })),
+        certifications: fd.certifications
+          .filter((c) => c.name.trim())
+          .map((c) => ({
+            name: c.name.trim(),
+            issuer: c.issuer.trim() || undefined,
+            issueDate: c.issueDate || undefined,
+          })),
+        projects: fd.projects
+          .filter((p) => p.name.trim())
+          .map((p) => ({
+            name: p.name.trim(),
+            description: p.description.trim() || undefined,
+            technologies: splitCsv(p.technologies),
+            role: p.role.trim() || undefined,
+            link: p.link.trim() || undefined,
+            startDate: p.startDate || undefined,
+            endDate: p.endDate || undefined,
+          })),
         availability: {
           status: fd.availability.status,
           type: fd.availability.type,
+          startDate: fd.availability.startDate || undefined,
+        },
+        socialLinks: {
+          linkedin: fd.socialLinks.linkedin.trim() || undefined,
+          github: fd.socialLinks.github.trim() || undefined,
+          portfolio: fd.socialLinks.portfolio.trim() || undefined,
         },
         source: 'platform' as const,
       };
-      await dispatch(createCandidate(payload));
+
+      const result = await dispatch(createCandidate(payload));
+      if (result.meta.requestStatus !== 'fulfilled') {
+        toast.error((result.payload as string) || 'Failed to create candidate profile');
+        return;
+      }
       await dispatch(fetchCandidates());
       onSave();
     } catch {
@@ -1928,34 +2016,24 @@ function CandidateModal({ jobId, onClose, onSave, onResumeQueued }: any) {
     }
   };
 
-  // Resume upload handlers
   const handleResumeDrop = (e: React.DragEvent) => {
     e.preventDefault();
-    const files = Array.from(e.dataTransfer.files).filter(f => f.type === 'application/pdf' || f.name.endsWith('.pdf'));
-    setSelectedResumes(prev => dedupeFiles([...prev, ...files]));
+    const files = Array.from(e.dataTransfer.files).filter((f) => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
+    setSelectedResumes((prev) => [...prev, ...files]);
   };
 
   const handleResumeSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const files = Array.from(e.target.files).filter(f => f.type === 'application/pdf' || f.name.endsWith('.pdf'));
-      setSelectedResumes(prev => dedupeFiles([...prev, ...files]));
-    }
-  };
-
-  const removeResume = (index: number) => {
-    setSelectedResumes(prev => prev.filter((_, i) => i !== index));
+    if (!e.target.files) return;
+    const files = Array.from(e.target.files).filter((f) => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
+    setSelectedResumes((prev) => [...prev, ...files]);
   };
 
   const handleResumeUpload = async () => {
-    if (selectedResumes.length === 0) return;
-    if (!jobId) {
-      toast.error('No job selected');
-      return;
-    }
+    if (!selectedResumes.length) return;
     setResumeParsing(true);
     try {
       const form = new FormData();
-      selectedResumes.forEach(f => form.append('files', f));
+      selectedResumes.forEach((f) => form.append('files', f));
       await api.post(`/candidates/upload/pdf?jobId=${jobId}`, form, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
@@ -1969,30 +2047,32 @@ function CandidateModal({ jobId, onClose, onSave, onResumeQueued }: any) {
     }
   };
 
-
-  // CSV upload handlers
   const handleCsvDrop = (e: React.DragEvent) => {
     e.preventDefault();
     const file = e.dataTransfer.files[0];
-    if (file && (file.type === 'text/csv' || file.name.endsWith('.csv'))) {
-      setSelectedCsv(file);
-      parseCsvPreview(file);
-    }
+    if (!file) return;
+    setSelectedCsv(file);
+    if (file.name.toLowerCase().endsWith('.csv')) parseCsvPreview(file);
+    else setCsvPreview([]);
   };
 
   const handleCsvSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setSelectedCsv(file);
-      parseCsvPreview(file);
-    }
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setSelectedCsv(file);
+    if (file.name.toLowerCase().endsWith('.csv')) parseCsvPreview(file);
+    else setCsvPreview([]);
   };
 
   const parseCsvPreview = async (file: File) => {
     const text = await file.text();
-    const lines = text.split('\n').slice(0, 5);
-    const headers = lines[0].split(',').map(h => h.trim());
-    const preview = lines.slice(1, 5).map(line => {
+    const lines = text.split('\n').slice(0, 6).filter(Boolean);
+    if (!lines.length) {
+      setCsvPreview([]);
+      return;
+    }
+    const headers = lines[0].split(',').map((h) => h.trim());
+    const preview = lines.slice(1, 5).map((line) => {
       const values = line.split(',');
       const row: any = {};
       headers.forEach((h, i) => { row[h] = values[i]?.trim() || ''; });
@@ -2003,685 +2083,370 @@ function CandidateModal({ jobId, onClose, onSave, onResumeQueued }: any) {
 
   const handleCsvUpload = async () => {
     if (!selectedCsv) return;
-    if (!jobId) {
-      toast.error('No job selected');
-      return;
-    }
     setSubmitting(true);
     try {
-      await dispatch(uploadCSV({ file: selectedCsv, jobId }));
+      const result = await dispatch(uploadCSV({ file: selectedCsv, jobId }));
+      if (result.meta.requestStatus !== 'fulfilled') {
+        toast.error((result.payload as string) || 'Failed to upload file');
+        return;
+      }
       await dispatch(fetchCandidates());
-      toast.success('CSV uploaded successfully');
       onSave();
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Failed to upload CSV');
     } finally {
       setSubmitting(false);
     }
   };
 
-  const iCls = "w-full px-2.5 py-2 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500";
-  const lCls = "block text-xs font-medium text-gray-700 mb-1";
-  const req  = <span className="text-red-500"> *</span>;
+  const handleJsonImport = async () => {
+    setSubmitting(true);
+    try {
+      const parsed = JSON.parse(jsonText);
+      if (!Array.isArray(parsed)) {
+        toast.error('JSON must be an array of candidate objects');
+        return;
+      }
+      const payload = parsed.map((candidate) => ({
+        ...(typeof candidate === 'object' && candidate ? candidate : {}),
+        jobId,
+      }));
+      const result = await dispatch(bulkImportJSON(payload));
+      if (result.meta.requestStatus !== 'fulfilled') {
+        toast.error((result.payload as string) || 'JSON import failed');
+        return;
+      }
+      await dispatch(fetchCandidates());
+      onSave();
+    } catch {
+      toast.error('Invalid JSON payload');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <Modal
       isOpen={true}
       onClose={onClose}
       title="Add Candidate"
-      subtitle={jobId ? `Job ID: ${jobId.slice(-8)} · Quick add form` : "Choose how you want to add candidates"}
+      subtitle={jobId ? `Attached to job ${jobId.slice(-8)}` : 'Choose import mode'}
       size="xl"
-      headerAccent="violet"
       showCloseButton={true}
       className="p-0"
       panelClassName="bg-white"
     >
-      {/* Upload Method Selector */}
-      <div className="px-5 py-4 bg-gray-50 border-b border-gray-100">
-        <div className="grid grid-cols-3 gap-3">
+      <div className="px-5 py-4 border-b border-gray-100 bg-gray-50">
+        <div className="grid grid-cols-4 gap-2">
+          {[
+            { id: 'manual', label: 'Manual' },
+            { id: 'resume', label: 'Resume AI' },
+            { id: 'csv', label: 'CSV/Excel' },
+            { id: 'json', label: 'JSON' },
+          ].map((option) => (
             <button
+              key={option.id}
               type="button"
-              onClick={() => setUploadMethod('manual')}
-              className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
-                uploadMethod === 'manual'
-                  ? 'border-blue-500 bg-blue-50 text-blue-700'
-                  : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+              onClick={() => setMode(option.id as typeof mode)}
+              className={`rounded-lg border px-3 py-2 text-xs font-semibold transition-all duration-200 ${
+                mode === option.id
+                  ? 'border-blue-600 bg-blue-600 text-white shadow-sm'
+                  : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:text-gray-900'
               }`}
             >
-              <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                uploadMethod === 'manual' ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-400'
-              }`}>
-                <Plus className="w-5 h-5" />
-              </div>
-              <span className="text-xs font-semibold">Add Manually</span>
-              <span className="text-[10px] text-center text-gray-400">Fill in detailed form</span>
+              {option.label}
             </button>
-            <button
-              type="button"
-              onClick={() => setUploadMethod('resume')}
-              className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
-                uploadMethod === 'resume'
-                  ? 'border-violet-500 bg-violet-50 text-violet-700'
-                  : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
-              }`}
-            >
-              <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                uploadMethod === 'resume' ? 'bg-violet-500 text-white' : 'bg-gray-100 text-gray-400'
-              }`}>
-                <FileText className="w-5 h-5" />
-              </div>
-              <span className="text-xs font-semibold">Upload Resumes</span>
-              <span className="text-[10px] text-center text-gray-400">AI-powered parsing</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setUploadMethod('csv')}
-              className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
-                uploadMethod === 'csv'
-                  ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
-                  : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
-              }`}
-            >
-              <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                uploadMethod === 'csv' ? 'bg-emerald-500 text-white' : 'bg-gray-100 text-gray-400'
-              }`}>
-                <FileText className="w-5 h-5" />
-              </div>
-              <span className="text-xs font-semibold">Upload CSV</span>
-              <span className="text-[10px] text-center text-gray-400">Bulk import candidates</span>
-            </button>
-          </div>
+          ))}
         </div>
+      </div>
 
-        {/* Form Body */}
-        <div className="flex-1 overflow-y-auto p-5">
-
-          {/* ── MANUAL METHOD ── */}
-
-          {/* ── 3.1 Basic Info ── */}
-          {uploadMethod === 'manual' && (
-            <div className="space-y-4">
+      <div className="max-h-[70vh] overflow-y-auto p-5">
+        {mode === 'manual' && (
+          <div className="space-y-4 animate-in fade-in duration-200">
+            <div className="rounded-xl border border-gray-200 p-4">
+              <p className="mb-3 text-xs font-semibold text-gray-900">1. Basic Information</p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={lCls}>First Name{req}</label>
-                  <input type="text" className={iCls} placeholder="e.g., John" required
-                    value={fd.firstName} onChange={e => setFd(p => ({ ...p, firstName: e.target.value }))} />
+                  <input className={iCls} value={fd.firstName} onChange={(e) => setFd((p) => ({ ...p, firstName: e.target.value }))} />
                 </div>
                 <div>
                   <label className={lCls}>Last Name{req}</label>
-                  <input type="text" className={iCls} placeholder="e.g., Doe" required
-                    value={fd.lastName} onChange={e => setFd(p => ({ ...p, lastName: e.target.value }))} />
+                  <input className={iCls} value={fd.lastName} onChange={(e) => setFd((p) => ({ ...p, lastName: e.target.value }))} />
                 </div>
               </div>
-              <div>
-                <label className={lCls}>Email{req}</label>
-                <input type="email" className={iCls} placeholder="john.doe@example.com" required
-                  value={fd.email} onChange={e => setFd(p => ({ ...p, email: e.target.value }))} />
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <div>
+                  <label className={lCls}>Email{req}</label>
+                  <input type="email" className={iCls} value={fd.email} onChange={(e) => setFd((p) => ({ ...p, email: e.target.value }))} />
+                </div>
+                <div>
+                  <label className={lCls}>Location{req}</label>
+                  <input className={iCls} value={fd.location} onChange={(e) => setFd((p) => ({ ...p, location: e.target.value }))} placeholder="City, Country" />
+                </div>
               </div>
-              <div>
-                <label className={lCls}>Headline</label>
-                <input type="text" className={iCls} placeholder='e.g., Backend Engineer'
-                  value={fd.headline} onChange={e => setFd(p => ({ ...p, headline: e.target.value }))} />
+              <div className="mt-3">
+                <label className={lCls}>Headline{req}</label>
+                <input className={iCls} value={fd.headline} onChange={(e) => setFd((p) => ({ ...p, headline: e.target.value }))} placeholder="Backend Engineer - Node.js & AI Systems" />
               </div>
-              <div>
-                <label className={lCls}>Location</label>
-                <input type="text" className={iCls} placeholder="City, Country"
-                  value={fd.location} onChange={e => setFd(p => ({ ...p, location: e.target.value }))} />
+              <div className="mt-3">
+                <label className={lCls}>Bio</label>
+                <textarea className={`${iCls} resize-none`} rows={3} value={fd.bio} onChange={(e) => setFd((p) => ({ ...p, bio: e.target.value }))} />
               </div>
-              <div>
-                <label className={lCls}>Availability</label>
-                <select className={`${iCls} bg-white`} value={fd.availability.type}
-                  onChange={e => setFd(p => ({ ...p, availability: { ...p.availability, type: e.target.value as any } }))}>
-                  <option>Full-time</option>
-                  <option>Part-time</option>
-                  <option>Contract</option>
+            </div>
+
+            <div className="rounded-xl border border-gray-200 p-4">
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-xs font-semibold text-gray-900">2. Skills & Languages</p>
+                <button type="button" onClick={addSkill} className="text-xs font-medium text-blue-700 hover:text-blue-800">+ Skill</button>
+              </div>
+              <div className="space-y-2">
+                {fd.skills.map((skill, i) => (
+                  <div key={i} className="grid grid-cols-[1fr_auto_auto_auto] gap-2">
+                    <input className={iCls} placeholder="Skill" value={skill.name} onChange={(e) => updateSkill(i, 'name', e.target.value)} />
+                    <select className={iCls} value={skill.level} onChange={(e) => updateSkill(i, 'level', e.target.value)}>
+                      <option>Beginner</option><option>Intermediate</option><option>Advanced</option><option>Expert</option>
+                    </select>
+                    <input type="number" min={0} className="w-20 px-2 py-2 text-xs border border-gray-300 rounded-lg" value={skill.yearsOfExperience} onChange={(e) => updateSkill(i, 'yearsOfExperience', Number(e.target.value))} />
+                    <button type="button" onClick={() => removeSkill(i)} className="rounded-lg border border-gray-200 px-2 text-xs text-gray-600 hover:bg-gray-50">Remove</button>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 flex items-center justify-between">
+                <p className="text-xs font-medium text-gray-700">Languages</p>
+                <button type="button" onClick={addLang} className="text-xs font-medium text-blue-700 hover:text-blue-800">+ Language</button>
+              </div>
+              <div className="mt-2 space-y-2">
+                {fd.languages.map((lang, i) => (
+                  <div key={i} className="grid grid-cols-[1fr_auto_auto] gap-2">
+                    <input className={iCls} placeholder="Language" value={lang.name} onChange={(e) => updateLang(i, 'name', e.target.value)} />
+                    <select className={iCls} value={lang.proficiency} onChange={(e) => updateLang(i, 'proficiency', e.target.value)}>
+                      <option>Basic</option><option>Conversational</option><option>Fluent</option><option>Native</option>
+                    </select>
+                    <button type="button" onClick={() => removeLang(i)} className="rounded-lg border border-gray-200 px-2 text-xs text-gray-600 hover:bg-gray-50">Remove</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-gray-200 p-4">
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-xs font-semibold text-gray-900">3. Experience</p>
+                <button type="button" onClick={addExp} className="text-xs font-medium text-blue-700 hover:text-blue-800">+ Experience</button>
+              </div>
+              <div className="space-y-3">
+                {fd.experience.map((exp, i) => (
+                  <div key={i} className="rounded-lg border border-gray-200 p-3">
+                    <div className="grid grid-cols-2 gap-2">
+                      <input className={iCls} placeholder="Company" value={exp.company} onChange={(e) => updateExp(i, 'company', e.target.value)} />
+                      <input className={iCls} placeholder="Role" value={exp.role} onChange={(e) => updateExp(i, 'role', e.target.value)} />
+                    </div>
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      <input type="month" className={iCls} value={exp.startDate} onChange={(e) => updateExp(i, 'startDate', e.target.value)} />
+                      <input type="month" className={iCls} disabled={exp.isCurrent} value={exp.endDate} onChange={(e) => updateExp(i, 'endDate', e.target.value)} />
+                    </div>
+                    <div className="mt-2 flex items-center gap-2">
+                      <input type="checkbox" checked={exp.isCurrent} onChange={(e) => updateExp(i, 'isCurrent', e.target.checked)} />
+                      <span className="text-xs text-gray-700">Current role</span>
+                    </div>
+                    <textarea className={`${iCls} mt-2 resize-none`} rows={2} placeholder="Description" value={exp.description} onChange={(e) => updateExp(i, 'description', e.target.value)} />
+                    <input className={`${iCls} mt-2`} placeholder="Technologies (comma-separated)" value={exp.technologies} onChange={(e) => updateExp(i, 'technologies', e.target.value)} />
+                    <button type="button" onClick={() => removeExp(i)} className="mt-2 text-xs text-gray-600 hover:text-red-600">Remove experience</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-gray-200 p-4">
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-xs font-semibold text-gray-900">4. Education</p>
+                <button type="button" onClick={addEdu} className="text-xs font-medium text-blue-700 hover:text-blue-800">+ Education</button>
+              </div>
+              <div className="space-y-2">
+                {fd.education.map((edu, i) => (
+                  <div key={i} className="rounded-lg border border-gray-200 p-3">
+                    <input className={iCls} placeholder="Institution" value={edu.institution} onChange={(e) => updateEdu(i, 'institution', e.target.value)} />
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      <input className={iCls} placeholder="Degree" value={edu.degree} onChange={(e) => updateEdu(i, 'degree', e.target.value)} />
+                      <input className={iCls} placeholder="Field of study" value={edu.fieldOfStudy} onChange={(e) => updateEdu(i, 'fieldOfStudy', e.target.value)} />
+                    </div>
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      <input type="number" className={iCls} value={edu.startYear} onChange={(e) => updateEdu(i, 'startYear', Number(e.target.value))} />
+                      <input type="number" className={iCls} value={edu.endYear} onChange={(e) => updateEdu(i, 'endYear', Number(e.target.value))} />
+                    </div>
+                    <button type="button" onClick={() => removeEdu(i)} className="mt-2 text-xs text-gray-600 hover:text-red-600">Remove education</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-gray-200 p-4">
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-xs font-semibold text-gray-900">5. Certifications</p>
+                <button type="button" onClick={addCert} className="text-xs font-medium text-blue-700 hover:text-blue-800">+ Certification</button>
+              </div>
+              <div className="space-y-2">
+                {fd.certifications.map((cert, i) => (
+                  <div key={i} className="grid grid-cols-3 gap-2">
+                    <input className={iCls} placeholder="Name" value={cert.name} onChange={(e) => updateCert(i, 'name', e.target.value)} />
+                    <input className={iCls} placeholder="Issuer" value={cert.issuer} onChange={(e) => updateCert(i, 'issuer', e.target.value)} />
+                    <input type="month" className={iCls} value={cert.issueDate} onChange={(e) => updateCert(i, 'issueDate', e.target.value)} />
+                    <button type="button" onClick={() => removeCert(i)} className="col-span-3 text-left text-xs text-gray-600 hover:text-red-600">Remove certification</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-gray-200 p-4">
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-xs font-semibold text-gray-900">6. Projects</p>
+                <button type="button" onClick={addProj} className="text-xs font-medium text-blue-700 hover:text-blue-800">+ Project</button>
+              </div>
+              <div className="space-y-3">
+                {fd.projects.map((proj, i) => (
+                  <div key={i} className="rounded-lg border border-gray-200 p-3">
+                    <div className="grid grid-cols-2 gap-2">
+                      <input className={iCls} placeholder="Project name" value={proj.name} onChange={(e) => updateProj(i, 'name', e.target.value)} />
+                      <input className={iCls} placeholder="Role" value={proj.role} onChange={(e) => updateProj(i, 'role', e.target.value)} />
+                    </div>
+                    <textarea className={`${iCls} mt-2 resize-none`} rows={2} placeholder="Description" value={proj.description} onChange={(e) => updateProj(i, 'description', e.target.value)} />
+                    <input className={`${iCls} mt-2`} placeholder="Technologies (comma-separated)" value={proj.technologies} onChange={(e) => updateProj(i, 'technologies', e.target.value)} />
+                    <input className={`${iCls} mt-2`} placeholder="Project link" value={proj.link} onChange={(e) => updateProj(i, 'link', e.target.value)} />
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      <input type="month" className={iCls} value={proj.startDate} onChange={(e) => updateProj(i, 'startDate', e.target.value)} />
+                      <input type="month" className={iCls} value={proj.endDate} onChange={(e) => updateProj(i, 'endDate', e.target.value)} />
+                    </div>
+                    <button type="button" onClick={() => removeProj(i)} className="mt-2 text-xs text-gray-600 hover:text-red-600">Remove project</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-gray-200 p-4">
+              <p className="mb-3 text-xs font-semibold text-gray-900">7. Availability & Social Links</p>
+              <div className="grid grid-cols-3 gap-2">
+                <select className={iCls} value={fd.availability.status} onChange={(e) => setFd((p) => ({ ...p, availability: { ...p.availability, status: e.target.value as any } }))}>
+                  <option>Available</option><option>Open to Opportunities</option><option>Not Available</option>
                 </select>
+                <select className={iCls} value={fd.availability.type} onChange={(e) => setFd((p) => ({ ...p, availability: { ...p.availability, type: e.target.value as any } }))}>
+                  <option>Full-time</option><option>Part-time</option><option>Contract</option>
+                </select>
+                <input type="date" className={iCls} value={fd.availability.startDate} onChange={(e) => setFd((p) => ({ ...p, availability: { ...p.availability, startDate: e.target.value } }))} />
+              </div>
+              <div className="mt-2 grid grid-cols-3 gap-2">
+                <input className={iCls} placeholder="LinkedIn" value={fd.socialLinks.linkedin} onChange={(e) => setFd((p) => ({ ...p, socialLinks: { ...p.socialLinks, linkedin: e.target.value } }))} />
+                <input className={iCls} placeholder="GitHub" value={fd.socialLinks.github} onChange={(e) => setFd((p) => ({ ...p, socialLinks: { ...p.socialLinks, github: e.target.value } }))} />
+                <input className={iCls} placeholder="Portfolio" value={fd.socialLinks.portfolio} onChange={(e) => setFd((p) => ({ ...p, socialLinks: { ...p.socialLinks, portfolio: e.target.value } }))} />
               </div>
             </div>
-          )}
-
-          {/* ── 3.2 Skills & Languages ── */}
-          {activeTab === 'skills' && (
-            <div className="space-y-6">
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-semibold text-gray-700">Skills{req}</label>
-                  <button type="button" onClick={addSkill} className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 font-medium">
-                    <Plus className="w-3.5 h-3.5" /> Add Skill
-                  </button>
-                </div>
-                <p className="text-[10px] text-gray-400 mb-2">Level: Beginner · Intermediate · Advanced · Expert</p>
-                <div className="space-y-2">
-                  {fd.skills.map((skill, i) => (
-                    <div key={i} className="flex items-center gap-2 bg-gray-50 p-2.5 rounded-lg border border-gray-200">
-                      <input type="text"
-                        className="flex-1 px-2 py-1.5 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        placeholder="Skill name (e.g., Node.js)" value={skill.name}
-                        onChange={e => updateSkill(i, 'name', e.target.value)} />
-                      <select
-                        className="px-2 py-1.5 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
-                        value={skill.level} onChange={e => updateSkill(i, 'level', e.target.value)}>
-                        <option>Beginner</option>
-                        <option>Intermediate</option>
-                        <option>Advanced</option>
-                        <option>Expert</option>
-                      </select>
-                      <input type="number" min={0} max={50}
-                        className="w-14 px-2 py-1.5 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        placeholder="Yrs" value={skill.yearsOfExperience}
-                        onChange={e => updateSkill(i, 'yearsOfExperience', Number(e.target.value))} />
-                      <span className="text-[10px] text-gray-400 whitespace-nowrap">yrs exp</span>
-                      {fd.skills.length > 1 && (
-                        <button type="button" onClick={() => removeSkill(i)} className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-500">
-                          <X className="w-3 h-3" />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-semibold text-gray-700">Languages</label>
-                  <button type="button" onClick={addLang} className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 font-medium">
-                    <Plus className="w-3.5 h-3.5" /> Add Language
-                  </button>
-                </div>
-                <p className="text-[10px] text-gray-400 mb-2">Proficiency: Basic · Conversational · Fluent · Native</p>
-                {fd.languages.length === 0 && <p className="text-xs text-gray-400 italic">No languages added yet.</p>}
-                <div className="space-y-2">
-                  {fd.languages.map((lang, i) => (
-                    <div key={i} className="flex items-center gap-2 bg-gray-50 p-2.5 rounded-lg border border-gray-200">
-                      <input type="text"
-                        className="flex-1 px-2 py-1.5 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        placeholder="Language (e.g., English)" value={lang.name}
-                        onChange={e => updateLang(i, 'name', e.target.value)} />
-                      <select
-                        className="px-2 py-1.5 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
-                        value={lang.proficiency} onChange={e => updateLang(i, 'proficiency', e.target.value)}>
-                        <option>Basic</option>
-                        <option>Conversational</option>
-                        <option>Fluent</option>
-                        <option>Native</option>
-                      </select>
-                      <button type="button" onClick={() => removeLang(i)} className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-500">
-                        <X className="w-3 h-3" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ── 3.3 Work Experience ── */}
-          {activeTab === 'experience' && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-semibold text-gray-700">Work Experience{req}</label>
-                <button type="button" onClick={addExp} className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 font-medium">
-                  <Plus className="w-3.5 h-3.5" /> Add Experience
-                </button>
-              </div>
-              {fd.experience.length === 0 && (
-                <div className="text-center py-10 border-2 border-dashed border-gray-200 rounded-xl">
-                  <Briefcase className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                  <p className="text-xs text-gray-500">No work experience added yet.</p>
-                  <button type="button" onClick={addExp} className="mt-2 text-xs text-blue-600 hover:text-blue-700 font-medium">+ Add first entry</button>
-                </div>
-              )}
-              {fd.experience.map((exp, i) => (
-                <div key={i} className="bg-gray-50 rounded-xl border border-gray-200 p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-gray-700">Experience {i + 1}</span>
-                    <button type="button" onClick={() => removeExp(i)} className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-500">
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div><label className={lCls}>Company</label>
-                      <input type="text" className={iCls} placeholder="Company Name" value={exp.company}
-                        onChange={e => updateExp(i, 'company', e.target.value)} /></div>
-                    <div><label className={lCls}>Role</label>
-                      <input type="text" className={iCls} placeholder="e.g., Backend Engineer" value={exp.role}
-                        onChange={e => updateExp(i, 'role', e.target.value)} /></div>
-                  </div>
-                  <div className="grid grid-cols-3 gap-3">
-                    <div><label className={lCls}>Start Date (YYYY-MM)</label>
-                      <input type="month" className={iCls} value={exp.startDate}
-                        onChange={e => updateExp(i, 'startDate', e.target.value)} /></div>
-                    <div><label className={lCls}>End Date (YYYY-MM)</label>
-                      <input type="month" className={iCls} value={exp.endDate} disabled={exp.isCurrent}
-                        onChange={e => updateExp(i, 'endDate', e.target.value)} /></div>
-                    <div className="flex items-end pb-2">
-                      <label className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer">
-                        <input type="checkbox" checked={exp.isCurrent}
-                          onChange={e => { updateExp(i, 'isCurrent', e.target.checked); if (e.target.checked) updateExp(i, 'endDate', ''); }}
-                          className="w-3.5 h-3.5 rounded border-gray-300 text-blue-600" />
-                        Current role
-                      </label>
-                    </div>
-                  </div>
-                  <div><label className={lCls}>Description</label>
-                    <textarea className={`${iCls} resize-none`} rows={3}
-                      placeholder="Key responsibilities and achievements..." value={exp.description}
-                      onChange={e => updateExp(i, 'description', e.target.value)} /></div>
-                  <div><label className={lCls}>Technologies (comma-separated)</label>
-                    <input type="text" className={iCls} placeholder="e.g., Node.js, PostgreSQL, Docker" value={exp.technologies}
-                      onChange={e => updateExp(i, 'technologies', e.target.value)} /></div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* ── 3.4 Education ── */}
-          {activeTab === 'education' && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-semibold text-gray-700">Education{req}</label>
-                <button type="button" onClick={addEdu} className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 font-medium">
-                  <Plus className="w-3.5 h-3.5" /> Add Education
-                </button>
-              </div>
-              {fd.education.map((edu, i) => (
-                <div key={i} className="bg-gray-50 rounded-xl border border-gray-200 p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-gray-700">Education {i + 1}</span>
-                    {fd.education.length > 1 && (
-                      <button type="button" onClick={() => removeEdu(i)} className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-500">
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
-                  <div><label className={lCls}>Institution</label>
-                    <input type="text" className={iCls} placeholder="University Name" value={edu.institution}
-                      onChange={e => updateEdu(i, 'institution', e.target.value)} /></div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div><label className={lCls}>Degree</label>
-                      <input type="text" className={iCls} placeholder="e.g., Bachelor's" value={edu.degree}
-                        onChange={e => updateEdu(i, 'degree', e.target.value)} /></div>
-                    <div><label className={lCls}>Field of Study</label>
-                      <input type="text" className={iCls} placeholder="e.g., Computer Science" value={edu.fieldOfStudy}
-                        onChange={e => updateEdu(i, 'fieldOfStudy', e.target.value)} /></div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div><label className={lCls}>Start Year</label>
-                      <input type="number" className={iCls} min={1950} max={new Date().getFullYear()} value={edu.startYear}
-                        onChange={e => updateEdu(i, 'startYear', Number(e.target.value))} /></div>
-                    <div><label className={lCls}>End Year</label>
-                      <input type="number" className={iCls} min={1950} max={new Date().getFullYear() + 8} value={edu.endYear}
-                        onChange={e => updateEdu(i, 'endYear', Number(e.target.value))} /></div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* ── 3.6 Projects ── */}
-          {activeTab === 'projects' && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-semibold text-gray-700">Projects{req}</label>
-                <button type="button" onClick={addProj} className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 font-medium">
-                  <Plus className="w-3.5 h-3.5" /> Add Project
-                </button>
-              </div>
-              {fd.projects.length === 0 && (
-                <div className="text-center py-10 border-2 border-dashed border-gray-200 rounded-xl">
-                  <FileText className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                  <p className="text-xs text-gray-500">No projects added yet.</p>
-                  <button type="button" onClick={addProj} className="mt-2 text-xs text-blue-600 hover:text-blue-700 font-medium">+ Add first project</button>
-                </div>
-              )}
-              {fd.projects.map((proj, i) => (
-                <div key={i} className="bg-gray-50 rounded-xl border border-gray-200 p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-gray-700">Project {i + 1}</span>
-                    <button type="button" onClick={() => removeProj(i)} className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-500">
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div><label className={lCls}>Project Name</label>
-                      <input type="text" className={iCls} placeholder="e.g., AI Recruitment System" value={proj.name}
-                        onChange={e => updateProj(i, 'name', e.target.value)} /></div>
-                    <div><label className={lCls}>Role</label>
-                      <input type="text" className={iCls} placeholder="e.g., Backend Engineer" value={proj.role}
-                        onChange={e => updateProj(i, 'role', e.target.value)} /></div>
-                  </div>
-                  <div><label className={lCls}>Description</label>
-                    <textarea className={`${iCls} resize-none`} rows={2}
-                      placeholder="AI-powered candidate screening platform..." value={proj.description}
-                      onChange={e => updateProj(i, 'description', e.target.value)} /></div>
-                  <div><label className={lCls}>Technologies (comma-separated)</label>
-                    <input type="text" className={iCls} placeholder="e.g., Next.js, Node.js, Gemini API" value={proj.technologies}
-                      onChange={e => updateProj(i, 'technologies', e.target.value)} /></div>
-                  <div><label className={lCls}>Project Link</label>
-                    <input type="url" className={iCls} placeholder="https://..." value={proj.link}
-                      onChange={e => updateProj(i, 'link', e.target.value)} /></div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div><label className={lCls}>Start Date (YYYY-MM)</label>
-                      <input type="month" className={iCls} value={proj.startDate}
-                        onChange={e => updateProj(i, 'startDate', e.target.value)} /></div>
-                    <div><label className={lCls}>End Date (YYYY-MM)</label>
-                      <input type="month" className={iCls} value={proj.endDate}
-                        onChange={e => updateProj(i, 'endDate', e.target.value)} /></div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* ── 3.5 Certifications + 3.7 Availability + 3.8 Social Links ── */}
-          {activeTab === 'extras' && (
-            <div className="space-y-6">
-
-              {/* 3.7 Availability */}
-              <div>
-                <label className="text-xs font-semibold text-gray-700 block mb-2">3.7 Availability{req}</label>
-                <div className="bg-gray-50 rounded-xl border border-gray-200 p-4 space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div><label className={lCls}>Status</label>
-                      <select className={`${iCls} bg-white`} value={fd.availability.status}
-                        onChange={e => setFd(p => ({ ...p, availability: { ...p.availability, status: e.target.value as any } }))}>
-                        <option>Available</option>
-                        <option>Open to Opportunities</option>
-                        <option>Not Available</option>
-                      </select></div>
-                    <div><label className={lCls}>Type</label>
-                      <select className={`${iCls} bg-white`} value={fd.availability.type}
-                        onChange={e => setFd(p => ({ ...p, availability: { ...p.availability, type: e.target.value as any } }))}>
-                        <option>Full-time</option>
-                        <option>Part-time</option>
-                        <option>Contract</option>
-                      </select></div>
-                  </div>
-                  <div><label className={lCls}>Available From (optional)</label>
-                    <input type="date" className={iCls} value={fd.availability.startDate}
-                      onChange={e => setFd(p => ({ ...p, availability: { ...p.availability, startDate: e.target.value } }))} /></div>
-                </div>
-              </div>
-
-              {/* 3.5 Certifications */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-semibold text-gray-700">3.5 Certifications</label>
-                  <button type="button" onClick={addCert} className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 font-medium">
-                    <Plus className="w-3.5 h-3.5" /> Add Certification
-                  </button>
-                </div>
-                {fd.certifications.length === 0 && <p className="text-xs text-gray-400 italic">No certifications added yet.</p>}
-                <div className="space-y-2">
-                  {fd.certifications.map((cert, i) => (
-                    <div key={i} className="bg-gray-50 rounded-xl border border-gray-200 p-3 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium text-gray-600">Certification {i + 1}</span>
-                        <button type="button" onClick={() => removeCert(i)} className="p-0.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-500">
-                          <X className="w-3 h-3" />
-                        </button>
-                      </div>
-                      <div className="grid grid-cols-3 gap-2">
-                        <div><label className={lCls}>Name</label>
-                          <input type="text" className={iCls} placeholder="AWS Certified Developer" value={cert.name}
-                            onChange={e => updateCert(i, 'name', e.target.value)} /></div>
-                        <div><label className={lCls}>Issuer</label>
-                          <input type="text" className={iCls} placeholder="Amazon" value={cert.issuer}
-                            onChange={e => updateCert(i, 'issuer', e.target.value)} /></div>
-                        <div><label className={lCls}>Issue Date (YYYY-MM)</label>
-                          <input type="month" className={iCls} value={cert.issueDate}
-                            onChange={e => updateCert(i, 'issueDate', e.target.value)} /></div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* 3.8 Social Links */}
-              <div>
-                <label className="text-xs font-semibold text-gray-700 block mb-2">3.8 Social Links</label>
-                <div className="bg-gray-50 rounded-xl border border-gray-200 p-4 space-y-3">
-                  <div><label className={lCls}>LinkedIn</label>
-                    <input type="url" className={iCls} placeholder="https://linkedin.com/in/..." value={fd.socialLinks.linkedin}
-                      onChange={e => setFd(p => ({ ...p, socialLinks: { ...p.socialLinks, linkedin: e.target.value } }))} /></div>
-                  <div><label className={lCls}>GitHub</label>
-                    <input type="url" className={iCls} placeholder="https://github.com/..." value={fd.socialLinks.github}
-                      onChange={e => setFd(p => ({ ...p, socialLinks: { ...p.socialLinks, github: e.target.value } }))} /></div>
-                  <div><label className={lCls}>Portfolio</label>
-                    <input type="url" className={iCls} placeholder="https://..." value={fd.socialLinks.portfolio}
-                      onChange={e => setFd(p => ({ ...p, socialLinks: { ...p.socialLinks, portfolio: e.target.value } }))} /></div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ── RESUME UPLOAD METHOD ── */}
-          {uploadMethod === 'resume' && (
-            <div className="space-y-4">
-              {/* Drop Zone */}
-              <div
-                onDragOver={e => e.preventDefault()}
-                onDrop={handleResumeDrop}
-                className="border-2 border-dashed border-violet-300 rounded-xl p-8 text-center bg-violet-50 hover:bg-violet-100 transition-colors"
-              >
-                <div className="w-16 h-16 rounded-2xl bg-violet-500 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-violet-500/30">
-                  <FileText className="w-8 h-8 text-white" />
-                </div>
-                <h3 className="text-sm font-bold text-gray-900 mb-1">Drop resumes here</h3>
-                <p className="text-xs text-gray-500 mb-4">PDF format supported • AI will extract candidate information</p>
-                <label className="inline-flex items-center gap-2 px-4 py-2 bg-violet-600 text-white text-xs font-medium rounded-lg hover:bg-violet-700 transition-colors cursor-pointer">
-                  <Plus className="w-4 h-4" />
-                  Browse Files
-                  <input type="file" accept=".pdf" multiple onChange={handleResumeSelect} className="hidden" />
-                </label>
-              </div>
-
-              {/* Selected Files */}
-              {selectedResumes.length > 0 && (
-                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                  <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-                    <h4 className="text-xs font-semibold text-gray-700">Selected Resumes ({selectedResumes.length})</h4>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedResumes([])}
-                      className="text-xs text-red-600 hover:text-red-700 font-medium"
-                    >
-                      Clear All
-                    </button>
-                  </div>
-                  <div className="divide-y divide-gray-100 max-h-48 overflow-y-auto">
-                    {selectedResumes.map((file, i) => (
-                      <div key={i} className="px-4 py-3 flex items-center justify-between hover:bg-gray-50">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center">
-                            <FileText className="w-4 h-4 text-red-600" />
-                          </div>
-                          <div>
-                            <p className="text-xs font-medium text-gray-900">{file.name}</p>
-                            <p className="text-[10px] text-gray-400">{(file.size / 1024).toFixed(1)} KB</p>
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => removeResume(i)}
-                          className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Upload Button */}
-              {selectedResumes.length > 0 && (
-                <button
-                  type="button"
-                  onClick={handleResumeUpload}
-                  disabled={resumeParsing}
-                  className="w-full py-3 text-xs font-medium text-white bg-violet-600 rounded-xl hover:bg-violet-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {resumeParsing ? (
-                    <><div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Parsing with AI...</>
-                  ) : (
-                    <><Zap className="w-4 h-4" /> Parse Resumes with AI</>
-                  )}
-                </button>
-              )}
-
-              {/* Background queued confirmation */}
-              {resumeQueued && (
-                <div className="flex items-start gap-3 p-4 rounded-xl bg-blue-50 border border-blue-200">
-                  <Bell className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-xs font-semibold text-blue-800">Processing in the background</p>
-                    <p className="text-[11px] text-blue-600 mt-0.5">
-                      AI is parsing your resumes. You'll get a notification in the bell icon when done.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={onClose}
-                      className="mt-2 text-xs font-medium text-blue-600 hover:text-blue-700"
-                    >
-                      Close this panel →
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ── CSV UPLOAD METHOD ── */}
-          {uploadMethod === 'csv' && (
-            <div className="space-y-4">
-              {/* Drop Zone */}
-              <div
-                onDragOver={e => e.preventDefault()}
-                onDrop={handleCsvDrop}
-                className="border-2 border-dashed border-emerald-300 rounded-xl p-8 text-center bg-emerald-50 hover:bg-emerald-100 transition-colors"
-              >
-                <div className="w-16 h-16 rounded-2xl bg-emerald-500 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-emerald-500/30">
-                  <FileText className="w-8 h-8 text-white" />
-                </div>
-                <h3 className="text-sm font-bold text-gray-900 mb-1">Drop CSV file here</h3>
-                <p className="text-xs text-gray-500 mb-4">Bulk import multiple candidates • All candidates will be added to the selected job</p>
-                <label className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-xs font-medium rounded-lg hover:bg-emerald-700 transition-colors cursor-pointer">
-                  <Plus className="w-4 h-4" />
-                  Browse Files
-                  <input type="file" accept=".csv" onChange={handleCsvSelect} className="hidden" />
-                </label>
-              </div>
-
-              {/* CSV Preview */}
-              {selectedCsv && (
-                <>
-                  <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                    <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center">
-                          <FileText className="w-5 h-5 text-emerald-600" />
-                        </div>
-                        <div>
-                          <p className="text-xs font-semibold text-gray-900">{selectedCsv.name}</p>
-                          <p className="text-[10px] text-gray-400">{(selectedCsv.size / 1024).toFixed(1)} KB</p>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => { setSelectedCsv(null); setCsvPreview([]); }}
-                        className="p-2 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Preview Table */}
-                  {csvPreview.length > 0 && (
-                    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                      <div className="px-4 py-3 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
-                        <h4 className="text-xs font-semibold text-gray-700">Preview (first {csvPreview.length} rows)</h4>
-                      </div>
-                      <div className="overflow-x-auto">
-                        <table className="w-full">
-                          <thead>
-                            <tr className="bg-gray-50 border-b border-gray-100">
-                              {Object.keys(csvPreview[0]).map((key, i) => (
-                                <th key={i} className="px-3 py-2 text-left text-[10px] font-semibold text-gray-600 uppercase tracking-wider">
-                                  {key}
-                                </th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-100">
-                            {csvPreview.map((row, i) => (
-                              <tr key={i} className="hover:bg-gray-50">
-                                {Object.values(row).map((val: any, j) => (
-                                  <td key={j} className="px-3 py-2 text-xs text-gray-600">
-                                    {String(val).slice(0, 50)}{String(val).length > 50 ? '...' : ''}
-                                  </td>
-                                ))}
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Upload Button */}
-                  <button
-                    type="button"
-                    onClick={handleCsvUpload}
-                    disabled={submitting}
-                    className="w-full py-3 text-xs font-medium text-white bg-emerald-600 rounded-xl hover:bg-emerald-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                  >
-                    {submitting ? (
-                      <><div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Uploading...</>
-                    ) : (
-                      <><Users className="w-4 h-4" /> Import Candidates</>
-                    )}
-                  </button>
-                </>
-              )}
-
-              {/* CSV Format Info */}
-              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200 p-4">
-                <h4 className="text-xs font-semibold text-blue-900 mb-2 flex items-center gap-2">
-                  <BarChart3 className="w-4 h-4 text-blue-600" />
-                  CSV Format Guide
-                </h4>
-                <p className="text-[10px] text-blue-700 mb-3">Required columns: firstName, lastName, email</p>
-                <code className="block bg-white/50 rounded-lg p-3 text-[10px] text-gray-700 overflow-x-auto">
-                  firstName,lastName,email,headline,location,skills<br/>
-                  John,Doe,john@example.com,Software Engineer,"Kigali, Rwanda","Node.js,React"
-                </code>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-between bg-gray-50/80 backdrop-blur-sm">
-          <div className="text-[11px] text-gray-500">
-            {uploadMethod === 'manual' ? 'Quick add: basic profile only' : 'Upload will attach candidates to this job'}
           </div>
-          <div className="flex gap-2">
-            <button type="button" onClick={onClose}
-              className="px-4 py-2 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all">
-              Cancel
-            </button>
-            {uploadMethod === 'manual' && (
-              <button type="button" onClick={handleManualSubmit} disabled={submitting}
-                className="px-4 py-2 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-all disabled:opacity-50 flex items-center gap-2">
-                {submitting
-                  ? <><div className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Saving...</>
-                  : 'Add Candidate'}
-              </button>
+        )}
+
+        {mode === 'resume' && (
+          <div className="space-y-4 animate-in fade-in duration-200">
+            <div onDragOver={(e) => e.preventDefault()} onDrop={handleResumeDrop} className="rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 p-8 text-center transition-colors hover:border-blue-300 hover:bg-blue-50/40">
+              <FileText className="mx-auto mb-2 h-8 w-8 text-gray-500" />
+              <p className="text-sm font-semibold text-gray-900">Drop PDF resumes</p>
+              <p className="mt-1 text-xs text-gray-500">AI parsing runs in background and candidates are attached to this job.</p>
+              <label className="mt-4 inline-flex cursor-pointer items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-xs font-medium text-white hover:bg-blue-700">
+                <Plus className="h-3.5 w-3.5" /> Browse PDFs
+                <input type="file" accept=".pdf" multiple onChange={handleResumeSelect} className="hidden" />
+              </label>
+            </div>
+            {selectedResumes.length > 0 && (
+              <div className="rounded-xl border border-gray-200">
+                {selectedResumes.map((file, i) => (
+                  <div key={`${file.name}-${i}`} className="flex items-center justify-between border-b border-gray-100 px-3 py-2 last:border-b-0">
+                    <span className="text-xs text-gray-700">{file.name}</span>
+                    <button type="button" onClick={() => setSelectedResumes((prev) => prev.filter((_, idx) => idx !== i))} className="text-xs text-gray-500 hover:text-red-600">Remove</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {resumeQueued && (
+              <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800">
+                Resumes were queued for AI parsing. You can close this modal and continue working.
+              </div>
             )}
           </div>
+        )}
+
+        {mode === 'csv' && (
+          <div className="space-y-4 animate-in fade-in duration-200">
+            <div onDragOver={(e) => e.preventDefault()} onDrop={handleCsvDrop} className="rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 p-8 text-center transition-colors hover:border-blue-300 hover:bg-blue-50/40">
+              <Users className="mx-auto mb-2 h-8 w-8 text-gray-500" />
+              <p className="text-sm font-semibold text-gray-900">Drop CSV or Excel</p>
+              <p className="mt-1 text-xs text-gray-500">Supported: .csv, .xlsx, .xls</p>
+              <label className="mt-4 inline-flex cursor-pointer items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-xs font-medium text-white hover:bg-blue-700">
+                <Plus className="h-3.5 w-3.5" /> Choose File
+                <input type="file" accept=".csv,.xlsx,.xls" onChange={handleCsvSelect} className="hidden" />
+              </label>
+            </div>
+            {selectedCsv && (
+              <div className="rounded-xl border border-gray-200 p-3">
+                <p className="text-xs font-semibold text-gray-800">{selectedCsv.name}</p>
+                <p className="text-[11px] text-gray-500">{(selectedCsv.size / 1024).toFixed(1)} KB</p>
+              </div>
+            )}
+            {csvPreview.length > 0 && (
+              <div className="overflow-x-auto rounded-xl border border-gray-200">
+                <table className="w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      {Object.keys(csvPreview[0]).map((key) => (
+                        <th key={key} className="px-2 py-2 text-left text-[10px] uppercase text-gray-600">{key}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {csvPreview.map((row, idx) => (
+                      <tr key={idx} className="border-t border-gray-100">
+                        {Object.values(row).map((value: any, cellIdx) => (
+                          <td key={cellIdx} className="px-2 py-2 text-xs text-gray-700">{String(value)}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {mode === 'json' && (
+          <div className="space-y-3 animate-in fade-in duration-200">
+            <p className="text-xs text-gray-600">Paste a JSON array. The selected jobId will be injected into every profile automatically.</p>
+            <textarea value={jsonText} onChange={(e) => setJsonText(e.target.value)} rows={18} className="w-full rounded-xl border border-gray-300 p-3 font-mono text-xs outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500" />
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-center justify-between border-t border-gray-100 bg-gray-50 px-5 py-3">
+        <span className="text-[11px] text-gray-500">
+          {mode === 'manual' ? 'Enter candidate details manually.' : 'Import mode will attach all records to this job.'}
+        </span>
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={onClose} className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50">Cancel</button>
+          {mode === 'manual' && (
+            <button type="button" onClick={handleManualSubmit} disabled={submitting} className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+              {submitting ? 'Saving...' : 'Create Candidate'}
+            </button>
+          )}
+          {mode === 'resume' && (
+            <button type="button" onClick={handleResumeUpload} disabled={resumeParsing || selectedResumes.length === 0} className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+              {resumeParsing ? 'Queueing...' : 'Queue Resume Parsing'}
+            </button>
+          )}
+          {mode === 'csv' && (
+            <button type="button" onClick={handleCsvUpload} disabled={submitting || !selectedCsv} className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+              {submitting ? 'Importing...' : 'Import CSV/Excel'}
+            </button>
+          )}
+          {mode === 'json' && (
+            <button type="button" onClick={handleJsonImport} disabled={submitting} className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+              {submitting ? 'Importing...' : 'Import JSON'}
+            </button>
+          )}
         </div>
+      </div>
     </Modal>
   );
 }

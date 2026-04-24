@@ -6,10 +6,11 @@ import { Avatar } from '@/components/ui/Avatar';
 import { User, Mail, Briefcase, Calendar, Edit2, ArrowRight } from 'lucide-react';
 import { AuthGuard } from '@/components/layout/AuthGuard';
 import Link from 'next/link';
+import { formatDisplayName } from '@/lib/utils';
 
 function ProfileContent() {
   const { user } = useAuth();
-  const displayName = user?.name || 'User';
+  const displayName = formatDisplayName(user?.name);
   const displayEmail = user?.email || '—';
   const role = user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : 'Recruiter';
 

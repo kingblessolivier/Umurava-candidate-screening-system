@@ -624,7 +624,7 @@ function SysHeader({
     return () => clearInterval(t);
   }, []);
 
-  const hasThinking = thinkingLog?.length > 0 || (result as ScreeningResult & { thinkingLog?: unknown[] }).thinkingLog?.length;
+  const hasThinking = ((thinkingLog?.length ?? 0) > 0) || (((result as ScreeningResult & { thinkingLog?: unknown[] }).thinkingLog?.length ?? 0) > 0);
 
   return (
     <div className="h-9 bg-white border-b border-gray-200 flex items-center px-4 gap-0 flex-shrink-0 select-none">

@@ -23,7 +23,7 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
       <Sidebar isCollapsed={isSidebarCollapsed} />
       <main
         className={cn(
-          'flex-1 min-h-screen flex flex-col transition-all duration-300 ease-out overflow-x-hidden',
+          'flex-1 min-h-screen flex flex-col pt-[56px] transition-all duration-300 ease-out overflow-x-hidden',
           isSidebarCollapsed ? 'ml-[72px]' : 'ml-[240px]'
         )}
       >

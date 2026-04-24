@@ -58,6 +58,20 @@ export function getInitials(name: string): string {
 }
 
 /**
+ * Formats a person's name for UI display
+ */
+export function formatDisplayName(name?: string | null): string {
+  if (!name) return 'User';
+
+  return name
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(' ');
+}
+
+/**
  * Debounces a function
  */
 export function debounce<T extends (...args: unknown[]) => unknown>(
