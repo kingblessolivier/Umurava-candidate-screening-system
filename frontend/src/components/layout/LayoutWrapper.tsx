@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { Sidebar } from './Sidebar';
 import { TopNav } from './TopNav';
+import { BreadcrumbBar } from './BreadcrumbBar';
 import { cn } from '@/lib/utils';
 import { NotificationsProvider } from '@/contexts/NotificationsContext';
 
@@ -22,7 +23,7 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
       <Sidebar isCollapsed={isSidebarCollapsed} />
       <main
         className={cn(
-          'flex-1 min-h-screen flex flex-col transition-all duration-300 ease-out',
+          'flex-1 min-h-screen flex flex-col transition-all duration-300 ease-out overflow-x-hidden',
           isSidebarCollapsed ? 'ml-[72px]' : 'ml-[240px]'
         )}
       >
@@ -30,6 +31,7 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
           isSidebarCollapsed={isSidebarCollapsed}
           onToggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
         />
+        <BreadcrumbBar />
         <div className="py-4 px-6 flex-1">{children}</div>
       </main>
     </NotificationsProvider>

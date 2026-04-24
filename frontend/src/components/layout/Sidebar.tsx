@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -8,14 +8,12 @@ import {
   Briefcase,
   Users,
   Zap,
-  BarChart3,
   Trophy,
   LogOut,
   Sparkles,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
-import { Avatar } from '@/components/ui/Avatar';
 import { motion } from 'framer-motion';
 
 const navItems = [
@@ -24,7 +22,6 @@ const navItems = [
   { href: '/candidates', icon: Users, label: 'Candidates' },
   { href: '/screening', icon: Zap, label: 'Screening' },
   { href: '/results', icon: Trophy, label: 'Results' },
-  { href: '/analytics', icon: BarChart3, label: 'Analytics' },
 ];
 
 function SidebarSkeleton({ isCollapsed }: { isCollapsed: boolean }) {
@@ -96,12 +93,7 @@ function SidebarSkeleton({ isCollapsed }: { isCollapsed: boolean }) {
 
 export function Sidebar({ isCollapsed }: { isCollapsed: boolean }) {
   const pathname = usePathname();
-  const { user, handleLogout, loading: authLoading } = useAuth();
-  const [isMounted, setIsMounted] = useState(false);
-
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
+  const { handleLogout, loading: authLoading } = useAuth();
 
   const onLogout = () => {
     handleLogout();
@@ -195,40 +187,18 @@ export function Sidebar({ isCollapsed }: { isCollapsed: boolean }) {
             );
           })}
         </nav>
-
-
-        {/* User & Logout */}
+        {/* Logout */}
         <div className="px-3 py-4 border-t border-blue-500">
-          {isMounted && user && (
-            <div className={cn(
-              'mb-3 p-3 rounded-lg bg-blue-500',
-              isCollapsed && 'p-2 flex justify-center'
-            )}>
-              {!isCollapsed ? (
-                <div className="flex items-center gap-3">
-                  <Avatar name={user.name} size="sm" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-white truncate">
-                      {user.name}
-                    </p>
-                    <p className="text-[10px] text-blue-200 truncate">{user.email}</p>
-                  </div>
-                </div>
-              ) : (
-                <Avatar name={user.name} size="sm" />
-              )}
-            </div>
-          )}
           <button
             onClick={onLogout}
             className={cn(
-              'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm',
-              'text-blue-100 hover:bg-blue-500 hover:text-white transition-all duration-200',
+              'group w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm',
+              'text-blue-100 hover:bg-red-600 hover:text-white transition-all duration-200',
               isCollapsed && 'justify-center px-2'
             )}
             title={isCollapsed ? 'Log out' : undefined}
           >
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-blue-500">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-blue-500 group-hover:bg-red-500 transition-colors duration-200">
               <LogOut className="w-4 h-4" />
             </div>
             {!isCollapsed && <span className="text-xs">Log out</span>}

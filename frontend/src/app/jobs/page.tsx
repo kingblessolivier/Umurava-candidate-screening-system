@@ -1665,7 +1665,6 @@ function JobModal({ job, onClose, onSave, onCreate, onUpdate }: any) {
       title={job ? 'Edit Job' : 'Create Job'}
       subtitle="Skill requirements use the Talent Profile Schema levels"
       size="xl"
-      headerAccent="blue"
       showCloseButton={true}
       className="p-0"
       panelClassName="bg-white"
@@ -1798,11 +1797,11 @@ function JobModal({ job, onClose, onSave, onCreate, onUpdate }: any) {
         {/* Footer */}
         <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-end gap-2 bg-gray-50/80 backdrop-blur-sm">
           <button type="button" onClick={onClose}
-            className="px-4 py-2 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all">
+            className="px-4 py-2 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all">
             Cancel
           </button>
           <button type="submit" onClick={handleSubmit} disabled={submitting}
-            className="px-5 py-2 text-xs font-medium text-white bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all disabled:opacity-50 flex items-center gap-2 shadow-sm shadow-blue-500/20">
+            className="px-4 py-2 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-all disabled:opacity-50 flex items-center gap-2">
             {submitting ? (
               <><div className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Saving...</>
             ) : (job ? 'Save Changes' : 'Create Job')}
@@ -2670,12 +2669,12 @@ function CandidateModal({ jobId, onClose, onSave, onResumeQueued }: any) {
           </div>
           <div className="flex gap-2">
             <button type="button" onClick={onClose}
-              className="px-4 py-2 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all">
+              className="px-4 py-2 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all">
               Cancel
             </button>
             {uploadMethod === 'manual' && (
               <button type="button" onClick={handleManualSubmit} disabled={submitting}
-                className="px-5 py-2 text-xs font-medium text-white bg-gradient-to-r from-violet-600 to-purple-600 rounded-xl hover:from-violet-700 hover:to-purple-700 transition-all disabled:opacity-50 flex items-center gap-2 shadow-sm shadow-violet-500/20">
+                className="px-4 py-2 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-all disabled:opacity-50 flex items-center gap-2">
                 {submitting
                   ? <><div className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Saving...</>
                   : 'Add Candidate'}

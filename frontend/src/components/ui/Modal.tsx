@@ -71,7 +71,7 @@ export function Modal({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
-          className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:ml-[240px]"
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4"
           onClick={(e) => {
             if (e.target === overlayRef.current) onClose();
           }}
@@ -99,21 +99,22 @@ export function Modal({
           >
             {/* Header */}
             {(title || showCloseButton) && (
-              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <div className="flex items-center justify-between px-5 pt-5 pb-4">
                 <div className="flex items-center gap-3">
                   {title && (
                     <div
                       className={cn(
-                        "w-10 h-10 rounded-xl flex items-center justify-center text-white text-sm font-bold shadow-md",
-                        accentColors[headerAccent]
+                        "w-8 h-8 rounded-lg flex items-center justify-center text-gray-600 text-xs font-semibold bg-gray-100 border border-gray-200",
+                        accentColors[headerAccent] && "border-transparent"
                       )}
+                      style={headerAccent !== 'blue' ? { backgroundColor: `var(--modal-accent-${headerAccent}, #f1f5f9)`, color: `var(--modal-accent-text-${headerAccent}, #475569)` } : {}}
                     >
                       {title.split(" ").map((w) => w[0]).join("").slice(0, 2)}
                     </div>
                   )}
                   <div>
                     {title && (
-                      <h2 className="text-base font-bold text-gray-900">{title}</h2>
+                      <h2 className="text-sm font-semibold text-gray-900">{title}</h2>
                     )}
                     {subtitle && (
                       <p className="text-xs text-gray-500 mt-0.5">{subtitle}</p>
@@ -123,16 +124,16 @@ export function Modal({
                 {showCloseButton && (
                   <button
                     onClick={onClose}
-                    className="p-2 rounded-xl hover:bg-gray-100 transition-all text-gray-400 hover:text-gray-600"
+                    className="p-1.5 rounded-lg hover:bg-gray-100 transition-all text-gray-400 hover:text-gray-600"
                   >
-                    <X className="w-5 h-5" />
+                    <X className="w-4 h-4" />
                   </button>
                 )}
               </div>
             )}
 
             {/* Content */}
-            <div className={cn("flex-1 overflow-y-auto px-6 py-5", className)}>
+            <div className={cn("flex-1 overflow-y-auto px-5 pb-5", className)}>
               {children}
             </div>
           </motion.div>

@@ -82,7 +82,6 @@ export function CreateCandidateModal({ isOpen, onClose }: Props) {
       title="Add Candidate"
       subtitle="Create a new candidate profile"
       size="md"
-      headerAccent="blue"
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-2 gap-3">

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
 import {
@@ -44,6 +44,11 @@ export function TopNav({
   const router = useRouter();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  const displayName = mounted ? (user?.name || 'User') : 'User';
+  const displayEmail = mounted ? (user?.email || '') : '';
   const { notifications, activeJobs, unreadCount, markAsRead, clearAll } = useNotifications();
   const activeJobList = Object.values(activeJobs);
 
@@ -219,48 +224,51 @@ export function TopNav({
                 setShowProfileMenu(!showProfileMenu);
                 setShowNotifications(false);
               }}
-              className="flex items-center gap-2 px-1.5 py-1 rounded-lg hover:bg-gray-100 transition-colors group"
+              className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-100 transition-colors group"
             >
-              <Avatar name={user?.name || 'User'} size="sm" />
-              <div className="text-left hidden sm:block">
-                <p className="text-xs font-medium text-gray-900">{user?.name}</p>
-                <p className="text-xs text-gray-500">{user?.email}</p>
-              </div>
-              <ChevronDown className="w-3 h-3 text-gray-600 group-hover:text-gray-900" />
+              <Avatar name={displayName} size="sm" />
+              <span className="text-sm font-medium text-gray-900 hidden sm:block">
+                {displayName}
+              </span>
+              <ChevronDown className="w-3.5 h-3.5 text-gray-600 group-hover:text-gray-900" />
             </button>
 
             {showProfileMenu && (
-              <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-gray-200 z-50">
-                <div className="p-4 border-b border-gray-200">
+              <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-gray-200 z-50 overflow-hidden">
+                {/* Header */}
+                <div className="px-4 py-3 bg-gradient-to-br from-blue-50 to-blue-100/50 border-b border-gray-100">
                   <div className="flex items-center gap-3">
-                    <Avatar name={user?.name || 'User'} size="md" />
-                    <div>
-                      <p className="text-sm font-semibold text-gray-900">{user?.name}</p>
-                      <p className="text-xs text-gray-500">{user?.email}</p>
+                    <Avatar name={displayName} size="md" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-gray-900 truncate">{displayName}</p>
+                      <p className="text-xs text-gray-500 truncate">{displayEmail}</p>
                     </div>
                   </div>
                 </div>
 
-                <div className="p-1">
+                {/* Navigation Items */}
+                <div className="p-1.5">
                   <Link
                     href="/profile"
                     onClick={() => setShowProfileMenu(false)}
-                    className="flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                    className="flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 rounded-lg transition-colors group"
                   >
-                    <UserIcon className="w-4 h-4 text-gray-400" />
-                    <span>My Profile</span>
+                    <UserIcon className="w-4 h-4 text-gray-400 group-hover:text-blue-500 transition-colors" />
+                    <span>Profile</span>
                   </Link>
                   <Link
                     href="/settings"
                     onClick={() => setShowProfileMenu(false)}
-                    className="flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                    className="flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 rounded-lg transition-colors group"
                   >
-                    <Settings className="w-4 h-4 text-gray-400" />
+                    <Settings className="w-4 h-4 text-gray-400 group-hover:text-blue-500 transition-colors" />
                     <span>Settings</span>
                   </Link>
                 </div>
 
-                <div className="p-2 border-t border-gray-200">
+                {/* Divider and Logout */}
+                <div className="mx-2 my-1 border-t border-gray-100" />
+                <div className="p-1.5">
                   <button
                     onClick={onLogout}
                     className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
