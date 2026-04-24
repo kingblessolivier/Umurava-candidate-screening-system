@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { AppDispatch, RootState } from "@/store";
-import { fetchResults, deleteResult } from "@/store/screeningSlice";
+import { fetchResults, deleteResult, setPage } from "@/store/screeningSlice";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import {
@@ -241,9 +241,42 @@ function LoadingState() {
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
+const PAGE_SIZE = 10;
+
+function PaginationBar({ page, total, onPage }: { page: number; total: number; onPage: (p: number) => void }) {
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+  if (totalPages <= 1) return null;
+  return (
+    <div className="flex items-center justify-between px-4 py-2.5 bg-white border border-gray-200 mt-3">
+      <span className="text-[10px] font-mono text-gray-500">
+        SHOWING {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} OF {total}
+      </span>
+      <div className="flex items-center gap-1">
+        <button
+          disabled={page <= 1}
+          onClick={() => onPage(page - 1)}
+          className="px-3 py-1.5 text-[10px] font-mono font-bold uppercase tracking-wider border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        >
+          ← PREV
+        </button>
+        <span className="px-3 py-1.5 text-[10px] font-mono font-bold text-gray-700 bg-gray-50 border border-gray-200">
+          {page} / {totalPages}
+        </span>
+        <button
+          disabled={page >= totalPages}
+          onClick={() => onPage(page + 1)}
+          className="px-3 py-1.5 text-[10px] font-mono font-bold uppercase tracking-wider border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        >
+          NEXT →
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function ResultsPage() {
   const dispatch = useDispatch<AppDispatch>();
-  const { results, loading } = useSelector((s: RootState) => s.screening);
+  const { results, loading, page, total } = useSelector((s: RootState) => s.screening);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [emailModal, setEmailModal] = useState<{
     open: boolean;
@@ -261,7 +294,7 @@ export default function ResultsPage() {
     setEmailModal({ open: true, recipients, jobTitle: result.jobTitle });
   };
 
-  useEffect(() => { dispatch(fetchResults()); }, [dispatch]);
+  useEffect(() => { dispatch(fetchResults({ page, limit: PAGE_SIZE })); }, [dispatch, page]);
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.preventDefault();
@@ -279,7 +312,7 @@ export default function ResultsPage() {
   return (
     <div className="min-h-screen bg-[#eef1f5] font-sans flex flex-col">
       {/* System Header */}
-      <SysHeader count={results.length} />
+      <SysHeader count={total} />
 
       {/* Stats Bar */}
       <StatsBar results={results} />
@@ -295,7 +328,7 @@ export default function ResultsPage() {
                 SCREENING RESULTS ARCHIVE
               </h1>
               <p className="text-xs text-gray-500 mt-0.5 font-mono">
-                {results.length} RECORD{results.length !== 1 ? "S" : ""} FOUND
+                {total} RECORD{total !== 1 ? "S" : ""} FOUND
               </p>
             </div>
             <Link
@@ -312,16 +345,23 @@ export default function ResultsPage() {
           ) : results.length === 0 ? (
             <EmptyState />
           ) : (
-            <div className="space-y-3">
-              {results.map((r) => (
-                <ResultCard
-                  key={r._id}
-                  result={r}
-                  onDelete={handleDelete}
-                  onEmail={handleEmailShortlisted}
-                />
-              ))}
-            </div>
+            <>
+              <div className="space-y-3">
+                {results.map((r) => (
+                  <ResultCard
+                    key={r._id}
+                    result={r}
+                    onDelete={handleDelete}
+                    onEmail={handleEmailShortlisted}
+                  />
+                ))}
+              </div>
+              <PaginationBar
+                page={page}
+                total={total}
+                onPage={(p) => dispatch(setPage(p))}
+              />
+            </>
           )}
         </div>
       </div>
@@ -329,7 +369,7 @@ export default function ResultsPage() {
       {/* Status Bar */}
       <div className="h-7 bg-white border-t border-gray-200 flex items-center px-4 gap-4 flex-shrink-0 select-none">
         {[
-          { icon: Database, label: "RESULTS", value: `${results.length}` },
+          { icon: Database, label: "RESULTS", value: `${total}` },
           { icon: Activity, label: "STATUS", value: loading ? "LOADING..." : "READY" },
           { icon: Server, label: "ENGINE", value: "GEMINI 2.5 FLASH" },
         ].map(({ icon: Icon, label, value }, i) => (

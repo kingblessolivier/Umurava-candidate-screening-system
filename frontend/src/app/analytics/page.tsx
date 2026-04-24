@@ -3,611 +3,551 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   TrendingUp, TrendingDown, Users, Briefcase, Target, UserCheck,
-  Activity, Clock, RefreshCw, ArrowUpRight, BarChart3, Download,
-  CheckCircle2, AlertTriangle, Star, Trophy, Zap, FileText,
-  ChevronRight, MapPin, Building2,
+  Activity, RefreshCw, BarChart3, CheckCircle2, AlertTriangle,
+  Star, Trophy, FileText, ChevronRight, Database, Server, Brain,
 } from 'lucide-react';
-import { motion } from 'framer-motion';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Cell, PieChart, Pie,
+  ResponsiveContainer, Cell,
 } from 'recharts';
 import { useDashboard } from '@/hooks/useDashboard';
 import { useJobs } from '@/hooks/useJobs';
 import Link from 'next/link';
 
-// ─── Palette ───────────────────────────────────────────────────────────────────
-const COLORS = {
-  blue:   '#2563eb',
-  green:  '#059669',
-  amber:  '#d97706',
-  red:    '#dc2626',
-  violet: '#7c3aed',
-  gray:   '#6b7280',
-};
-const CHART_COLORS = [COLORS.blue, COLORS.violet, COLORS.green, COLORS.amber, COLORS.red];
+// ─── System Header ──────────────────────────────────────────────────────────────
+function SysHeader({ onRefresh, refreshing }: { onRefresh: () => void; refreshing: boolean }) {
+  const [clock, setClock] = useState(() => {
+    const n = new Date();
+    return `${n.getHours().toString().padStart(2, '0')}:${n.getMinutes().toString().padStart(2, '0')}:${n.getSeconds().toString().padStart(2, '0')} UTC`;
+  });
+  useEffect(() => {
+    const t = setInterval(() => {
+      const n = new Date();
+      setClock(`${n.getHours().toString().padStart(2, '0')}:${n.getMinutes().toString().padStart(2, '0')}:${n.getSeconds().toString().padStart(2, '0')} UTC`);
+    }, 1000);
+    return () => clearInterval(t);
+  }, []);
 
-// ─── Animation ─────────────────────────────────────────────────────────────────
-const fade = { hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: 'easeOut' } } };
-const stagger = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.06 } } };
-
-// ─── Sub-components ────────────────────────────────────────────────────────────
-
-function LiveClock() {
-  const [t, setT] = useState(new Date());
-  useEffect(() => { const i = setInterval(() => setT(new Date()), 1000); return () => clearInterval(i); }, []);
   return (
-    <span className="font-mono text-[11px] text-gray-400">
-      {t.toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}
-      {' · '}
-      {t.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-    </span>
-  );
-}
-
-function KPI({
-  label, value, sub, icon: Icon, accent = COLORS.blue, trend, trendLabel,
-}: {
-  label: string; value: string | number; sub?: string;
-  icon: React.ElementType; accent?: string;
-  trend?: 'up' | 'down' | 'flat'; trendLabel?: string;
-}) {
-  const TIcon = trend === 'up' ? TrendingUp : trend === 'down' ? TrendingDown : null;
-  const tColor = trend === 'up' ? 'text-emerald-600' : trend === 'down' ? 'text-rose-500' : 'text-gray-400';
-  return (
-    <motion.div variants={fade} className="bg-white border border-gray-200 rounded-xl p-4 flex flex-col gap-3 hover:shadow-md transition-shadow">
-      <div className="flex items-start justify-between">
-        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-none">{label}</span>
-        <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${accent}18` }}>
-          <Icon className="w-4 h-4" style={{ color: accent }} />
+    <div className="h-9 bg-white border-b border-gray-200 flex items-center px-4 gap-0 flex-shrink-0 select-none">
+      <div className="flex items-center gap-3 flex-1">
+        <div className="flex items-center gap-1.5">
+          <div className="w-2 h-2 rounded-full bg-green-500" />
+          <span className="text-[11px] font-bold text-gray-900 tracking-widest uppercase">TalentAI</span>
         </div>
+        <div className="w-px h-3.5 bg-gray-200" />
+        <span className="text-[10px] text-gray-500 tracking-wider uppercase">People Analytics · Executive Dashboard</span>
+        <div className="w-px h-3.5 bg-gray-200" />
+        <span className="text-[10px] text-gray-400 font-mono">STRATEGIC HIRING INTELLIGENCE</span>
       </div>
-      <div>
-        <div className="text-3xl font-bold text-gray-900 tracking-tight leading-none">{value}</div>
-        {sub && <div className="text-[11px] text-gray-400 mt-1">{sub}</div>}
-      </div>
-      {trend && trendLabel && (
-        <div className={`flex items-center gap-1 text-[11px] font-semibold ${tColor}`}>
-          {TIcon && <TIcon className="w-3 h-3" />}
-          {trendLabel}
-        </div>
-      )}
-    </motion.div>
-  );
-}
-
-function SectionCard({ title, subtitle, icon: Icon, action, children, className = '' }: {
-  title: string; subtitle?: string; icon?: React.ElementType;
-  action?: React.ReactNode; children: React.ReactNode; className?: string;
-}) {
-  return (
-    <motion.div variants={fade} className={`bg-white border border-gray-200 rounded-xl overflow-hidden ${className}`}>
-      <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          {Icon && (
-            <div className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center">
-              <Icon className="w-3.5 h-3.5 text-gray-600" />
-            </div>
-          )}
-          <div>
-            <h2 className="text-sm font-semibold text-gray-900">{title}</h2>
-            {subtitle && <p className="text-[10px] text-gray-400 mt-0.5">{subtitle}</p>}
-          </div>
-        </div>
-        {action}
-      </div>
-      {children}
-    </motion.div>
-  );
-}
-
-function ScoreBar({ label, value, max, color }: { label: string; value: number; max: number; color: string }) {
-  const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
-  return (
-    <div className="space-y-1">
-      <div className="flex items-center justify-between">
-        <span className="text-xs text-gray-700 font-medium truncate pr-2">{label}</span>
-        <span className="text-xs font-bold text-gray-900 flex-shrink-0">{value}</span>
-      </div>
-      <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-        <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pct}%`, backgroundColor: color }} />
+      <div className="flex items-center gap-3">
+        <span className="text-[10px] font-mono text-gray-400">{clock}</span>
+        <div className="w-px h-3.5 bg-gray-200" />
+        <button
+          onClick={onRefresh}
+          className="flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-mono font-bold uppercase tracking-wider border border-gray-200 hover:bg-gray-50 text-gray-600 transition-colors"
+        >
+          <RefreshCw className={`w-2.5 h-2.5 ${refreshing ? 'animate-spin' : ''}`} />
+          REFRESH
+        </button>
       </div>
     </div>
   );
 }
 
-const REC_CONFIG: Record<string, { label: string; color: string; icon: React.ElementType }> = {
-  'Strongly Recommended': { label: 'Strongly Recommended', color: COLORS.green,  icon: Star },
-  'Recommended':          { label: 'Recommended',          color: COLORS.blue,   icon: CheckCircle2 },
-  'Consider':             { label: 'Consider',             color: COLORS.amber,  icon: AlertTriangle },
-  'Not Recommended':      { label: 'Not Recommended',      color: COLORS.gray,   icon: TrendingDown },
-};
-
-// ─── Custom Tooltip ─────────────────────────────────────────────────────────────
-function ChartTooltip({ active, payload, label }: any) {
-  if (!active || !payload?.length) return null;
+// ─── KPI Strip ──────────────────────────────────────────────────────────────────
+function KPIStrip({ metrics }: {
+  metrics: { label: string; value: string | number; unit?: string; accent: string; icon: React.ElementType }[];
+}) {
   return (
-    <div className="bg-white border border-gray-200 rounded-lg shadow-lg px-3 py-2 text-xs">
-      <p className="font-semibold text-gray-700 mb-1">{label}</p>
-      {payload.map((p: any) => (
-        <p key={p.name} style={{ color: p.color }} className="font-medium">{p.name}: {p.value}</p>
+    <div className="bg-white border-b border-gray-200 flex items-stretch flex-shrink-0">
+      {metrics.map(({ label, value, unit = '', accent, icon: Icon }, i) => (
+        <React.Fragment key={label}>
+          {i > 0 && <div className="w-px bg-gray-200 self-stretch" />}
+          <div className="flex-1 px-4 py-2.5 flex items-center gap-2.5 min-w-0">
+            <Icon className="w-3 h-3 flex-shrink-0" style={{ color: accent }} />
+            <div className="min-w-0">
+              <p className="text-[8px] font-semibold uppercase tracking-widest text-gray-500 leading-none mb-0.5">{label}</p>
+              <p className="text-sm font-bold font-mono leading-none" style={{ color: accent }}>
+                {value}{unit}
+              </p>
+            </div>
+          </div>
+        </React.Fragment>
       ))}
     </div>
   );
 }
 
-// ─── Main Page ──────────────────────────────────────────────────────────────────
+// ─── Panel ─────────────────────────────────────────────────────────────────────
+function Panel({ title, badge, action, children, accent = '#3b82f6' }: {
+  title: string; badge?: string; action?: React.ReactNode;
+  children: React.ReactNode; accent?: string;
+}) {
+  return (
+    <div className="bg-white border border-gray-200 overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-2.5 bg-gray-50 border-b border-gray-200">
+        <div className="flex items-center gap-2.5">
+          <div className="w-1 h-3.5 rounded-sm" style={{ backgroundColor: accent }} />
+          <span className="text-[10px] font-bold uppercase tracking-widest text-gray-700">{title}</span>
+          {badge && (
+            <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 bg-gray-100 border border-gray-200 text-gray-500">{badge}</span>
+          )}
+        </div>
+        {action}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// ─── Chart Tooltip ──────────────────────────────────────────────────────────────
+function ChartTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-white border border-gray-200 shadow px-3 py-2 text-[11px] font-mono">
+      <p className="font-bold text-gray-700 mb-1">{label}</p>
+      {payload.map((p: any) => (
+        <p key={p.name} style={{ color: p.color }}>
+          {p.name}: <span className="font-bold">{p.value}</span>
+        </p>
+      ))}
+    </div>
+  );
+}
+
+// ─── Empty Cell ─────────────────────────────────────────────────────────────────
+function EmptyState({ icon: Icon, label }: { icon: React.ElementType; label: string }) {
+  return (
+    <div className="flex items-center justify-center py-12 text-center">
+      <div>
+        <Icon className="w-7 h-7 text-gray-200 mx-auto mb-2" />
+        <p className="text-[11px] font-mono text-gray-400 uppercase tracking-widest">{label}</p>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main ──────────────────────────────────────────────────────────────────────
 export default function AnalyticsPage() {
   const { dashboard, loading, refreshDashboard } = useDashboard();
   const { jobs } = useJobs();
-  const [refreshing, setRefreshing] = useState(false);
-  const [lastRefresh, setLastRefresh] = useState(new Date());
-  const [activeSkillTab, setActiveSkillTab] = useState<'demand' | 'gaps'>('demand');
+  const [refreshing, setRefreshing]   = useState(false);
+  const [skillTab, setSkillTab]       = useState<'demand' | 'gaps'>('demand');
 
-  const stats     = dashboard?.overview;
+  const stats      = dashboard?.overview;
   const scoreStats = dashboard?.scoreStats;
   const topSkills  = dashboard?.topSkills  || [];
   const commonGaps = dashboard?.commonGaps || [];
   const recBD      = dashboard?.recBreakdown || {};
-  const sources    = dashboard?.candidateSources || [];
+
   const recentScreenings = (dashboard?.recentScreenings || []).map(s => ({
     jobTitle:        s.jobTitle        || 'Unknown Position',
     totalApplicants: s.totalApplicants ?? 0,
     shortlistSize:   s.shortlistSize   ?? 0,
     screeningDate:   s.screeningDate   || new Date().toISOString(),
-    aiModel:         s.aiModel         || '',
+    aiModel:         s.aiModel         || 'GEMINI',
   }));
 
   const totalApplicants  = recentScreenings.reduce((a, s) => a + s.totalApplicants, 0);
   const totalShortlisted = recentScreenings.reduce((a, s) => a + s.shortlistSize, 0);
-  const convRate = totalApplicants > 0 ? ((totalShortlisted / totalApplicants) * 100).toFixed(1) : '0';
+  const convRate  = totalApplicants > 0 ? ((totalShortlisted / totalApplicants) * 100).toFixed(1) : '—';
+  const totalRecs = Object.values(recBD).reduce<number>((a, b) => a + (b as number), 0);
 
-  const totalRecs = Object.values(recBD).reduce((a, b) => a + b, 0);
-
-  // Score distribution derived from recBreakdown as proxy buckets
   const scoreDistData = useMemo(() => [
-    { range: '80–100', count: (recBD['Strongly Recommended'] || 0) },
-    { range: '65–79',  count: (recBD['Recommended'] || 0) },
-    { range: '50–64',  count: (recBD['Consider'] || 0) },
-    { range: '0–49',   count: (recBD['Not Recommended'] || 0) },
+    { label: 'STRONG',   range: '80–100', count: recBD['Strongly Recommended'] || 0, color: '#16a34a' },
+    { label: 'REC.',     range: '65–79',  count: recBD['Recommended']           || 0, color: '#3b82f6' },
+    { label: 'CONSIDER', range: '50–64',  count: recBD['Consider']              || 0, color: '#d97706' },
+    { label: 'NOT REC.', range: '0–49',   count: recBD['Not Recommended']       || 0, color: '#ef4444' },
   ], [recBD]);
-
-  const pieData = useMemo(() => sources.map((s, i) => ({
-    name: s.source.charAt(0).toUpperCase() + s.source.slice(1),
-    value: s.count,
-    color: CHART_COLORS[i % CHART_COLORS.length],
-  })), [sources]);
 
   const handleRefresh = () => {
     setRefreshing(true);
     refreshDashboard();
-    setTimeout(() => { setLastRefresh(new Date()); setRefreshing(false); }, 1200);
+    setTimeout(() => setRefreshing(false), 1200);
   };
 
+  const kpis = [
+    { label: 'CANDIDATE POOL',    value: stats?.totalCandidates ?? 0,                                        icon: Users,      accent: '#3b82f6' },
+    { label: 'ACTIVE POSITIONS',  value: stats?.activeJobs ?? 0,                                             icon: Briefcase,  accent: '#7c3aed' },
+    { label: 'EVALUATIONS RUN',   value: stats?.totalScreenings ?? 0,                                        icon: FileText,   accent: '#16a34a' },
+    { label: 'AVG QUALITY SCORE', value: scoreStats ? Math.round(scoreStats.avgScore) : '—', unit: scoreStats ? '%' : '', icon: Target,     accent: '#d97706' },
+    { label: 'SHORTLISTED',       value: totalShortlisted,                                                    icon: UserCheck,  accent: '#16a34a' },
+    { label: 'SELECTION RATE',    value: convRate, unit: convRate !== '—' ? '%' : '',                        icon: TrendingUp, accent: '#3b82f6' },
+  ];
+
+  const REC_ROWS = [
+    { key: 'Strongly Recommended', label: 'STRONGLY REC.', color: '#16a34a', icon: Star },
+    { key: 'Recommended',          label: 'RECOMMENDED',   color: '#3b82f6', icon: CheckCircle2 },
+    { key: 'Consider',             label: 'CONSIDER',      color: '#d97706', icon: AlertTriangle },
+    { key: 'Not Recommended',      label: 'NOT REC.',      color: '#ef4444', icon: TrendingDown },
+  ];
+
+  const skillData = skillTab === 'demand' ? topSkills : commonGaps;
+  const skillMax  = skillData[0]?.count || 1;
+  const skillColor = skillTab === 'demand' ? '#3b82f6' : '#d97706';
+
   return (
-    <motion.div initial="hidden" animate="show" variants={stagger} className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#eef1f5] font-sans flex flex-col">
 
-      {/* ── Status Bar ── */}
-      <div className="bg-gray-900 px-6 py-1.5 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5">
-            <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-[10px] font-bold text-gray-300 tracking-widest uppercase">TalentAI</span>
-          </div>
-          <span className="text-gray-600 text-[10px]">|</span>
-          <span className="text-[10px] text-gray-400 tracking-wider uppercase">People Analytics · Executive View</span>
-        </div>
-        <div className="flex items-center gap-4">
-          <LiveClock />
-          <span className="text-[10px] text-gray-500">
-            Refreshed: <span className="text-gray-300">{lastRefresh.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</span>
-          </span>
-        </div>
-      </div>
+      <SysHeader onRefresh={handleRefresh} refreshing={refreshing} />
+      <KPIStrip metrics={kpis} />
 
-      {/* ── Page Header ── */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="flex items-center justify-between gap-4 flex-wrap">
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">People Analytics</h1>
-            <p className="text-xs text-gray-500 mt-0.5">Strategic hiring intelligence for leadership decisions</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleRefresh}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-all"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-              Refresh
-            </button>
-            <button className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-gray-900 rounded-lg hover:bg-gray-800 transition-all">
-              <Download className="w-3.5 h-3.5" />
-              Export Report
-            </button>
-          </div>
-        </div>
-      </div>
+      <div className="flex-1 p-4 overflow-y-auto">
+        <div className="max-w-[1600px] mx-auto space-y-4">
 
-      <div className="p-6 space-y-6 max-w-[1600px] mx-auto">
-        {loading ? (
-          <div className="flex items-center justify-center py-32">
-            <div className="text-center">
-              <div className="w-10 h-10 border-3 border-gray-200 border-t-gray-900 rounded-full animate-spin mx-auto mb-4 border-[3px]" />
-              <p className="text-sm text-gray-500">Loading analytics…</p>
-            </div>
-          </div>
-        ) : (
-          <>
-            {/* ── KPI Row ── */}
-            <motion.div variants={stagger} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-              <KPI label="Candidate Pool"    value={stats?.totalCandidates ?? 0} sub="total in pipeline"          icon={Users}     accent={COLORS.blue}   trend="up"   trendLabel="Active pipeline" />
-              <KPI label="Open Positions"    value={stats?.activeJobs ?? 0}      sub={`of ${stats?.totalJobs ?? 0} total`} icon={Briefcase} accent={COLORS.violet} />
-              <KPI label="Evaluations Run"   value={stats?.totalScreenings ?? 0} sub="completed sessions"        icon={FileText}  accent={COLORS.green}  />
-              <KPI label="Average Score"     value={scoreStats ? Math.round(scoreStats.avgScore) : '—'}  sub="composite /100" icon={Target}    accent={COLORS.amber}  />
-              <KPI label="Shortlisted"       value={totalRecs}                   sub="across all roles"          icon={UserCheck} accent={COLORS.green}  trend="up"   trendLabel={`${convRate}% selection rate`} />
-              <KPI label="Top Score"         value={scoreStats ? Math.round(scoreStats.maxScore) : '—'}   sub="highest candidate"      icon={Trophy}    accent={COLORS.blue}   />
-            </motion.div>
-
-            {/* ── Executive Summary Banner ── */}
-            <motion.div variants={fade} className="rounded-xl bg-gray-900 text-white p-5">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
-                  <Activity className="w-4 h-4 text-white" />
-                </div>
-                <div>
-                  <h2 className="text-sm font-bold">Executive Summary</h2>
-                  <p className="text-[10px] text-gray-400">Key hiring indicators at a glance</p>
-                </div>
+          {loading ? (
+            <div className="flex items-center justify-center py-32">
+              <div className="text-center">
+                <div className="w-8 h-8 border-2 border-gray-200 border-t-blue-500 rounded-full animate-spin mx-auto mb-3" />
+                <p className="text-[11px] font-mono text-gray-500 uppercase tracking-widest">LOADING ANALYTICS...</p>
               </div>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                {[
-                  {
-                    label: 'Pipeline Health',
-                    value: `${stats?.totalCandidates ?? 0} candidates`,
-                    sub: `across ${stats?.activeJobs ?? 0} active positions`,
-                    color: 'border-blue-500/40 bg-blue-500/10',
-                    icon: Users,
-                  },
-                  {
-                    label: 'Evaluation Coverage',
-                    value: `${stats?.totalScreenings ?? 0} sessions`,
-                    sub: `${scoreStats?.totalRanked ?? 0} candidates ranked`,
-                    color: 'border-violet-500/40 bg-violet-500/10',
-                    icon: FileText,
-                  },
-                  {
-                    label: 'Selection Rate',
-                    value: `${convRate}%`,
-                    sub: `${totalShortlisted} of ${totalApplicants} applicants`,
-                    color: 'border-emerald-500/40 bg-emerald-500/10',
-                    icon: UserCheck,
-                  },
-                  {
-                    label: 'Quality Index',
-                    value: scoreStats ? `${Math.round(scoreStats.avgScore)}/100` : '—',
-                    sub: `avg confidence ${scoreStats?.avgConfidence ? Math.round(scoreStats.avgConfidence) : '—'}%`,
-                    color: 'border-amber-500/40 bg-amber-500/10',
-                    icon: Target,
-                  },
-                ].map(item => (
-                  <div key={item.label} className={`border rounded-lg p-3.5 ${item.color}`}>
-                    <div className="flex items-center gap-2 mb-2">
-                      <item.icon className="w-3.5 h-3.5 text-gray-300" />
-                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{item.label}</span>
-                    </div>
-                    <p className="text-lg font-bold text-white">{item.value}</p>
-                    <p className="text-[10px] text-gray-400 mt-0.5">{item.sub}</p>
-                  </div>
-                ))}
-              </div>
-            </motion.div>
-
-            {/* ── Row 1: Evaluations + Candidate Sources ── */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-              {/* Recent Evaluations Table */}
-              <SectionCard
-                className="lg:col-span-2"
-                title="Recent Evaluations"
-                subtitle="Latest candidate assessment sessions"
-                icon={Activity}
-                action={
-                  <Link href="/results" className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700">
-                    View all <ChevronRight className="w-3.5 h-3.5" />
-                  </Link>
-                }
-              >
-                {recentScreenings.length === 0 ? (
-                  <div className="flex items-center justify-center py-12">
-                    <div className="text-center">
-                      <FileText className="w-8 h-8 text-gray-200 mx-auto mb-2" />
-                      <p className="text-sm text-gray-400">No evaluations yet</p>
-                      <p className="text-xs text-gray-300 mt-1">Run your first screening to see results here</p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="border-b border-gray-100 bg-gray-50">
-                          <th className="text-[10px] font-bold text-gray-400 uppercase tracking-wider py-2.5 px-4 text-left">Position</th>
-                          <th className="text-[10px] font-bold text-gray-400 uppercase tracking-wider py-2.5 px-4 text-right">Applicants</th>
-                          <th className="text-[10px] font-bold text-gray-400 uppercase tracking-wider py-2.5 px-4 text-right">Shortlisted</th>
-                          <th className="text-[10px] font-bold text-gray-400 uppercase tracking-wider py-2.5 px-4 text-right">Rate</th>
-                          <th className="text-[10px] font-bold text-gray-400 uppercase tracking-wider py-2.5 px-4 text-right">Date</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-50">
-                        {recentScreenings.map((s, i) => {
-                          const rate = s.totalApplicants > 0 ? ((s.shortlistSize / s.totalApplicants) * 100).toFixed(0) : '0';
-                          return (
-                            <tr key={i} className="hover:bg-gray-50 transition-colors">
-                              <td className="py-3 px-4">
-                                <span className="text-sm font-semibold text-gray-900">{s.jobTitle}</span>
-                              </td>
-                              <td className="py-3 px-4 text-right">
-                                <span className="text-sm text-gray-600">{s.totalApplicants}</span>
-                              </td>
-                              <td className="py-3 px-4 text-right">
-                                <span className="text-sm font-bold text-emerald-600">{s.shortlistSize}</span>
-                              </td>
-                              <td className="py-3 px-4 text-right">
-                                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                                  Number(rate) >= 30 ? 'bg-emerald-50 text-emerald-700' :
-                                  Number(rate) >= 15 ? 'bg-amber-50 text-amber-700' :
-                                  'bg-gray-100 text-gray-600'
-                                }`}>{rate}%</span>
-                              </td>
-                              <td className="py-3 px-4 text-right">
-                                <span className="text-xs text-gray-400">
-                                  {new Date(s.screeningDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
-                                </span>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </SectionCard>
-
-              {/* Candidate Sources */}
-              <SectionCard title="Candidate Sources" subtitle="Intake channel breakdown" icon={Users}>
-                {sources.length === 0 ? (
-                  <div className="flex items-center justify-center py-12 text-center">
-                    <div>
-                      <Users className="w-8 h-8 text-gray-200 mx-auto mb-2" />
-                      <p className="text-sm text-gray-400">No source data yet</p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="p-5 space-y-1">
-                    {/* Mini donut */}
-                    {pieData.length > 0 && (
-                      <div className="flex justify-center mb-4">
-                        <ResponsiveContainer width={120} height={120}>
-                          <PieChart>
-                            <Pie data={pieData} cx="50%" cy="50%" innerRadius={32} outerRadius={52}
-                              dataKey="value" paddingAngle={2} strokeWidth={0}>
-                              {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
-                            </Pie>
-                          </PieChart>
-                        </ResponsiveContainer>
-                      </div>
-                    )}
-                    <div className="space-y-3">
-                      {sources.map((src, i) => (
-                        <div key={src.source} className="flex items-center gap-3">
-                          <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }} />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="text-xs font-medium text-gray-700 capitalize">{src.source}</span>
-                              <span className="text-xs font-bold text-gray-900">{src.count}</span>
-                            </div>
-                            <div className="h-1 bg-gray-100 rounded-full overflow-hidden">
-                              <div
-                                className="h-full rounded-full"
-                                style={{
-                                  width: `${Math.min(100, (src.count / (sources[0]?.count || 1)) * 100)}%`,
-                                  backgroundColor: CHART_COLORS[i % CHART_COLORS.length],
-                                }}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </SectionCard>
             </div>
+          ) : (
+            <>
 
-            {/* ── Row 2: Score Distribution + Recommendation Breakdown ── */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* ── Row 1: Recent Evaluations + Assessment Outcomes ── */}
+              <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-4">
 
-              {/* Score Distribution */}
-              <SectionCard title="Score Distribution" subtitle="Candidate quality across all evaluations" icon={BarChart3}>
-                <div className="p-5">
-                  {totalRecs === 0 ? (
-                    <div className="flex items-center justify-center py-10 text-center">
-                      <div>
-                        <BarChart3 className="w-8 h-8 text-gray-200 mx-auto mb-2" />
-                        <p className="text-sm text-gray-400">No evaluation data yet</p>
-                      </div>
-                    </div>
+                {/* Recent Evaluations table */}
+                <Panel
+                  title="RECENT EVALUATIONS"
+                  badge={`${recentScreenings.length} SESSIONS`}
+                  action={
+                    <Link href="/results" className="flex items-center gap-1 text-[10px] font-mono font-bold text-blue-600 hover:text-blue-700 uppercase tracking-wider">
+                      ALL RESULTS <ChevronRight className="w-3 h-3" />
+                    </Link>
+                  }
+                >
+                  {recentScreenings.length === 0 ? (
+                    <EmptyState icon={FileText} label="NO EVALUATIONS YET" />
                   ) : (
-                    <ResponsiveContainer width="100%" height={200}>
-                      <BarChart data={scoreDistData} barSize={36}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
-                        <XAxis dataKey="range" tick={{ fontSize: 11, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
-                        <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
-                        <Tooltip content={<ChartTooltip />} />
-                        <Bar dataKey="count" name="Candidates" radius={[4, 4, 0, 0]}>
-                          {scoreDistData.map((entry, i) => (
-                            <Cell key={i} fill={[COLORS.green, COLORS.blue, COLORS.amber, COLORS.gray][i]} />
-                          ))}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
+                    <div className="overflow-x-auto">
+                      <table className="w-full" style={{ borderCollapse: 'collapse' }}>
+                        <thead>
+                          <tr style={{ borderBottom: '1px solid #e5e7eb', background: '#f9fafb' }}>
+                            {[
+                              { h: 'POSITION',    align: 'left'  },
+                              { h: 'APPLICANTS',  align: 'right' },
+                              { h: 'SHORTLISTED', align: 'right' },
+                              { h: 'RATE',        align: 'right' },
+                              { h: 'ENGINE',      align: 'right' },
+                              { h: 'DATE',        align: 'right' },
+                            ].map(({ h, align }) => (
+                              <th
+                                key={h}
+                                className="py-2.5 px-4 text-[9px] font-bold uppercase tracking-widest text-gray-500 font-mono"
+                                style={{ textAlign: align as 'left' | 'right' }}
+                              >{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {recentScreenings.map((s, i) => {
+                            const rate    = s.totalApplicants > 0 ? ((s.shortlistSize / s.totalApplicants) * 100).toFixed(0) : '0';
+                            const rateNum = Number(rate);
+                            return (
+                              <tr
+                                key={i}
+                                style={{ borderBottom: '1px solid #f3f4f6', background: i % 2 === 0 ? '#ffffff' : '#f9fafb' }}
+                                className="hover:bg-blue-50 transition-colors"
+                              >
+                                <td className="py-3 px-4">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-1 h-4 bg-blue-500 flex-shrink-0" />
+                                    <span className="text-xs font-bold font-mono text-gray-900">{s.jobTitle}</span>
+                                  </div>
+                                </td>
+                                <td className="py-3 px-4 text-right">
+                                  <span className="text-xs font-mono text-gray-600">{s.totalApplicants}</span>
+                                </td>
+                                <td className="py-3 px-4 text-right">
+                                  <span className="text-xs font-bold font-mono" style={{ color: '#16a34a' }}>{s.shortlistSize}</span>
+                                </td>
+                                <td className="py-3 px-4 text-right">
+                                  <span
+                                    className="text-[10px] font-bold font-mono px-2 py-0.5"
+                                    style={{
+                                      background: rateNum >= 30 ? '#dcfce7' : rateNum >= 15 ? '#fef3c7' : '#f3f4f6',
+                                      color:      rateNum >= 30 ? '#16a34a' : rateNum >= 15 ? '#d97706'  : '#6b7280',
+                                      border:     `1px solid ${rateNum >= 30 ? '#bbf7d0' : rateNum >= 15 ? '#fde68a' : '#e5e7eb'}`,
+                                    }}
+                                  >
+                                    {rate}%
+                                  </span>
+                                </td>
+                                <td className="py-3 px-4 text-right">
+                                  <span className="text-[9px] font-mono text-gray-400 uppercase">{s.aiModel}</span>
+                                </td>
+                                <td className="py-3 px-4 text-right">
+                                  <span className="text-[10px] font-mono text-gray-500">
+                                    {new Date(s.screeningDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toUpperCase()}
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
                   )}
-                </div>
-              </SectionCard>
+                </Panel>
 
-              {/* Recommendation Breakdown */}
-              <SectionCard title="Assessment Outcomes" subtitle="Candidate recommendation summary" icon={Trophy}>
-                <div className="p-5 space-y-3">
+                {/* Assessment Outcomes */}
+                <Panel title="ASSESSMENT OUTCOMES" badge={`${totalRecs} TOTAL`}>
                   {totalRecs === 0 ? (
-                    <div className="flex items-center justify-center py-10 text-center">
-                      <div>
-                        <Trophy className="w-8 h-8 text-gray-200 mx-auto mb-2" />
-                        <p className="text-sm text-gray-400">No assessment data yet</p>
-                      </div>
-                    </div>
+                    <EmptyState icon={Trophy} label="NO DATA YET" />
                   ) : (
-                    Object.entries(REC_CONFIG).map(([key, cfg]) => {
-                      const count = recBD[key] || 0;
-                      const pct = totalRecs > 0 ? Math.round((count / totalRecs) * 100) : 0;
-                      const IconComp = cfg.icon;
-                      return (
-                        <div key={key} className="flex items-center gap-3">
-                          <IconComp className="w-4 h-4 flex-shrink-0" style={{ color: cfg.color }} />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="text-xs font-medium text-gray-700">{cfg.label}</span>
+                    <div className="p-4 space-y-3">
+                      {REC_ROWS.map(({ key, label, color, icon: Icon }) => {
+                        const count = (recBD[key] as number) || 0;
+                        const pct   = totalRecs > 0 ? Math.round((count / totalRecs) * 100) : 0;
+                        return (
+                          <div key={key} className="space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-1.5">
+                                <Icon className="w-3 h-3 flex-shrink-0" style={{ color }} />
+                                <span className="text-[10px] font-bold font-mono uppercase tracking-wider" style={{ color }}>{label}</span>
+                              </div>
                               <div className="flex items-center gap-2">
-                                <span className="text-xs font-bold text-gray-900">{count}</span>
-                                <span className="text-[10px] text-gray-400 w-8 text-right">{pct}%</span>
+                                <span className="text-[10px] font-bold font-mono text-gray-700">{count}</span>
+                                <span className="text-[9px] font-mono text-gray-400 w-6 text-right">{pct}%</span>
                               </div>
                             </div>
-                            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                              <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pct}%`, backgroundColor: cfg.color }} />
+                            <div className="h-1.5 bg-gray-100 border border-gray-200 overflow-hidden">
+                              <div className="h-full transition-all duration-700" style={{ width: `${pct}%`, backgroundColor: color }} />
                             </div>
                           </div>
-                        </div>
-                      );
-                    })
+                        );
+                      })}
+
+                      <div className="pt-3 border-t border-gray-200 space-y-0">
+                        {[
+                          { label: 'TOTAL RANKED',    value: scoreStats?.totalRanked ?? 0,                                                    color: '#3b82f6' },
+                          { label: 'AVG CONFIDENCE',  value: scoreStats?.avgConfidence ? `${Math.round(scoreStats.avgConfidence)}%` : '—',    color: '#6b7280' },
+                          { label: 'HIGHEST SCORE',   value: scoreStats?.maxScore ? `${Math.round(scoreStats.maxScore)}` : '—',               color: '#16a34a' },
+                          { label: 'SELECTION RATE',  value: convRate !== '—' ? `${convRate}%` : '—',                                         color: '#3b82f6' },
+                        ].map(({ label, value, color }, i, arr) => (
+                          <div
+                            key={label}
+                            className="flex items-center justify-between py-2"
+                            style={{ borderBottom: i < arr.length - 1 ? '1px solid #f3f4f6' : 'none' }}
+                          >
+                            <span className="text-[9px] font-mono text-gray-500 uppercase tracking-wider">{label}</span>
+                            <span className="text-[11px] font-bold font-mono" style={{ color }}>{value}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   )}
-                </div>
-              </SectionCard>
-            </div>
-
-            {/* ── Row 3: Skill Intelligence ── */}
-            <SectionCard
-              title="Skill Intelligence"
-              subtitle="Market demand vs. candidate supply analysis"
-              icon={Target}
-              action={
-                <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
-                  {(['demand', 'gaps'] as const).map(tab => (
-                    <button
-                      key={tab}
-                      onClick={() => setActiveSkillTab(tab)}
-                      className={`px-3 py-1 text-[11px] font-semibold rounded-md transition-all ${
-                        activeSkillTab === tab ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                      }`}
-                    >
-                      {tab === 'demand' ? 'In-Demand Skills' : 'Skill Gaps'}
-                    </button>
-                  ))}
-                </div>
-              }
-            >
-              <div className="p-5">
-                {activeSkillTab === 'demand' ? (
-                  topSkills.length === 0 ? (
-                    <div className="text-center py-10">
-                      <Target className="w-8 h-8 text-gray-200 mx-auto mb-2" />
-                      <p className="text-sm text-gray-400">No skill data available yet</p>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3">
-                      {topSkills.slice(0, 10).map((s, i) => (
-                        <ScoreBar key={s.skill} label={s.skill} value={s.count} max={topSkills[0]?.count || 1} color={CHART_COLORS[i % CHART_COLORS.length]} />
-                      ))}
-                    </div>
-                  )
-                ) : (
-                  commonGaps.length === 0 ? (
-                    <div className="text-center py-10">
-                      <AlertTriangle className="w-8 h-8 text-gray-200 mx-auto mb-2" />
-                      <p className="text-sm text-gray-400">No gap data available yet</p>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3">
-                      {commonGaps.slice(0, 10).map((g, i) => (
-                        <ScoreBar key={g.skill} label={g.skill} value={g.count} max={commonGaps[0]?.count || 1} color={COLORS.amber} />
-                      ))}
-                    </div>
-                  )
-                )}
+                </Panel>
               </div>
-            </SectionCard>
 
-            {/* ── Row 4: Positions + Quick Actions ── */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* ── Row 2: Score Chart + Skill Intelligence + Pipeline Summary ── */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
-              {/* Open Positions */}
-              <SectionCard
-                className="lg:col-span-2"
-                title="Position Overview"
-                subtitle="Active roles in the hiring pipeline"
-                icon={Briefcase}
+                {/* Score Distribution */}
+                <Panel title="SCORE DISTRIBUTION" badge="BY QUALITY BAND">
+                  <div className="p-4">
+                    {totalRecs === 0 ? (
+                      <EmptyState icon={BarChart3} label="NO EVALUATION DATA YET" />
+                    ) : (
+                      <>
+                        <ResponsiveContainer width="100%" height={180}>
+                          <BarChart data={scoreDistData} barSize={44} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="2 2" vertical={false} stroke="#f3f4f6" />
+                            <XAxis
+                              dataKey="label"
+                              tick={{ fontSize: 9, fill: '#9ca3af', fontFamily: 'monospace', fontWeight: 700 }}
+                              axisLine={false}
+                              tickLine={false}
+                            />
+                            <YAxis
+                              tick={{ fontSize: 9, fill: '#9ca3af', fontFamily: 'monospace' }}
+                              axisLine={false}
+                              tickLine={false}
+                            />
+                            <Tooltip content={<ChartTooltip />} />
+                            <Bar dataKey="count" name="Candidates" radius={[2, 2, 0, 0]}>
+                              {scoreDistData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                        <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5 pt-2 border-t border-gray-100">
+                          {scoreDistData.map(d => (
+                            <div key={d.range} className="flex items-center gap-1.5">
+                              <div className="w-2 h-2 flex-shrink-0" style={{ backgroundColor: d.color }} />
+                              <span className="text-[9px] font-mono text-gray-500">{d.range}</span>
+                              <span className="text-[9px] font-bold font-mono text-gray-700 ml-auto">{d.count}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </Panel>
+
+                {/* Skill Intelligence */}
+                <Panel
+                  title="SKILL INTELLIGENCE"
+                  accent={skillColor}
+                  action={
+                    <div className="flex items-center gap-px border border-gray-200">
+                      {(['demand', 'gaps'] as const).map(t => (
+                        <button
+                          key={t}
+                          onClick={() => setSkillTab(t)}
+                          className="px-2.5 py-1 text-[9px] font-mono font-bold uppercase tracking-wider transition-colors"
+                          style={{
+                            background: skillTab === t ? '#3b82f6' : 'transparent',
+                            color:      skillTab === t ? '#fff'    : '#9ca3af',
+                          }}
+                        >
+                          {t === 'demand' ? 'DEMAND' : 'GAPS'}
+                        </button>
+                      ))}
+                    </div>
+                  }
+                >
+                  <div className="p-4 space-y-2.5">
+                    {skillData.length === 0 ? (
+                      <EmptyState icon={Target} label="NO SKILL DATA YET" />
+                    ) : (
+                      skillData.slice(0, 8).map((s: { skill: string; count: number }) => {
+                        const pct = Math.min(100, (s.count / skillMax) * 100);
+                        return (
+                          <div key={s.skill} className="space-y-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-mono text-gray-700 truncate pr-2">{s.skill}</span>
+                              <span className="text-[10px] font-bold font-mono text-gray-900 flex-shrink-0">{s.count}</span>
+                            </div>
+                            <div className="h-1 bg-gray-100 overflow-hidden">
+                              <div className="h-full transition-all duration-700" style={{ width: `${pct}%`, backgroundColor: skillColor }} />
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </Panel>
+
+                {/* Pipeline Summary + Quick Actions */}
+                <div className="space-y-4">
+                  <Panel title="PIPELINE SUMMARY">
+                    <div className="p-4 space-y-0">
+                      {[
+                        { label: 'TOTAL CANDIDATES', value: stats?.totalCandidates ?? 0,  color: '#3b82f6' },
+                        { label: 'ACTIVE ROLES',      value: stats?.activeJobs ?? 0,       color: '#7c3aed' },
+                        { label: 'TOTAL ROLES',       value: stats?.totalJobs ?? 0,        color: '#6b7280' },
+                        { label: 'SCREENINGS DONE',   value: stats?.totalScreenings ?? 0, color: '#16a34a' },
+                        { label: 'CANDIDATES RANKED', value: scoreStats?.totalRanked ?? 0, color: '#d97706' },
+                      ].map(({ label, value, color }, i, arr) => (
+                        <div
+                          key={label}
+                          className="flex items-center justify-between py-2"
+                          style={{ borderBottom: i < arr.length - 1 ? '1px solid #f3f4f6' : 'none' }}
+                        >
+                          <span className="text-[9px] font-mono text-gray-500 uppercase tracking-wider">{label}</span>
+                          <span className="text-[11px] font-bold font-mono" style={{ color }}>{value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </Panel>
+
+                  <Panel title="QUICK ACTIONS">
+                    <div className="p-3 space-y-1.5">
+                      {[
+                        { label: 'RUN EVALUATION',  sub: 'Screen new candidates',  href: '/screening', color: '#3b82f6' },
+                        { label: 'VIEW RESULTS',     sub: 'All screening outcomes', href: '/results',   color: '#7c3aed' },
+                        { label: 'MANAGE POSITIONS', sub: 'Jobs & descriptions',    href: '/jobs',      color: '#16a34a' },
+                      ].map(item => (
+                        <Link
+                          key={item.label}
+                          href={item.href}
+                          className="flex items-center justify-between px-3 py-2.5 border border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-colors group"
+                        >
+                          <div>
+                            <p className="text-[10px] font-bold font-mono uppercase tracking-wider" style={{ color: item.color }}>{item.label}</p>
+                            <p className="text-[9px] font-mono text-gray-400 mt-0.5">{item.sub}</p>
+                          </div>
+                          <ChevronRight className="w-3 h-3 text-gray-300 group-hover:text-blue-500 transition-colors" />
+                        </Link>
+                      ))}
+                    </div>
+                  </Panel>
+                </div>
+              </div>
+
+              {/* ── Row 3: Position Overview ── */}
+              <Panel
+                title="POSITION OVERVIEW"
+                badge={`${jobs.length} ROLES`}
                 action={
-                  <Link href="/jobs" className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700">
-                    Manage <ChevronRight className="w-3.5 h-3.5" />
+                  <Link href="/jobs" className="flex items-center gap-1 text-[10px] font-mono font-bold text-blue-600 hover:text-blue-700 uppercase tracking-wider">
+                    MANAGE <ChevronRight className="w-3 h-3" />
                   </Link>
                 }
               >
                 {jobs.length === 0 ? (
-                  <div className="flex items-center justify-center py-12">
-                    <div className="text-center">
-                      <Briefcase className="w-8 h-8 text-gray-200 mx-auto mb-2" />
-                      <p className="text-sm text-gray-400">No positions found</p>
-                    </div>
-                  </div>
+                  <EmptyState icon={Briefcase} label="NO POSITIONS FOUND" />
                 ) : (
                   <div className="overflow-x-auto">
-                    <table className="w-full">
+                    <table className="w-full" style={{ borderCollapse: 'collapse' }}>
                       <thead>
-                        <tr className="border-b border-gray-100 bg-gray-50">
-                          <th className="text-[10px] font-bold text-gray-400 uppercase tracking-wider py-2.5 px-4 text-left">Position</th>
-                          <th className="text-[10px] font-bold text-gray-400 uppercase tracking-wider py-2.5 px-4 text-left">Department</th>
-                          <th className="text-[10px] font-bold text-gray-400 uppercase tracking-wider py-2.5 px-4 text-left">Level</th>
-                          <th className="text-[10px] font-bold text-gray-400 uppercase tracking-wider py-2.5 px-4 text-center">Status</th>
-                          <th className="text-[10px] font-bold text-gray-400 uppercase tracking-wider py-2.5 px-4 text-right">Action</th>
+                        <tr style={{ borderBottom: '1px solid #e5e7eb', background: '#f9fafb' }}>
+                          {[
+                            { h: 'POSITION',   align: 'left'  },
+                            { h: 'DEPARTMENT', align: 'left'  },
+                            { h: 'LEVEL',      align: 'left'  },
+                            { h: 'TYPE',       align: 'left'  },
+                            { h: 'STATUS',     align: 'left'  },
+                            { h: '',           align: 'right' },
+                          ].map(({ h, align }, i) => (
+                            <th
+                              key={h + i}
+                              className="py-2.5 px-4 text-[9px] font-bold uppercase tracking-widest text-gray-500 font-mono"
+                              style={{ textAlign: align as 'left' | 'right' }}
+                            >{h}</th>
+                          ))}
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-50">
-                        {jobs.slice(0, 8).map((job: any) => (
-                          <tr key={job._id} className="hover:bg-gray-50 transition-colors">
+                      <tbody>
+                        {jobs.slice(0, 10).map((job: any, i: number) => (
+                          <tr
+                            key={job._id}
+                            style={{ borderBottom: '1px solid #f3f4f6', background: i % 2 === 0 ? '#ffffff' : '#f9fafb' }}
+                            className="hover:bg-blue-50 transition-colors"
+                          >
                             <td className="py-3 px-4">
-                              <div className="flex items-center gap-2">
-                                <div className="w-6 h-6 rounded-md bg-blue-100 flex items-center justify-center flex-shrink-0">
-                                  <Briefcase className="w-3 h-3 text-blue-600" />
-                                </div>
-                                <span className="text-sm font-semibold text-gray-900 truncate max-w-[160px]">{job.title}</span>
-                              </div>
+                              <span className="text-xs font-bold font-mono text-gray-900">{job.title}</span>
                             </td>
                             <td className="py-3 px-4">
-                              <span className="text-xs text-gray-500">{job.department || '—'}</span>
+                              <span className="text-[10px] font-mono text-gray-500">{job.department || '—'}</span>
                             </td>
                             <td className="py-3 px-4">
-                              <span className="text-xs text-gray-500">{job.experienceLevel}</span>
+                              <span className="text-[10px] font-mono text-gray-500 uppercase">{job.experienceLevel || '—'}</span>
                             </td>
-                            <td className="py-3 px-4 text-center">
-                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                                job.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500'
-                              }`}>
-                                {job.isActive ? 'Active' : 'Paused'}
+                            <td className="py-3 px-4">
+                              <span className="text-[10px] font-mono text-gray-500 uppercase">{job.employmentType || '—'}</span>
+                            </td>
+                            <td className="py-3 px-4">
+                              <span
+                                className="text-[9px] font-bold font-mono px-2 py-0.5"
+                                style={{
+                                  background: job.isActive ? '#dcfce7' : '#f3f4f6',
+                                  color:      job.isActive ? '#16a34a' : '#6b7280',
+                                  border:     `1px solid ${job.isActive ? '#bbf7d0' : '#e5e7eb'}`,
+                                }}
+                              >
+                                {job.isActive ? 'ACTIVE' : 'PAUSED'}
                               </span>
                             </td>
                             <td className="py-3 px-4 text-right">
                               <Link
                                 href="/jobs"
-                                className="text-[11px] font-medium text-blue-600 hover:text-blue-700 flex items-center justify-end gap-0.5"
+                                className="text-[10px] font-bold font-mono text-blue-600 hover:text-blue-700 uppercase tracking-wider"
                               >
-                                Open <ArrowUpRight className="w-3 h-3" />
+                                OPEN →
                               </Link>
                             </td>
                           </tr>
@@ -616,73 +556,33 @@ export default function AnalyticsPage() {
                     </table>
                   </div>
                 )}
-              </SectionCard>
+              </Panel>
 
-              {/* Quick Actions */}
-              <SectionCard title="Quick Actions" subtitle="Frequently used workflows" icon={Zap}>
-                <div className="p-4 space-y-2">
-                  {[
-                    { label: 'Run Evaluation',   sub: 'Assess new candidates',          href: '/screening', icon: Zap,       color: 'bg-blue-50 text-blue-600 border-blue-100' },
-                    { label: 'View Results',      sub: 'Review evaluation outcomes',     href: '/results',   icon: Trophy,    color: 'bg-violet-50 text-violet-600 border-violet-100' },
-                    { label: 'Manage Positions',  sub: `${stats?.activeJobs ?? 0} open`, href: '/jobs',      icon: Briefcase, color: 'bg-emerald-50 text-emerald-600 border-emerald-100' },
-                  ].map(item => (
-                    <Link
-                      key={item.label}
-                      href={item.href}
-                      className="flex items-center gap-3 p-3 rounded-xl border hover:shadow-sm transition-all group"
-                      style={{ borderColor: 'transparent' }}
-                      onMouseEnter={e => (e.currentTarget.style.borderColor = '')}
-                    >
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 border ${item.color}`}>
-                        <item.icon className="w-3.5 h-3.5" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-semibold text-gray-800">{item.label}</p>
-                        <p className="text-[10px] text-gray-400">{item.sub}</p>
-                      </div>
-                      <ChevronRight className="w-3.5 h-3.5 text-gray-300 group-hover:text-gray-500 transition-colors" />
-                    </Link>
-                  ))}
-
-                  {/* System Health */}
-                  <div className="mt-2 pt-3 border-t border-gray-100 space-y-2">
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">System Status</p>
-                    {[
-                      { label: 'Data Pipeline',     status: 'Operational', ok: true },
-                      { label: 'Evaluation Engine', status: 'Operational', ok: true },
-                      { label: 'Notifications',     status: 'Active',      ok: true },
-                    ].map(item => (
-                      <div key={item.label} className="flex items-center justify-between">
-                        <span className="text-[11px] text-gray-500">{item.label}</span>
-                        <span className={`flex items-center gap-1 text-[10px] font-semibold ${item.ok ? 'text-emerald-600' : 'text-red-500'}`}>
-                          <div className={`w-1.5 h-1.5 rounded-full ${item.ok ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`} />
-                          {item.status}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </SectionCard>
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* ── Footer ── */}
-      <div className="mt-6 px-6 py-3 bg-white border-t border-gray-100">
-        <div className="flex items-center justify-between text-[10px] text-gray-400 max-w-[1600px] mx-auto">
-          <div className="flex items-center gap-4">
-            <span className="font-medium text-gray-500">TalentAI</span>
-            <span>People Analytics Platform</span>
-            <span>·</span>
-            <span>Confidential — For Internal Use Only</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-            <span>All systems operational</span>
-          </div>
+            </>
+          )}
         </div>
       </div>
-    </motion.div>
+
+      {/* ── Status Bar ── */}
+      <div className="h-7 bg-white border-t border-gray-200 flex items-center px-4 gap-4 flex-shrink-0 select-none">
+        {[
+          { icon: Database,  label: 'CANDIDATES', value: `${stats?.totalCandidates ?? 0}`  },
+          { icon: Briefcase, label: 'POSITIONS',  value: `${stats?.activeJobs ?? 0} ACTIVE / ${stats?.totalJobs ?? 0} TOTAL` },
+          { icon: Activity,  label: 'RATE',       value: convRate !== '—' ? `${convRate}%` : '—' },
+          { icon: Server,    label: 'ENGINE',     value: 'GEMINI 2.5 FLASH' },
+          { icon: Brain,     label: 'STATUS',     value: loading ? 'LOADING...' : 'OPERATIONAL' },
+        ].map(({ icon: Icon, label, value }, i) => (
+          <React.Fragment key={label}>
+            {i > 0 && <div className="w-px h-3 bg-gray-200" />}
+            <div className="flex items-center gap-1.5 text-[9px] font-mono">
+              <Icon className="w-2.5 h-2.5 text-gray-400" />
+              <span className="text-gray-400 tracking-wider">{label}:</span>
+              <span className="text-gray-500 tracking-wider">{value}</span>
+            </div>
+          </React.Fragment>
+        ))}
+      </div>
+
+    </div>
   );
 }

@@ -77,239 +77,532 @@ async function exportPDF(
 ) {
   const { default: jsPDF }     = await import("jspdf");
   const { default: autoTable } = await import("jspdf-autotable");
-  const doc      = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-  const W        = doc.internal.pageSize.getWidth();
-  const H        = doc.internal.pageSize.getHeight();
-  const margin   = 18;
-  const contentW = W - margin * 2;
-  const allCandidates = candidates.length > 0;
+
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const W   = doc.internal.pageSize.getWidth();
+  const H   = doc.internal.pageSize.getHeight();
+  const M   = 16;
+  const CW  = W - M * 2;
+
+  // Color palette
+  type RGB = [number, number, number];
+  const C = {
+    navy:   [15,  23,  42]  as RGB,
+    blue:   [37,  99,  235] as RGB,
+    green:  [22,  163, 74]  as RGB,
+    amber:  [217, 119, 6]   as RGB,
+    red:    [220, 38,  38]  as RGB,
+    gray:   [71,  85,  105] as RGB,
+    lgray:  [148, 163, 184] as RGB,
+    xlgray: [241, 245, 249] as RGB,
+    white:  [255, 255, 255] as RGB,
+  };
+
+  const scoreRGB   = (s: number): RGB => s >= 70 ? C.green : s >= 50 ? C.amber : C.red;
+  const recRGB     = (rec: string): RGB => {
+    if (rec === "Strongly Recommended") return C.green;
+    if (rec === "Recommended")          return C.blue;
+    if (rec === "Consider")             return C.amber;
+    return C.red;
+  };
+
   const totalApplicants = candidates.length + (rejectedCandidates?.length || 0);
+  const avgScore = candidates.length ? Math.round(candidates.reduce((a, c) => a + c.finalScore, 0) / candidates.length) : 0;
+  const topScore = candidates.length ? Math.max(...candidates.map(c => c.finalScore)) : 0;
 
-  const addHeader = (n: number) => {
-    doc.setFillColor(255, 255, 255); doc.rect(0, 0, W, 14, "F");
-    doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(0, 0, 0);
-    doc.text("TALENTAI — SCREENING REPORT", margin, 9);
-    doc.setFont("helvetica", "normal"); doc.setTextColor(100, 100, 100);
-    doc.text(`Page ${n}`, W - margin, 9, { align: "right" });
-  };
-  const addFooter = () => {
-    doc.setFontSize(7); doc.setTextColor(100, 100, 100); doc.setFont("helvetica", "normal");
-    doc.text(`Generated ${new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })} · TalentAI`, margin, H - 8);
-    doc.setDrawColor(200, 200, 200); doc.line(margin, H - 12, W - margin, H - 12);
+  let pageNum = 1;
+
+  const drawBar = (x: number, y: number, w: number, h: number, pct: number, color: RGB) => {
+    doc.setFillColor(...C.xlgray); doc.rect(x, y, w, h, "F");
+    if (pct > 0) { doc.setFillColor(...color); doc.rect(x, y, Math.max(0.5, w * (pct / 100)), h, "F"); }
   };
 
-  // ── Cover Page ──
-  addHeader(1);
-  doc.setFillColor(255, 255, 255); doc.rect(0, 14, W, 90, "F");
-  doc.setFillColor(200, 200, 200); doc.rect(0, 14, 4, 90, "F");
-  doc.setFont("helvetica", "bold"); doc.setFontSize(26); doc.setTextColor(0, 0, 0);
-  doc.text("Candidate Screening", margin + 6, 52);
-  doc.setTextColor(100, 100, 100); doc.text("Report", margin + 6, 65);
-  doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(100, 100, 100);
-  doc.text(`Position: ${jobTitle}`, margin + 6, 79); doc.setFontSize(9);
-  doc.text(`Date: ${new Date(screeningDate).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}`, margin + 6, 87);
-  doc.setFillColor(200, 200, 200); doc.roundedRect(W - margin - 46, 50, 46, 32, 4, 4, "F");
-  doc.setFont("helvetica", "bold"); doc.setFontSize(20); doc.setTextColor(0, 0, 0);
-  doc.text(`${candidates.length}`, W - margin - 23, 62, { align: "center" });
-  doc.setFontSize(7); doc.setFont("helvetica", "normal");
-  doc.text("SELECTED", W - margin - 23, 68, { align: "center" });
-  doc.setTextColor(100, 100, 100);
-  doc.text(`${rejectedCandidates?.length || 0}`, W - margin - 23, 76, { align: "center" });
-  doc.text("NOT SELECTED", W - margin - 23, 80, { align: "center" });
+  const addPageHeader = () => {
+    doc.setFillColor(...C.blue); doc.rect(0, 0, W, 1.5, "F");
+    doc.setFillColor(...C.white); doc.rect(0, 1.5, W, 10, "F");
+    doc.setFont("helvetica", "bold"); doc.setFontSize(7); doc.setTextColor(...C.navy);
+    doc.text("TALENTAI — CANDIDATE SCREENING REPORT", M, 8);
+    doc.setFont("helvetica", "normal"); doc.setTextColor(...C.lgray);
+    doc.text(jobTitle.slice(0, 50).toUpperCase(), M + 72, 8);
+    doc.setFont("helvetica", "bold"); doc.setTextColor(...C.navy);
+    doc.text(`PAGE ${pageNum}`, W - M, 8, { align: "right" });
+    doc.setDrawColor(...C.xlgray); doc.setLineWidth(0.3); doc.line(0, 11.5, W, 11.5);
+  };
 
-  // ── Summary Statistics ──
-  let y = 115;
-  const avgScore = allCandidates ? Math.round(candidates.reduce((a, c) => a + c.finalScore, 0) / candidates.length) : 0;
-  doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.setTextColor(0, 0, 0);
-  doc.text("EXECUTIVE SUMMARY", margin, y); y += 8;
+  const addPageFooter = () => {
+    doc.setDrawColor(...C.xlgray); doc.setLineWidth(0.3); doc.line(M, H - 10, W - M, H - 10);
+    doc.setFontSize(6.5); doc.setFont("helvetica", "normal"); doc.setTextColor(...C.lgray);
+    doc.text("CONFIDENTIAL — FOR INTERNAL USE ONLY · TalentAI Candidate Screening Report", M, H - 6.5);
+    doc.text(`Generated ${new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`, W - M, H - 6.5, { align: "right" });
+  };
+
+  const sectionHeader = (label: string, color: RGB = C.navy) => {
+    doc.setFillColor(...color); doc.rect(M, 0, CW, 0, "F"); // dummy to set color
+    doc.setFillColor(...color); doc.rect(M, 0, CW, 8, "F");
+    // re-draw at current y — caller positions y before calling
+  };
+
+  // ── COVER PAGE ──────────────────────────────────────────────────────────────
+  // Navy header band
+  doc.setFillColor(...C.navy); doc.rect(0, 0, W, 58, "F");
+  doc.setFillColor(...C.blue); doc.rect(0, 0, 4, 58, "F");
+
+  // Brand
+  doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.setTextColor(...C.blue);
+  doc.text("TALENTAI", 12, 14);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.setTextColor(...C.lgray);
+  doc.text("AI-POWERED RECRUITING PLATFORM", 12, 20);
+  doc.setDrawColor(37, 55, 85); doc.setLineWidth(0.3); doc.line(12, 24, W - 12, 24);
+
+  // Report title
+  doc.setFont("helvetica", "bold"); doc.setFontSize(24); doc.setTextColor(...C.white);
+  doc.text("Candidate Screening", 12, 39);
+  doc.setTextColor(...C.blue); doc.text("Report", 12, 50);
+
+  // Position band (light gray)
+  doc.setFillColor(...C.xlgray); doc.rect(0, 58, W, 30, "F");
+  doc.setFillColor(...C.blue);   doc.rect(0, 58, 4, 30, "F");
+  doc.setFont("helvetica", "bold"); doc.setFontSize(7.5); doc.setTextColor(...C.lgray);
+  doc.text("POSITION", 12, 67);
+  doc.setFont("helvetica", "bold"); doc.setFontSize(15); doc.setTextColor(...C.navy);
+  doc.text(jobTitle, 12, 77);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(...C.gray);
+  doc.text(
+    `Screening Date: ${new Date(screeningDate).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}`,
+    12, 84
+  );
+
+  // Stat boxes
+  const coverStats: { label: string; value: string; color: RGB }[] = [
+    { label: "TOTAL APPLICANTS", value: `${totalApplicants}`,   color: C.blue },
+    { label: "SHORTLISTED",      value: `${candidates.length}`, color: C.green },
+    { label: "AVG SCORE",        value: `${avgScore}%`,         color: scoreRGB(avgScore) },
+    { label: "TOP SCORE",        value: `${topScore}%`,         color: scoreRGB(topScore) },
+  ];
+  const bxW = CW / 4;
+  coverStats.forEach(({ label, value, color }, i) => {
+    const bx = M + i * bxW;
+    doc.setFillColor(...C.white);   doc.rect(bx, 97, bxW - 3, 22, "F");
+    doc.setFillColor(...color);     doc.rect(bx, 97, bxW - 3, 2,  "F");
+    doc.setFont("helvetica", "bold"); doc.setFontSize(16); doc.setTextColor(...color);
+    doc.text(value, bx + (bxW - 3) / 2, 110, { align: "center" });
+    doc.setFont("helvetica", "bold"); doc.setFontSize(6); doc.setTextColor(...C.lgray);
+    doc.text(label, bx + (bxW - 3) / 2, 116, { align: "center" });
+  });
+
+  // Table of contents
+  let y = 128;
+  doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(...C.navy);
+  doc.text("REPORT CONTENTS", M, y); y += 5;
+
+  const toc = [
+    ["01", "Executive Summary",          "Key hiring metrics and recommendation breakdown"],
+    ["02", "Shortlisted Candidates",     `${candidates.length} candidate${candidates.length !== 1 ? "s" : ""} selected for interview`],
+    ["03", "Candidate Detail Profiles",  "Per-candidate scores, strengths, gaps & interview questions"],
+    ...(rejectedCandidates?.length
+      ? [["04", "Not Shortlisted",       `${rejectedCandidates.length} candidate${rejectedCandidates.length !== 1 ? "s" : ""} — rejection reasons & improvement areas`]]
+      : []),
+  ];
 
   autoTable(doc, {
-    startY: y, margin: { left: margin, right: margin },
-    head: [["Metric", "Value"]],
-    body: [
-      ["Total Applicants", `${totalApplicants}`],
-      ["Selected Candidates", `${candidates.length}`],
-      ["Not Selected", `${rejectedCandidates?.length || 0}`],
-      ["Top Score", `${allCandidates ? Math.max(...candidates.map(c => c.finalScore)) : 0}%`],
-      ["Average Score", `${avgScore}%`],
-      ["Position", jobTitle],
-    ],
-    theme: "plain",
-    styles: { fontSize: 9, textColor: [50, 50, 50], cellPadding: 3, fillColor: [255, 255, 255] },
-    headStyles: { fillColor: [200, 200, 200], textColor: [0, 0, 0], fontStyle: "bold" },
-    alternateRowStyles: { fillColor: [248, 248, 248] },
-    columnStyles: { 0: { fontStyle: "bold", textColor: [50, 50, 50] }, 1: { textColor: [0, 0, 0], fontStyle: "bold" } },
+    startY: y, margin: { left: M, right: M },
+    head: [], body: toc, theme: "plain",
+    styles: { fontSize: 8, cellPadding: { top: 3, bottom: 3, left: 4, right: 4 }, textColor: [...C.gray] },
+    columnStyles: {
+      0: { fontStyle: "bold", textColor: [...C.blue], cellWidth: 10 },
+      1: { fontStyle: "bold", textColor: [...C.navy], cellWidth: 60 },
+      2: { textColor: [...C.lgray] },
+    },
+    alternateRowStyles: { fillColor: [...C.xlgray] },
   });
-  y = (doc as { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY ?? y;
-  y += 10;
+  y = (doc as any).lastAutoTable?.finalY ?? y;
+  y += 8;
 
-  // ── Selected Candidates Overview ──
-  if (allCandidates) {
-    doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.setTextColor(0, 0, 0);
-    doc.text("SELECTED CANDIDATES OVERVIEW", margin, y); y += 7;
-    autoTable(doc, {
-      startY: y, margin: { left: margin, right: margin },
-      head: [["Rank", "Candidate", "Score", "Recommendation"]],
-      body: candidates.map(c => [`#${c.rank}`, displayName(c), `${c.finalScore}%`, c.recommendation]),
-      theme: "striped",
-      styles: { fontSize: 8, textColor: [50, 50, 50], cellPadding: 3, fillColor: [255, 255, 255] },
-      headStyles: { fillColor: [200, 200, 200], textColor: [0, 0, 0], fontStyle: "bold", fontSize: 8 },
-      alternateRowStyles: { fillColor: [248, 248, 248] },
-      columnStyles: { 0: { textColor: [0, 0, 0] }, 2: { textColor: [0, 0, 0], fontStyle: "bold" } },
-    });
-    y = (doc as { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY ?? y;
+  // Confidentiality notice
+  doc.setFillColor(254, 243, 199); doc.rect(M, y, CW, 14, "F");
+  doc.setDrawColor(253, 230, 138); doc.setLineWidth(0.3); doc.rect(M, y, CW, 14, "D");
+  doc.setFillColor(...C.amber); doc.rect(M, y, 3, 14, "F");
+  doc.setFont("helvetica", "bold"); doc.setFontSize(7.5); doc.setTextColor(120, 53, 15);
+  doc.text("CONFIDENTIAL DOCUMENT", M + 7, y + 5.5);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.setTextColor(146, 64, 14);
+  doc.text("This report contains sensitive candidate data intended for authorized HR personnel only.", M + 7, y + 10.5);
+
+  addPageFooter();
+
+  // ── EXECUTIVE SUMMARY ────────────────────────────────────────────────────────
+  doc.addPage(); pageNum++;
+  addPageHeader(); addPageFooter();
+  y = 18;
+
+  doc.setFillColor(...C.navy); doc.rect(M, y, CW, 8, "F");
+  doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.setTextColor(...C.white);
+  doc.text("01  EXECUTIVE SUMMARY", M + 4, y + 5.5);
+  y += 12;
+
+  // Key metric grid (2 rows × 3 cols)
+  const sumMetrics: { label: string; value: string; color: RGB }[] = [
+    { label: "Total Applicants",  value: `${totalApplicants}`,              color: C.blue },
+    { label: "AI Shortlisted",    value: `${candidates.length}`,            color: C.green },
+    { label: "Not Shortlisted",   value: `${rejectedCandidates?.length || 0}`, color: C.red },
+    { label: "Average Score",     value: `${avgScore}%`,                    color: scoreRGB(avgScore) },
+    { label: "Highest Score",     value: `${topScore}%`,                    color: scoreRGB(topScore) },
+    { label: "Assessment Date",   value: new Date(screeningDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }), color: C.navy },
+  ];
+  const mW = CW / 3;
+  sumMetrics.forEach(({ label, value, color }, i) => {
+    const mx = M + (i % 3) * mW;
+    const my = y + Math.floor(i / 3) * 18;
+    doc.setFillColor(...C.xlgray); doc.rect(mx, my, mW - 3, 15, "F");
+    doc.setFillColor(...color);    doc.rect(mx, my, mW - 3, 2,  "F");
+    doc.setFont("helvetica", "bold"); doc.setFontSize(13); doc.setTextColor(...color);
+    doc.text(value, mx + 5, my + 10);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.setTextColor(...C.lgray);
+    doc.text(label.toUpperCase(), mx + 5, my + 14);
+  });
+  y += 38;
+
+  // Recommendation breakdown
+  doc.setFont("helvetica", "bold"); doc.setFontSize(8.5); doc.setTextColor(...C.navy);
+  doc.text("RECOMMENDATION BREAKDOWN", M, y); y += 6;
+
+  const recMap: Record<string, number> = {};
+  candidates.forEach(c => { recMap[c.recommendation] = (recMap[c.recommendation] || 0) + 1; });
+
+  [
+    { label: "Strongly Recommended", color: C.green },
+    { label: "Recommended",          color: C.blue  },
+    { label: "Consider",             color: C.amber },
+    { label: "Not Recommended",      color: C.red   },
+  ].forEach(({ label, color }) => {
+    const count = recMap[label] || 0;
+    const pct   = candidates.length ? (count / candidates.length) * 100 : 0;
+    doc.setFont("helvetica", "bold");   doc.setFontSize(8); doc.setTextColor(...C.navy);
+    doc.text(label, M, y);
+    doc.setFont("helvetica", "bold");   doc.setFontSize(8); doc.setTextColor(...color);
+    doc.text(`${count}`, M + 62, y);
+    drawBar(M + 70, y - 4, CW - 70, 5, pct, color);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.setTextColor(...C.lgray);
+    doc.text(`${Math.round(pct)}%`, W - M, y, { align: "right" });
+    y += 9;
+  });
+  y += 5;
+
+  // Shortlisted overview table
+  if (candidates.length > 0) {
+    if (y > H - 60) { doc.addPage(); pageNum++; addPageHeader(); addPageFooter(); y = 18; }
+    doc.setFillColor(...C.navy); doc.rect(M, y, CW, 8, "F");
+    doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.setTextColor(...C.white);
+    doc.text("02  SHORTLISTED CANDIDATES", M + 4, y + 5.5);
     y += 10;
+
+    autoTable(doc, {
+      startY: y, margin: { left: M, right: M },
+      head: [["RNK", "CANDIDATE", "EMAIL", "SCORE", "DECISION"]],
+      body: candidates.map(c => [`#${c.rank}`, displayName(c), c.email, `${c.finalScore}%`, c.recommendation]),
+      theme: "plain",
+      styles: { fontSize: 8, cellPadding: { top: 3, bottom: 3, left: 4, right: 4 }, textColor: [...C.gray], lineColor: [...C.xlgray], lineWidth: 0.3 },
+      headStyles: { fillColor: [...C.xlgray], textColor: [...C.navy], fontStyle: "bold", fontSize: 7.5 },
+      alternateRowStyles: { fillColor: [249, 250, 251] },
+      columnStyles: {
+        0: { fontStyle: "bold", textColor: [...C.navy], cellWidth: 13 },
+        1: { fontStyle: "bold", textColor: [...C.navy] },
+        2: { textColor: [...C.lgray], fontSize: 7.5 },
+        3: { fontStyle: "bold", cellWidth: 17 },
+        4: { fontStyle: "bold", cellWidth: 48 },
+      },
+      didParseCell: (d) => {
+        if (d.section !== "body") return;
+        if (d.column.index === 3) { const s = parseInt(d.cell.raw as string); d.cell.styles.textColor = scoreRGB(s); }
+        if (d.column.index === 4) { d.cell.styles.textColor = recRGB(d.cell.raw as string); }
+      },
+    });
+    y = (doc as any).lastAutoTable?.finalY ?? y;
+    y += 8;
   }
 
-  // ── Not Selected Candidates Overview ──
+  // Not shortlisted overview table
   if (rejectedCandidates && rejectedCandidates.length > 0) {
-    doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.setTextColor(0, 0, 0);
-    doc.text("NOT SELECTED CANDIDATES OVERVIEW", margin, y); y += 7;
+    if (y > H - 50) { doc.addPage(); pageNum++; addPageHeader(); addPageFooter(); y = 18; }
+    doc.setFillColor(127, 29, 29); doc.rect(M, y, CW, 8, "F");
+    doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.setTextColor(...C.white);
+    doc.text("NOT SHORTLISTED — OVERVIEW", M + 4, y + 5.5);
+    y += 10;
+
     autoTable(doc, {
-      startY: y, margin: { left: margin, right: margin },
-      head: [["Candidate", "Score", "Gap from Cutoff"]],
+      startY: y, margin: { left: M, right: M },
+      head: [["CANDIDATE", "EMAIL", "SCORE", "GAP FROM CUTOFF"]],
       body: rejectedCandidates.map(r => [
         r.candidateName || r.email.split("@")[0],
+        r.email,
         `${r.finalScore}%`,
-        `-${Math.round(r.closestShortlistScore - r.finalScore)} pts`
+        `-${Math.round(r.closestShortlistScore - r.finalScore)} pts`,
       ]),
-      theme: "striped",
-      styles: { fontSize: 8, textColor: [50, 50, 50], cellPadding: 3, fillColor: [255, 255, 255] },
-      headStyles: { fillColor: [200, 200, 200], textColor: [0, 0, 0], fontStyle: "bold", fontSize: 8 },
-      alternateRowStyles: { fillColor: [248, 248, 248] },
-      columnStyles: { 1: { textColor: [0, 0, 0] }, 2: { textColor: [0, 0, 0], fontSize: 7 } },
+      theme: "plain",
+      styles: { fontSize: 8, cellPadding: { top: 3, bottom: 3, left: 4, right: 4 }, textColor: [...C.gray], lineColor: [...C.xlgray], lineWidth: 0.3 },
+      headStyles: { fillColor: [254, 242, 242], textColor: [127, 29, 29], fontStyle: "bold", fontSize: 7.5 },
+      alternateRowStyles: { fillColor: [255, 250, 250] },
+      columnStyles: {
+        0: { fontStyle: "bold", textColor: [...C.navy] },
+        2: { fontStyle: "bold", textColor: [...C.red], cellWidth: 17 },
+        3: { textColor: [...C.red], fontSize: 7.5, cellWidth: 32 },
+      },
     });
-    y = (doc as { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY ?? y;
+    y = (doc as any).lastAutoTable?.finalY ?? y;
   }
 
-  addFooter();
+  // ── CANDIDATE DETAIL PAGES ───────────────────────────────────────────────────
+  if (candidates.length > 0) {
+    doc.addPage(); pageNum++;
+    addPageHeader(); addPageFooter();
+    y = 18;
+    doc.setFillColor(...C.navy); doc.rect(M, y, CW, 8, "F");
+    doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.setTextColor(...C.white);
+    doc.text("03  CANDIDATE DETAIL PROFILES", M + 4, y + 5.5);
+    y += 12;
+    doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(...C.gray);
+    doc.text(`The following pages contain individual assessment reports for all ${candidates.length} shortlisted candidate${candidates.length !== 1 ? "s" : ""}.`, M, y);
+  }
 
-  // ── Detailed Candidate Pages ──
-  let pageNum = 2;
+  candidates.forEach((c) => {
+    doc.addPage(); pageNum++;
+    addPageHeader(); addPageFooter();
+    y = 18;
 
-  // Selected candidates detail
-  candidates.forEach((c, idx) => {
-    if (y > H - 50) { doc.addPage(); addHeader(pageNum); y = 22; pageNum++; }
-    doc.addPage(); addHeader(pageNum);
-    y = 22;
-    doc.setFillColor(200, 200, 200); doc.rect(margin, y, contentW, 28, "F");
-    doc.setFillColor(200, 200, 200); doc.rect(margin, y, 3, 28, "F");
-    doc.setFont("helvetica", "bold"); doc.setFontSize(14); doc.setTextColor(0, 0, 0);
-    doc.text(`#${c.rank}  ${displayName(c)}`, margin + 7, y + 11);
-    doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(100, 100, 100);
-    doc.text(c.email, margin + 7, y + 19); doc.text(c.recommendation, margin + 7, y + 25);
-    doc.setFillColor(200, 200, 200); doc.circle(W - margin - 20, y + 14, 10, "F");
-    doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.setTextColor(0, 0, 0);
-    doc.text(`${c.finalScore}`, W - margin - 20, y + 15, { align: "center" });
-    doc.setFontSize(7); doc.text("/ 100", W - margin - 20, y + 21, { align: "center" });
-    y += 36;
+    const sc = scoreRGB(c.finalScore);
+    const rc = recRGB(c.recommendation);
 
-    // Summary
-    doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.setTextColor(0, 0, 0);
-    doc.text("EVALUATION SUMMARY", margin, y); y += 5;
-    doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(50, 50, 50);
-    const sl = doc.splitTextToSize(c.summary, contentW); doc.text(sl, margin, y); y += sl.length * 5 + 6;
+    // Header panel
+    doc.setFillColor(...C.navy); doc.rect(M, y, CW, 32, "F");
+    doc.setFillColor(...sc); doc.rect(M, y, 3.5, 32, "F");
+
+    // Rank badge
+    doc.setFillColor(...sc); doc.rect(M + 7, y + 5, 14, 12, "F");
+    doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.setTextColor(...C.white);
+    doc.text(`#${c.rank}`, M + 14, y + 13, { align: "center" });
+
+    // Name + email
+    doc.setFont("helvetica", "bold"); doc.setFontSize(13); doc.setTextColor(...C.white);
+    doc.text(displayName(c), M + 26, y + 13);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(...C.lgray);
+    doc.text(c.email, M + 26, y + 20);
+
+    // Recommendation pill
+    doc.setFillColor(...rc); doc.rect(M + 26, y + 23, 50, 6, "F");
+    doc.setFont("helvetica", "bold"); doc.setFontSize(6.5); doc.setTextColor(...C.white);
+    doc.text(c.recommendation.toUpperCase(), M + 51, y + 27, { align: "center" });
+
+    // Score circle
+    const cx = W - M - 18;
+    const cy = y + 16;
+    doc.setFillColor(...sc); doc.circle(cx, cy, 13, "F");
+    doc.setFillColor(20, 30, 55); doc.circle(cx, cy, 10.5, "F");
+    doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.setTextColor(...sc);
+    doc.text(`${c.finalScore}`, cx, cy + 2, { align: "center" });
+    doc.setFont("helvetica", "bold"); doc.setFontSize(6); doc.setTextColor(...C.lgray);
+    doc.text("/ 100", cx, cy + 7.5, { align: "center" });
+    y += 37;
+
+    // Evaluation summary
+    doc.setFillColor(...C.xlgray); doc.rect(M, y, CW, 6, "F");
+    doc.setFillColor(...C.blue); doc.rect(M, y, 3, 6, "F");
+    doc.setFont("helvetica", "bold"); doc.setFontSize(7.5); doc.setTextColor(...C.navy);
+    doc.text("EVALUATION SUMMARY", M + 6, y + 4.2);
+    y += 8;
+    const sumL = doc.splitTextToSize(c.summary, CW);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(...C.gray);
+    doc.text(sumL, M, y);
+    y += sumL.length * 4.5 + 7;
 
     // Score breakdown
-    doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.setTextColor(0, 0, 0);
-    doc.text("SCORE BREAKDOWN", margin, y); y += 5;
-    autoTable(doc, {
-      startY: y, margin: { left: margin, right: margin },
-      head: [["Category", "Score"]],
-      body: [
-        ["Skills", `${c.breakdown.skillsScore}%`],
-        ["Experience", `${c.breakdown.experienceScore}%`],
-        ["Education", `${c.breakdown.educationScore}%`],
-        ["Projects", `${c.breakdown.projectsScore}%`],
-        ["Availability", `${c.breakdown.availabilityScore}%`],
-        ["TOTAL", `${c.finalScore}%`],
-      ],
-      theme: "plain",
-      styles: { fontSize: 8, textColor: [50, 50, 50], cellPadding: 3, fillColor: [255, 255, 255] },
-      headStyles: { fillColor: [200, 200, 200], textColor: [0, 0, 0], fontStyle: "bold", fontSize: 8 },
-      alternateRowStyles: { fillColor: [248, 248, 248] },
-      didParseCell: (d) => { if (d.row.index === 5) { d.cell.styles.fontStyle = "bold"; d.cell.styles.textColor = [0, 0, 0]; } },
+    if (y > H - 80) { doc.addPage(); pageNum++; addPageHeader(); addPageFooter(); y = 18; }
+    doc.setFillColor(...C.xlgray); doc.rect(M, y, CW, 6, "F");
+    doc.setFillColor(...C.blue); doc.rect(M, y, 3, 6, "F");
+    doc.setFont("helvetica", "bold"); doc.setFontSize(7.5); doc.setTextColor(...C.navy);
+    doc.text("SCORE BREAKDOWN", M + 6, y + 4.2);
+    y += 9;
+
+    [
+      ["Skills",       c.breakdown.skillsScore],
+      ["Experience",   c.breakdown.experienceScore],
+      ["Education",    c.breakdown.educationScore],
+      ["Projects",     c.breakdown.projectsScore],
+      ["Availability", c.breakdown.availabilityScore],
+    ].forEach(([label, score]) => {
+      const bc = scoreRGB(score as number);
+      doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(...C.navy);
+      doc.text(label as string, M, y + 3.5);
+      doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(...bc);
+      doc.text(`${score}%`, M + 30, y + 3.5);
+      drawBar(M + 42, y, CW - 42 - 4, 5, score as number, bc);
+      y += 8;
     });
-    y = (doc as { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY ?? y; y += 6;
+    // Total row
+    doc.setDrawColor(...C.xlgray); doc.setLineWidth(0.3); doc.line(M, y, M + CW, y);
+    y += 3;
+    doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.setTextColor(...C.navy);
+    doc.text("COMPOSITE SCORE", M, y + 3.5);
+    doc.setTextColor(...sc);
+    doc.text(`${c.finalScore}%`, M + 30, y + 3.5);
+    drawBar(M + 42, y, CW - 42 - 4, 6, c.finalScore, sc);
+    y += 12;
 
     // Strengths & Gaps
-    const cw = (contentW - 4) / 2;
-    doc.setFont("helvetica", "bold"); doc.setFontSize(9);
-    doc.setTextColor(0, 0, 0); doc.text("STRENGTHS", margin, y);
-    doc.setTextColor(0, 0, 0); doc.text("GAPS", margin + cw + 4, y); y += 5;
-    for (let i = 0; i < Math.min(Math.max(c.strengths.length, c.gaps.length), 4); i++) {
-      doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(50, 50, 50);
-      if (c.strengths[i]) { const l = doc.splitTextToSize(`• ${c.strengths[i]}`, cw - 2); doc.text(l, margin, y); }
-      if (c.gaps[i])      { const l = doc.splitTextToSize(`• ${c.gaps[i]}`, cw - 2);      doc.text(l, margin + cw + 4, y); }
+    if (y > H - 55) { doc.addPage(); pageNum++; addPageHeader(); addPageFooter(); y = 18; }
+    const colW = (CW - 4) / 2;
+
+    doc.setFillColor(240, 253, 244); doc.rect(M, y, colW, 6, "F");
+    doc.setFillColor(...C.green); doc.rect(M, y, 3, 6, "F");
+    doc.setFont("helvetica", "bold"); doc.setFontSize(7.5); doc.setTextColor(...C.green);
+    doc.text("STRENGTHS", M + 6, y + 4.2);
+
+    doc.setFillColor(254, 242, 242); doc.rect(M + colW + 4, y, colW, 6, "F");
+    doc.setFillColor(...C.red); doc.rect(M + colW + 4, y, 3, 6, "F");
+    doc.setFont("helvetica", "bold"); doc.setFontSize(7.5); doc.setTextColor(...C.red);
+    doc.text("SKILL GAPS", M + colW + 10, y + 4.2);
+    y += 8;
+
+    const maxSG = Math.min(Math.max(c.strengths.length, c.gaps.length), 5);
+    for (let i = 0; i < maxSG; i++) {
+      if (c.strengths[i]) {
+        const sl = doc.splitTextToSize(`+ ${c.strengths[i]}`, colW - 4);
+        doc.setFont("helvetica", "normal"); doc.setFontSize(7.5); doc.setTextColor(21, 128, 61);
+        doc.text(sl, M + 2, y);
+      }
+      if (c.gaps[i]) {
+        const gl = doc.splitTextToSize(`- ${c.gaps[i]}`, colW - 4);
+        doc.setFont("helvetica", "normal"); doc.setFontSize(7.5); doc.setTextColor(185, 28, 28);
+        doc.text(gl, M + colW + 6, y);
+      }
       y += 6;
     }
     y += 4;
 
-    // Interview Questions
-    if (c.interviewQuestions.length > 0 && y < H - 50) {
-      doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.setTextColor(0, 0, 0);
-      doc.text("INTERVIEW QUESTIONS", margin, y); y += 5;
-      c.interviewQuestions.forEach((q, qi) => {
-        if (y > H - 30) return;
-        const lines = doc.splitTextToSize(`${qi + 1}. ${q}`, contentW);
-        doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(50, 50, 50);
-        doc.text(lines, margin, y); y += lines.length * 5 + 2;
+    // Interview questions
+    if (c.interviewQuestions.length > 0) {
+      if (y > H - 50) { doc.addPage(); pageNum++; addPageHeader(); addPageFooter(); y = 18; }
+      doc.setFillColor(...C.xlgray); doc.rect(M, y, CW, 6, "F");
+      doc.setFillColor(...C.blue); doc.rect(M, y, 3, 6, "F");
+      doc.setFont("helvetica", "bold"); doc.setFontSize(7.5); doc.setTextColor(...C.navy);
+      doc.text("SUGGESTED INTERVIEW QUESTIONS", M + 6, y + 4.2);
+      y += 9;
+
+      c.interviewQuestions.slice(0, 6).forEach((q, qi) => {
+        if (y > H - 22) return;
+        doc.setFillColor(...C.blue); doc.rect(M, y - 1, 5, 5, "F");
+        doc.setFont("helvetica", "bold"); doc.setFontSize(7); doc.setTextColor(...C.white);
+        doc.text(`${qi + 1}`, M + 2.5, y + 2.5, { align: "center" });
+        const ql = doc.splitTextToSize(q, CW - 9);
+        doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(...C.gray);
+        doc.text(ql, M + 8, y + 2.5);
+        y += ql.length * 4.5 + 4;
       });
     }
-    addFooter();
   });
 
-  // Rejected candidates detail
+  // ── NOT SHORTLISTED DETAIL PAGES ────────────────────────────────────────────
   if (rejectedCandidates && rejectedCandidates.length > 0) {
-    rejectedCandidates.forEach((r, idx) => {
-      doc.addPage(); addHeader(pageNum); pageNum++;
-      y = 22;
+    doc.addPage(); pageNum++;
+    addPageHeader(); addPageFooter();
+    y = 18;
+    doc.setFillColor(127, 29, 29); doc.rect(M, y, CW, 8, "F");
+    doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.setTextColor(...C.white);
+    doc.text("04  NOT SHORTLISTED — DETAIL PROFILES", M + 4, y + 5.5);
+    y += 12;
+    doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(...C.gray);
+    doc.text(`Assessment summaries for ${rejectedCandidates.length} candidate${rejectedCandidates.length !== 1 ? "s" : ""} who did not meet the shortlist threshold, including improvement areas.`, M, y);
 
-      // Header for rejected candidate
-      doc.setFillColor(200, 200, 200); doc.rect(margin, y, contentW, 22, "F");
-      doc.setFont("helvetica", "bold"); doc.setFontSize(14); doc.setTextColor(0, 0, 0);
-      doc.text(`${r.candidateName || r.email.split("@")[0]}`, margin + 7, y + 10);
-      doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(100, 100, 100);
-      doc.text(r.email, margin + 7, y + 18);
-      doc.setFillColor(200, 200, 200); doc.circle(W - margin - 20, y + 11, 8, "F");
-      doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.setTextColor(0, 0, 0);
-      doc.text(`${r.finalScore}`, W - margin - 20, y + 12, { align: "center" });
-      doc.setFontSize(7); doc.text("/ 100", W - margin - 20, y + 17, { align: "center" });
-      y += 30;
+    rejectedCandidates.forEach((r) => {
+      doc.addPage(); pageNum++;
+      addPageHeader(); addPageFooter();
+      y = 18;
 
-      // Rejection Reason
-      doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.setTextColor(0, 0, 0);
-      doc.text("REJECTION REASON", margin, y); y += 5;
-      doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(50, 50, 50);
-      const rr = doc.splitTextToSize(r.whyNotSelected, contentW);
-      doc.text(rr, margin, y); y += rr.length * 5 + 6;
+      // Header
+      doc.setFillColor(127, 29, 29); doc.rect(M, y, CW, 28, "F");
+      doc.setFillColor(...C.red); doc.rect(M, y, 3.5, 28, "F");
 
-      // Missing Skills
-      if (r.topMissingSkills && r.topMissingSkills.length > 0) {
-        doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.setTextColor(0, 0, 0);
-        doc.text("MISSING SKILLS", margin, y); y += 5;
-        doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(50, 50, 50);
-        r.topMissingSkills.forEach(s => {
-          doc.text(`✗ ${s}`, margin + 4, y); y += 5;
+      // Score circle
+      const cx = W - M - 16; const cy = y + 14;
+      doc.setFillColor(...C.red); doc.circle(cx, cy, 11, "F");
+      doc.setFillColor(80, 20, 20); doc.circle(cx, cy, 8.5, "F");
+      doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.setTextColor(...C.red);
+      doc.text(`${r.finalScore}`, cx, cy + 2, { align: "center" });
+      doc.setFont("helvetica", "bold"); doc.setFontSize(5.5); doc.setTextColor(248, 113, 113);
+      doc.text("/ 100", cx, cy + 7, { align: "center" });
+
+      doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.setTextColor(...C.white);
+      doc.text(r.candidateName || r.email.split("@")[0], M + 8, y + 11);
+      doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(252, 165, 165);
+      doc.text(r.email, M + 8, y + 18);
+      doc.setFillColor(...C.red); doc.rect(M + 8, y + 21, 32, 5, "F");
+      doc.setFont("helvetica", "bold"); doc.setFontSize(6); doc.setTextColor(...C.white);
+      doc.text("NOT SHORTLISTED", M + 24, y + 24.5, { align: "center" });
+      y += 34;
+
+      // Gap callout
+      const gap = Math.round(r.closestShortlistScore - r.finalScore);
+      doc.setFillColor(254, 242, 242); doc.rect(M, y, CW, 12, "F");
+      doc.setDrawColor(254, 202, 202); doc.setLineWidth(0.3); doc.rect(M, y, CW, 12, "D");
+      doc.setFont("helvetica", "bold"); doc.setFontSize(8.5); doc.setTextColor(...C.red);
+      doc.text(`${gap} POINTS BELOW SHORTLIST THRESHOLD`, M + 5, y + 5.5);
+      doc.setFont("helvetica", "normal"); doc.setFontSize(7.5); doc.setTextColor(185, 28, 28);
+      doc.text(`Required: ${r.closestShortlistScore}   ·   Candidate scored: ${r.finalScore}`, M + 5, y + 9.5);
+      y += 16;
+
+      // Rejection reason
+      doc.setFillColor(...C.xlgray); doc.rect(M, y, CW, 6, "F");
+      doc.setFillColor(...C.red); doc.rect(M, y, 3, 6, "F");
+      doc.setFont("helvetica", "bold"); doc.setFontSize(7.5); doc.setTextColor(...C.navy);
+      doc.text("REJECTION REASON", M + 6, y + 4.2);
+      y += 8;
+      const rrl = doc.splitTextToSize(r.whyNotSelected, CW);
+      doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(...C.gray);
+      doc.text(rrl, M, y);
+      y += rrl.length * 4.5 + 8;
+
+      // Missing skills
+      if (r.topMissingSkills?.length > 0) {
+        if (y > H - 45) { doc.addPage(); pageNum++; addPageHeader(); addPageFooter(); y = 18; }
+        doc.setFillColor(254, 242, 242); doc.rect(M, y, CW, 6, "F");
+        doc.setFillColor(...C.red); doc.rect(M, y, 3, 6, "F");
+        doc.setFont("helvetica", "bold"); doc.setFontSize(7.5); doc.setTextColor(127, 29, 29);
+        doc.text("MISSING SKILLS", M + 6, y + 4.2);
+        y += 9;
+        const cols = 4;
+        const sw = CW / cols;
+        r.topMissingSkills.forEach((s, si) => {
+          const sx = M + (si % cols) * sw;
+          const sy = y + Math.floor(si / cols) * 10;
+          doc.setFillColor(254, 226, 226); doc.rect(sx, sy - 1, sw - 3, 7, "F");
+          doc.setDrawColor(252, 165, 165); doc.setLineWidth(0.3); doc.rect(sx, sy - 1, sw - 3, 7, "D");
+          doc.setFont("helvetica", "bold"); doc.setFontSize(7.5); doc.setTextColor(...C.red);
+          doc.text(`✗ ${s}`, sx + 2, sy + 3.5);
         });
-        y += 3;
+        y += Math.ceil(r.topMissingSkills.length / cols) * 10 + 4;
       }
 
-      // Improvement Suggestions
-      if (r.improvementSuggestions && r.improvementSuggestions.length > 0) {
-        doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.setTextColor(0, 0, 0);
-        doc.text("IMPROVEMENT AREAS", margin, y); y += 5;
-        doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(50, 50, 50);
-        r.improvementSuggestions.forEach(s => {
-          doc.text(`→ ${s}`, margin + 4, y); y += 5;
+      // Improvement suggestions
+      if (r.improvementSuggestions?.length > 0) {
+        if (y > H - 35) { doc.addPage(); pageNum++; addPageHeader(); addPageFooter(); y = 18; }
+        doc.setFillColor(239, 246, 255); doc.rect(M, y, CW, 6, "F");
+        doc.setFillColor(...C.blue); doc.rect(M, y, 3, 6, "F");
+        doc.setFont("helvetica", "bold"); doc.setFontSize(7.5); doc.setTextColor(...C.navy);
+        doc.text("IMPROVEMENT AREAS", M + 6, y + 4.2);
+        y += 9;
+        r.improvementSuggestions.forEach((s, si) => {
+          if (y > H - 18) return;
+          doc.setFillColor(...C.blue); doc.rect(M, y - 0.5, 4.5, 4.5, "F");
+          doc.setFont("helvetica", "bold"); doc.setFontSize(7); doc.setTextColor(...C.white);
+          doc.text(`${si + 1}`, M + 2.25, y + 3, { align: "center" });
+          const il = doc.splitTextToSize(s, CW - 9);
+          doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(...C.gray);
+          doc.text(il, M + 7.5, y + 3);
+          y += il.length * 4.5 + 3;
         });
       }
-
-      addFooter();
     });
   }
 
-  doc.save(`Screening-${jobTitle.replace(/\s+/g, "-")}-${new Date().toISOString().split("T")[0]}.pdf`);
+  doc.save(`TalentAI-Screening-${jobTitle.replace(/\s+/g, "-")}-${new Date().toISOString().split("T")[0]}.pdf`);
 }
 
 // ─── System chrome components ─────────────────────────────────────────────────
@@ -1052,6 +1345,9 @@ export default function ResultDetailPage() {
     open: boolean;
     recipients: { name: string; email: string }[];
   }>({ open: false, recipients: [] });
+  const [candidatePage, setCandidatePage] = useState(1);
+  const [rejectedPage, setRejectedPage] = useState(1);
+  const CAND_PAGE_SIZE = 10;
 
   useEffect(() => {
     if (!id) return;
@@ -1081,6 +1377,8 @@ export default function ResultDetailPage() {
       return b.finalScore - a.finalScore;
     });
   }, [result, filter, sortBy]);
+
+  useEffect(() => { setCandidatePage(1); }, [filter, sortBy]);
 
   const handleEmailSelected = () => {
     if (!result) return;
@@ -1131,6 +1429,11 @@ export default function ResultDetailPage() {
 
   const allSelected  = result.shortlist.length > 0 && selectedIds.size === result.shortlist.length;
   const REC_FILTERS: RecFilter[] = ["All", "Strongly Recommended", "Recommended", "Consider", "Not Recommended"];
+
+  const totalCandidatePages = Math.ceil(filtered.length / CAND_PAGE_SIZE);
+  const pagedFiltered = filtered.slice((candidatePage - 1) * CAND_PAGE_SIZE, candidatePage * CAND_PAGE_SIZE);
+  const totalRejectedPages = Math.ceil((result.rejectedCandidates?.length ?? 0) / CAND_PAGE_SIZE);
+  const pagedRejected = (result.rejectedCandidates ?? []).slice((rejectedPage - 1) * CAND_PAGE_SIZE, rejectedPage * CAND_PAGE_SIZE);
 
   const effectiveThinkingLog = thinkingLog?.length ? thinkingLog : (result.thinkingLog ?? []);
 
@@ -1220,7 +1523,7 @@ export default function ResultDetailPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((c, i) => (
+                  {pagedFiltered.map((c, i) => (
                     <CandidateRow
                       key={c.candidateId}
                       candidate={c}
@@ -1237,6 +1540,34 @@ export default function ResultDetailPage() {
                 </tbody>
               </table>
             </div>
+
+            {/* Candidate pagination */}
+            {totalCandidatePages > 1 && (
+              <div className="flex items-center justify-between px-4 py-2.5 border-t border-gray-200 bg-gray-50">
+                <span className="text-[10px] font-mono text-gray-500">
+                  SHOWING {(candidatePage - 1) * CAND_PAGE_SIZE + 1}–{Math.min(candidatePage * CAND_PAGE_SIZE, filtered.length)} OF {filtered.length}
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    disabled={candidatePage <= 1}
+                    onClick={() => setCandidatePage(p => p - 1)}
+                    className="px-3 py-1 text-[10px] font-mono font-bold uppercase tracking-wider border border-gray-200 bg-white text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    ← PREV
+                  </button>
+                  <span className="px-3 py-1 text-[10px] font-mono font-bold text-gray-700 bg-white border border-gray-200">
+                    {candidatePage} / {totalCandidatePages}
+                  </span>
+                  <button
+                    disabled={candidatePage >= totalCandidatePages}
+                    onClick={() => setCandidatePage(p => p + 1)}
+                    className="px-3 py-1 text-[10px] font-mono font-bold uppercase tracking-wider border border-gray-200 bg-white text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    NEXT →
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Not shortlisted */}
             {result.rejectedCandidates?.length > 0 && (
@@ -1266,11 +1597,37 @@ export default function ResultDetailPage() {
                     >
                       <table className="w-full" style={{ borderCollapse: "collapse" }}>
                         <tbody>
-                          {result.rejectedCandidates.map((r, i) => (
+                          {pagedRejected.map((r, i) => (
                             <RejectedRow key={r.candidateId} rejected={r} index={i} />
                           ))}
                         </tbody>
                       </table>
+                      {totalRejectedPages > 1 && (
+                        <div className="flex items-center justify-between px-4 py-2.5 border-t border-red-200 bg-red-50">
+                          <span className="text-[10px] font-mono text-red-600">
+                            SHOWING {(rejectedPage - 1) * CAND_PAGE_SIZE + 1}–{Math.min(rejectedPage * CAND_PAGE_SIZE, result.rejectedCandidates.length)} OF {result.rejectedCandidates.length}
+                          </span>
+                          <div className="flex items-center gap-1">
+                            <button
+                              disabled={rejectedPage <= 1}
+                              onClick={() => setRejectedPage(p => p - 1)}
+                              className="px-3 py-1 text-[10px] font-mono font-bold uppercase tracking-wider border border-red-200 bg-white text-red-600 hover:bg-red-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                            >
+                              ← PREV
+                            </button>
+                            <span className="px-3 py-1 text-[10px] font-mono font-bold text-red-700 bg-white border border-red-200">
+                              {rejectedPage} / {totalRejectedPages}
+                            </span>
+                            <button
+                              disabled={rejectedPage >= totalRejectedPages}
+                              onClick={() => setRejectedPage(p => p + 1)}
+                              className="px-3 py-1 text-[10px] font-mono font-bold uppercase tracking-wider border border-red-200 bg-white text-red-600 hover:bg-red-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                            >
+                              NEXT →
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </motion.div>
                   )}
                 </AnimatePresence>

@@ -168,7 +168,7 @@ export default function JobsPage() {
 
 
   return (
-    <div className="h-screen flex overflow-hidden bg-gray-100">
+    <div className="-mx-6 -my-4 flex overflow-hidden bg-gray-100" style={{ height: 'calc(100vh - 56px)' }}>
 
       {/* ── Sidebar ── */}
       <aside className="w-56 flex-shrink-0 flex flex-col bg-white border-r border-gray-200">
@@ -243,9 +243,9 @@ export default function JobsPage() {
       </aside>
 
       {/* ── Main Content ── */}
-      <main className="flex-1 overflow-auto bg-gray-50 p-3">
+      <main className="flex-1 min-w-0 overflow-auto bg-gray-50 p-3">
         {selectedJob ? (
-          <div className="bg-white rounded-xl border border-gray-200 flex flex-col" style={{ height: 'calc(100vh - 24px)' }}>
+          <div className="bg-white rounded-xl border border-gray-200 flex flex-col h-full">
 
             {/* Unified job header */}
             <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-3 flex-shrink-0">
