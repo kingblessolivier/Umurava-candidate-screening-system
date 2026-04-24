@@ -17,6 +17,7 @@ import {
   Loader2,
   FileText,
   Brain,
+  Menu,
 } from 'lucide-react';
 import { Avatar } from '@/components/ui/Avatar';
 import { cn } from '@/lib/utils';
@@ -37,9 +38,11 @@ function formatTimestamp(ts: string): string {
 export function TopNav({
   isSidebarCollapsed,
   onToggleSidebar,
+  onOpenMobileSidebar,
 }: {
   isSidebarCollapsed: boolean;
   onToggleSidebar: () => void;
+  onOpenMobileSidebar: () => void;
 }) {
   const { user, handleLogout } = useAuth();
   const router = useRouter();
@@ -70,15 +73,22 @@ export function TopNav({
     <div
       className={cn(
         'fixed top-0 z-30 border-b border-slate-200/70 bg-white/90 backdrop-blur-md shadow-[0_1px_0_rgba(15,23,42,0.03)] transition-all duration-300 ease-out',
-        isSidebarCollapsed ? 'left-[72px] w-[calc(100%-72px)]' : 'left-[240px] w-[calc(100%-240px)]'
+        isSidebarCollapsed ? 'left-0 w-full lg:left-[72px] lg:w-[calc(100%-72px)]' : 'left-0 w-full lg:left-[240px] lg:w-[calc(100%-240px)]'
       )}
     >
       <div className="flex items-center justify-between px-5 py-2">
         {/* Left: Logo + sidebar toggle */}
         <div className="flex items-center gap-2.5">
           <button
+            onClick={onOpenMobileSidebar}
+            className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 lg:hidden"
+            aria-label="Open sidebar"
+          >
+            <Menu className="w-4 h-4" />
+          </button>
+          <button
             onClick={onToggleSidebar}
-            className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
+            className="hidden lg:inline-flex rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
             aria-label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
             {isSidebarCollapsed ? (

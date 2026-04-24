@@ -11,6 +11,7 @@ import {
   Trophy,
   LogOut,
   Sparkles,
+  X,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
@@ -91,7 +92,15 @@ function SidebarSkeleton({ isCollapsed }: { isCollapsed: boolean }) {
   );
 }
 
-export function Sidebar({ isCollapsed }: { isCollapsed: boolean }) {
+export function Sidebar({
+  isCollapsed,
+  isMobileOpen,
+  onCloseMobile,
+}: {
+  isCollapsed: boolean;
+  isMobileOpen: boolean;
+  onCloseMobile: () => void;
+}) {
   const pathname = usePathname();
   const { handleLogout, loading: authLoading } = useAuth();
 
@@ -109,13 +118,26 @@ export function Sidebar({ isCollapsed }: { isCollapsed: boolean }) {
       className={cn(
         'fixed left-0 top-0 h-screen flex flex-col z-40 transition-all duration-300 ease-out',
         'bg-blue-600 text-white',
-        isCollapsed ? 'w-[72px]' : 'w-[240px]'
+        'w-[240px] transform lg:translate-x-0',
+        isMobileOpen ? 'translate-x-0' : '-translate-x-full',
+        isCollapsed ? 'lg:w-[72px]' : 'lg:w-[240px]'
       )}
     >
+        <div className="flex items-center justify-end px-3 pt-3 lg:hidden">
+          <button
+            type="button"
+            onClick={onCloseMobile}
+            aria-label="Close sidebar"
+            className="rounded-lg p-1.5 text-blue-100 hover:bg-blue-500/80 hover:text-white transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
         {/* Logo */}
         <div className="px-3 py-4 border-b border-blue-500/80">
           <Link
             href="/"
+            onClick={onCloseMobile}
             className={cn(
               'flex items-center gap-2.5 px-2 py-1.5 rounded-lg transition-all duration-200',
               'hover:bg-blue-500/90',
@@ -149,6 +171,7 @@ export function Sidebar({ isCollapsed }: { isCollapsed: boolean }) {
                <Link
                  key={href}
                  href={href}
+                 onClick={onCloseMobile}
                  className={cn(
                   'relative flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs transition-all duration-200 border border-transparent',
                    isActive

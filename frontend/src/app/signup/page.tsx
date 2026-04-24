@@ -30,7 +30,7 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="h-screen w-full flex flex-col overflow-hidden">
+    <div className="min-h-screen w-full flex flex-col overflow-x-hidden bg-white">
       {/* Main Content - 50/50 Split */}
       <div className="flex-1 flex w-full">
         {/* Left Side - Blue Panel */}
@@ -68,10 +68,10 @@ export default function SignupPage() {
         </div>
 
         {/* Right Side - Registration Form */}
-        <div className="w-1/2 flex items-center justify-center px-8 bg-white">
+        <div className="w-full lg:w-1/2 flex items-center justify-center px-4 py-8 sm:px-6 lg:px-8 bg-white">
           <div className="w-full max-w-sm">
             {/* Mobile Logo */}
-            <div className="flex items-center gap-3 mb-10 lg:hidden">
+            <div className="flex items-center gap-3 mb-8 lg:hidden">
               <div className="w-12 h-12 rounded bg-blue-600 flex items-center justify-center">
                 <span className="text-white font-bold text-xl">T</span>
               </div>
@@ -189,7 +189,7 @@ export default function SignupPage() {
       </div>
 
       {/* Full Width Footer Bar */}
-      <div className="h-7 bg-blue-600 border-t border-blue-500 flex items-center px-4 gap-3 flex-shrink-0">
+      <div className="hidden sm:flex h-7 bg-blue-600 border-t border-blue-500 items-center px-4 gap-3 flex-shrink-0">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-1.5">
             <div className="w-2 h-2 rounded-full bg-white" />
