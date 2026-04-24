@@ -1,6 +1,5 @@
 "use client";
-export const dynamic = "force-dynamic";
-import { useEffect, useState, useCallback, useRef } from "react";
+import { Suspense, useEffect, useState, useCallback, useRef } from "react";
 import { useDispatch, useSelector }       from "react-redux";
 import { AppDispatch, RootState }         from "@/store";
 import { uploadCSV, uploadPDFs, bulkImportJSON, fetchCandidates } from "@/store/candidatesSlice";
@@ -26,7 +25,7 @@ const SAMPLE_JSON = JSON.stringify([
   }
 ], null, 2);
 
-export default function UploadCandidatesPage() {
+function UploadContent() {
   const dispatch    = useDispatch<AppDispatch>();
   const router      = useRouter();
   const searchParams = useSearchParams();
@@ -87,7 +86,6 @@ export default function UploadCandidatesPage() {
           setTimeout(() => router.push("/candidates"), 1500);
         }
       } else {
-        // PDF — runs in background
         if (!files.length) return toast.error("Select PDF files first");
         if (!pdfJobId) return toast.error("Select a job position for the PDF resumes");
         await dispatch(uploadPDFs({ files, jobId: pdfJobId })).unwrap();
@@ -134,7 +132,7 @@ export default function UploadCandidatesPage() {
         ))}
       </div>
 
-      {/* Job selector — required for PDF uploads */}
+      {/* Job selector */}
       {(tab === "csv" || tab === "pdf") && (
         <div className="space-y-1.5">
           <label className="text-xs font-medium text-gray-400">Job Position (required)</label>
@@ -185,15 +183,9 @@ export default function UploadCandidatesPage() {
           <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>or click to browse</p>
           {tab === "csv" && (
             <div className="mt-4 space-y-2 text-center text-[11px]" style={{ color: "var(--text-muted)" }}>
-              <p>
-                Required column: <code className="text-blue-400">email</code>.
-              </p>
-              <p>
-                Recommended: <code className="text-blue-400">firstName</code>, <code className="text-blue-400">lastName</code>, <code className="text-blue-400">headline</code>, <code className="text-blue-400">location</code>, <code className="text-blue-400">skills</code>, <code className="text-blue-400">availabilityType</code>.
-              </p>
-              <p>
-                Choose a job above. The upload will attach every row to that job, so the CSV does not need a <code className="text-blue-400">jobId</code> column.
-              </p>
+              <p>Required column: <code className="text-blue-400">email</code>.</p>
+              <p>Recommended: <code className="text-blue-400">firstName</code>, <code className="text-blue-400">lastName</code>, <code className="text-blue-400">headline</code>, <code className="text-blue-400">location</code>, <code className="text-blue-400">skills</code>, <code className="text-blue-400">availabilityType</code>.</p>
+              <p>Choose a job above. The upload will attach every row to that job, so the CSV does not need a <code className="text-blue-400">jobId</code> column.</p>
             </div>
           )}
           {files.length > 0 && (
@@ -250,12 +242,9 @@ export default function UploadCandidatesPage() {
             <div>
               <p className="text-sm font-medium text-blue-300">Processing in the background</p>
               <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
-                AI is parsing your resumes. You'll receive a notification in the bell icon when it's done — feel free to navigate anywhere.
+                Resumes are being parsed. You'll receive a notification when it's done — feel free to navigate anywhere.
               </p>
-              <button
-                onClick={() => router.push("/candidates")}
-                className="mt-3 text-xs text-blue-400 hover:text-blue-300"
-              >
+              <button onClick={() => router.push("/candidates")} className="mt-3 text-xs text-blue-400 hover:text-blue-300">
                 View candidates →
               </button>
             </div>
@@ -297,10 +286,7 @@ export default function UploadCandidatesPage() {
               </div>
             )}
             {result.created > 0 && (
-              <button
-                onClick={() => router.push("/candidates")}
-                className="text-xs text-blue-400 hover:text-blue-300"
-              >
+              <button onClick={() => router.push("/candidates")} className="text-xs text-blue-400 hover:text-blue-300">
                 View all candidates →
               </button>
             )}
@@ -308,5 +294,13 @@ export default function UploadCandidatesPage() {
         )}
       </AnimatePresence>
     </div>
+  );
+}
+
+export default function UploadCandidatesPage() {
+  return (
+    <Suspense fallback={null}>
+      <UploadContent />
+    </Suspense>
   );
 }

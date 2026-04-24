@@ -1,7 +1,6 @@
 'use client';
-export const dynamic = 'force-dynamic';
 
-import React, { useEffect, useState } from 'react';
+import React, { Suspense, useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '@/store';
@@ -888,7 +887,7 @@ function NavBar({
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function ScreeningPage() {
+function ScreeningContent() {
   const router   = useRouter();
   const dispatch = useDispatch<AppDispatch>();
   const params   = useSearchParams();
@@ -1061,5 +1060,13 @@ export default function ScreeningPage() {
         model="GEMINI-2.5-FLASH"
       />
     </div>
+  );
+}
+
+export default function ScreeningPage() {
+  return (
+    <Suspense fallback={null}>
+      <ScreeningContent />
+    </Suspense>
   );
 }
