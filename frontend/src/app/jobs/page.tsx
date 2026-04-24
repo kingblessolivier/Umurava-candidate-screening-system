@@ -213,8 +213,24 @@ export default function JobsPage() {
         {/* Job List */}
         <div className="flex-1 overflow-y-auto px-2 py-2">
           {loading ? (
-            <div className="flex items-center justify-center py-8">
-              <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            <div className="space-y-2 py-1">
+              {Array.from({ length: 5 }).map((_, index) => (
+                <div key={index} className="rounded-lg border border-gray-100 bg-white p-2">
+                  <div className="animate-pulse">
+                    <div className="flex items-center gap-2">
+                      <div className="h-8 w-8 rounded-md bg-gray-200" />
+                      <div className="flex-1 space-y-1.5">
+                        <div className="h-3 w-3/5 rounded bg-gray-200" />
+                        <div className="h-2.5 w-2/5 rounded bg-gray-100" />
+                      </div>
+                    </div>
+                    <div className="mt-2 flex gap-1.5">
+                      <div className="h-4 w-14 rounded-full bg-gray-100" />
+                      <div className="h-4 w-10 rounded-full bg-gray-100" />
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           ) : filteredJobs.length === 0 ? (
             <div className="text-center py-8">
@@ -737,17 +753,103 @@ function CandidatesTab({ jobId, jobTitle, onViewCandidate, onAddCandidate, onDel
   useEffect(() => {
     if (!jobId || viewMode !== 'pipeline') return;
     setPipelineLoading(true);
-    api.get('/candidates', { params: { jobId, page: 1, limit: 100 } })
+    api.get('/candidates', { params: { jobId, page: 1, limit: 1000 } })
       .then(res => setPipelineCandidates(res.data.data || []))
       .catch(() => {})
       .finally(() => setPipelineLoading(false));
   }, [jobId, viewMode, refreshKey]);
 
-  // Get screening scores for candidates
-  const getCandidateScore = (candidate: any) => {
-    // This would match by candidate ID in real app
-    return Math.floor(Math.random() * 40) + 60; // Mock score for demo
+  const screeningByCandidateId = useMemo(() => {
+    const map = new Map<string, { stage: 'shortlisted' | 'consider' | 'rejected'; score: number | null }>();
+
+    (screeningResult?.shortlist || []).forEach((candidate: any) => {
+      const candidateId = String(candidate.candidateId || '');
+      if (!candidateId) return;
+
+      let stage: 'shortlisted' | 'consider' = 'shortlisted';
+      if (candidate.recommendation === 'Consider') stage = 'consider';
+
+      map.set(candidateId, {
+        stage,
+        score: typeof candidate.finalScore === 'number' ? candidate.finalScore : null,
+      });
+    });
+
+    (screeningResult?.rejectedCandidates || []).forEach((candidate: any) => {
+      const candidateId = String(candidate.candidateId || '');
+      if (!candidateId) return;
+
+      map.set(candidateId, {
+        stage: 'rejected',
+        score: typeof candidate.finalScore === 'number' ? candidate.finalScore : null,
+      });
+    });
+
+    return map;
+  }, [screeningResult]);
+
+  const getPipelineStage = (candidateId: string) => {
+    const stage = screeningByCandidateId.get(String(candidateId))?.stage;
+    return stage || 'applied';
   };
+
+  const getScoreForCandidate = (candidateId: string) => {
+    return screeningByCandidateId.get(String(candidateId))?.score ?? null;
+  };
+
+  const sortedLocalCandidates = useMemo(() => {
+    const candidatesToSort = [...localCandidates];
+
+    candidatesToSort.sort((a: any, b: any) => {
+      if (sortBy === 'name') {
+        const nameA = `${a.firstName || ''} ${a.lastName || ''}`.trim().toLowerCase();
+        const nameB = `${b.firstName || ''} ${b.lastName || ''}`.trim().toLowerCase();
+        return nameA.localeCompare(nameB);
+      }
+
+      if (sortBy === 'score') {
+        const scoreA = getScoreForCandidate(a._id);
+        const scoreB = getScoreForCandidate(b._id);
+        if (scoreA === null && scoreB === null) return 0;
+        if (scoreA === null) return 1;
+        if (scoreB === null) return -1;
+        return scoreB - scoreA;
+      }
+
+      const dateA = new Date(a.createdAt || 0).getTime();
+      const dateB = new Date(b.createdAt || 0).getTime();
+      return dateB - dateA;
+    });
+
+    return candidatesToSort;
+  }, [localCandidates, sortBy, screeningByCandidateId]);
+
+  const sortedPipelineCandidates = useMemo(() => {
+    const candidatesToSort = [...pipelineCandidates];
+
+    candidatesToSort.sort((a: any, b: any) => {
+      if (sortBy === 'name') {
+        const nameA = `${a.firstName || ''} ${a.lastName || ''}`.trim().toLowerCase();
+        const nameB = `${b.firstName || ''} ${b.lastName || ''}`.trim().toLowerCase();
+        return nameA.localeCompare(nameB);
+      }
+
+      if (sortBy === 'score') {
+        const scoreA = getScoreForCandidate(a._id);
+        const scoreB = getScoreForCandidate(b._id);
+        if (scoreA === null && scoreB === null) return 0;
+        if (scoreA === null) return 1;
+        if (scoreB === null) return -1;
+        return scoreB - scoreA;
+      }
+
+      const dateA = new Date(a.createdAt || 0).getTime();
+      const dateB = new Date(b.createdAt || 0).getTime();
+      return dateB - dateA;
+    });
+
+    return candidatesToSort;
+  }, [pipelineCandidates, sortBy, screeningByCandidateId]);
 
   const toggleCandidate = (id: string) => {
     const newSet = new Set(selectedCandidates);
@@ -811,27 +913,6 @@ function CandidatesTab({ jobId, jobTitle, onViewCandidate, onAddCandidate, onDel
     setSelectedCandidates(new Set());
     setShowDeleteConfirm(false);
     toast.success('Candidates deleted successfully');
-  };
-
-  // Build pipeline stage mapping from latest screening result
-  const shortlistedIds   = new Set((screeningResult?.shortlist || []).filter((c: any) => ['Strongly Recommended','Recommended'].includes(c.recommendation)).map((c: any) => c.candidateId));
-  const considerIds      = new Set((screeningResult?.shortlist || []).filter((c: any) => c.recommendation === 'Consider').map((c: any) => c.candidateId));
-  const rejectedIds      = new Set((screeningResult?.rejectedCandidates || []).map((c: any) => c.candidateId));
-  const screenedIds      = new Set([...shortlistedIds, ...considerIds, ...rejectedIds]);
-
-  const getPipelineStage = (candidateId: string) => {
-    if (shortlistedIds.has(candidateId)) return 'shortlisted';
-    if (considerIds.has(candidateId))    return 'consider';
-    if (rejectedIds.has(candidateId))    return 'rejected';
-    return 'applied';
-  };
-
-  const getScoreForCandidate = (candidateId: string) => {
-    const s = (screeningResult?.shortlist || []).find((c: any) => c.candidateId === candidateId);
-    if (s) return s.finalScore;
-    const r = (screeningResult?.rejectedCandidates || []).find((c: any) => c.candidateId === candidateId);
-    if (r) return r.finalScore;
-    return null;
   };
 
   const pipelineStages = [
@@ -992,18 +1073,53 @@ function CandidatesTab({ jobId, jobTitle, onViewCandidate, onAddCandidate, onDel
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {isLoading ? (
-                  <tr><td colSpan={7} className="px-3 py-8 text-center">
-                    <div className="flex items-center justify-center gap-2 text-xs text-gray-500">
-                      <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                      Loading candidates…
-                    </div>
-                  </td></tr>
-                ) : localCandidates.length === 0 ? (
+                  Array.from({ length: 6 }).map((_, rowIndex) => (
+                    <tr key={`candidate-skeleton-${rowIndex}`}>
+                      <td className="px-3 py-3">
+                        <div className="h-3 w-3 rounded bg-gray-200 animate-pulse" />
+                      </td>
+                      <td className="px-3 py-3">
+                        <div className="flex items-center gap-2 animate-pulse">
+                          <div className="h-7 w-7 rounded-lg bg-gray-200" />
+                          <div className="h-3 w-28 rounded bg-gray-200" />
+                        </div>
+                      </td>
+                      <td className="px-3 py-3">
+                        <div className="h-3 w-36 rounded bg-gray-200 animate-pulse" />
+                      </td>
+                      <td className="px-3 py-3">
+                        <div className="h-3 w-16 rounded bg-gray-200 animate-pulse" />
+                      </td>
+                      <td className="px-3 py-3">
+                        <div className="h-4 w-20 rounded-full bg-gray-100 animate-pulse" />
+                      </td>
+                      <td className="px-3 py-3">
+                        <div className="h-3 w-20 rounded bg-gray-100 animate-pulse" />
+                      </td>
+                      <td className="px-3 py-3">
+                        <div className="ml-auto h-3 w-14 rounded bg-gray-100 animate-pulse" />
+                      </td>
+                    </tr>
+                  ))
+                ) : sortedLocalCandidates.length === 0 ? (
                   <tr><td colSpan={7} className="px-3 py-8 text-center text-xs text-gray-500">
                     No candidates match your search.
                   </td></tr>
-                ) : localCandidates.map((candidate: any) => {
-                  const score = getCandidateScore(candidate);
+                ) : sortedLocalCandidates.map((candidate: any) => {
+                  const score = getScoreForCandidate(candidate._id);
+                  const stage = getPipelineStage(candidate._id);
+                  const stageStyles: Record<string, string> = {
+                    applied: 'bg-blue-50 text-blue-700 border-blue-200',
+                    shortlisted: 'bg-green-50 text-green-700 border-green-200',
+                    consider: 'bg-amber-50 text-amber-700 border-amber-200',
+                    rejected: 'bg-red-50 text-red-700 border-red-200',
+                  };
+                  const stageLabel: Record<string, string> = {
+                    applied: 'Applied',
+                    shortlisted: 'Shortlisted',
+                    consider: 'Consider',
+                    rejected: 'Not Selected',
+                  };
                   const isSelected = selectedCandidates.has(candidate._id);
                   return (
                     <tr
@@ -1030,23 +1146,27 @@ function CandidatesTab({ jobId, jobTitle, onViewCandidate, onAddCandidate, onDel
                         <span className="text-xs text-gray-600">{candidate.email}</span>
                       </td>
                       <td className="px-3 py-2">
-                        <div className="flex items-center gap-1.5">
-                          <div className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full rounded-full ${
-                                score >= 80 ? 'bg-green-500' : score >= 60 ? 'bg-amber-500' : 'bg-red-500'
-                              }`}
-                              style={{ width: `${score}%` }}
-                            />
+                        {score !== null ? (
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full ${
+                                  score >= 80 ? 'bg-green-500' : score >= 60 ? 'bg-amber-500' : 'bg-red-500'
+                                }`}
+                                style={{ width: `${score}%` }}
+                              />
+                            </div>
+                            <span className={`text-[10px] font-bold ${
+                              score >= 80 ? 'text-green-600' : score >= 60 ? 'text-amber-600' : 'text-red-600'
+                            }`}>{score}%</span>
                           </div>
-                          <span className={`text-[10px] font-bold ${
-                            score >= 80 ? 'text-green-600' : score >= 60 ? 'text-amber-600' : 'text-red-600'
-                          }`}>{score}%</span>
-                        </div>
+                        ) : (
+                          <span className="text-[10px] font-medium text-gray-400">Not scored</span>
+                        )}
                       </td>
                       <td className="px-3 py-2">
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-200">
-                          Applied
+                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium border ${stageStyles[stage]}`}>
+                          {stageLabel[stage]}
                         </span>
                       </td>
                       <td className="px-3 py-2">
@@ -1114,14 +1234,30 @@ function CandidatesTab({ jobId, jobTitle, onViewCandidate, onAddCandidate, onDel
       ) : (
         /* Pipeline View */
         pipelineLoading ? (
-          <div className="flex items-center justify-center py-16 gap-2 text-xs text-gray-500">
-            <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-            Building pipeline…
+          <div className="grid grid-cols-4 gap-3">
+            {Array.from({ length: 4 }).map((_, columnIndex) => (
+              <div key={`pipeline-skeleton-${columnIndex}`} className="flex flex-col bg-gray-50 rounded-2xl border border-gray-200 overflow-hidden">
+                <div className="px-3 py-2.5 border-b border-gray-200 bg-white">
+                  <div className="h-3 w-24 rounded bg-gray-200 animate-pulse" />
+                </div>
+                <div className="p-2.5 space-y-2">
+                  {Array.from({ length: 3 }).map((__, cardIndex) => (
+                    <div key={`pipeline-card-skeleton-${columnIndex}-${cardIndex}`} className="rounded-xl border border-gray-200 bg-white p-2.5">
+                      <div className="animate-pulse space-y-2">
+                        <div className="h-3 w-4/5 rounded bg-gray-200" />
+                        <div className="h-2.5 w-3/5 rounded bg-gray-100" />
+                        <div className="h-2.5 w-2/5 rounded bg-gray-100" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
         ) : (
         <div className="grid grid-cols-4 gap-3">
           {pipelineStages.map(stage => {
-            const stageCards = pipelineCandidates.filter((c: any) => getPipelineStage(c._id) === stage.id);
+            const stageCards = sortedPipelineCandidates.filter((c: any) => getPipelineStage(c._id) === stage.id);
             const colColors: Record<string, { header: string; badge: string; text: string; dot: string }> = {
               applied:     { header: 'from-blue-50',  badge: 'bg-blue-100 text-blue-700',   text: 'text-blue-700',   dot: 'bg-blue-500'   },
               shortlisted: { header: 'from-green-50', badge: 'bg-green-100 text-green-700', text: 'text-green-700', dot: 'bg-green-500' },

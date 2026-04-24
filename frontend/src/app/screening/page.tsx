@@ -4,7 +4,7 @@ import React, { Suspense, useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '@/store';
-import { stopRunning } from '@/store/screeningSlice';
+import { stopRunning, resumeRunning } from '@/store/screeningSlice';
 import { useJobs } from '@/hooks/useJobs';
 import { useJobCandidates } from '@/hooks/useJobCandidates';
 import { useScreening } from '@/hooks/useScreening';
@@ -888,6 +888,7 @@ function NavBar({
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 function ScreeningContent() {
+  const SCREENING_SESSION_KEY = 'talentai_active_screening_session';
   const router   = useRouter();
   const dispatch = useDispatch<AppDispatch>();
   const params   = useSearchParams();
@@ -901,7 +902,7 @@ function ScreeningContent() {
 
   const { jobs, loading: jobsLoading } = useJobs();
   const { total: candidateCount }       = useJobCandidates(jobId || null);
-  const { notifications, liveEvents }   = useNotifications();
+  const { notifications, liveEvents, activeJobs }   = useNotifications();
   const pendingBgJobId = useSelector((s: RootState) => s.screening.pendingBgJobId);
 
   const {
@@ -914,6 +915,16 @@ function ScreeningContent() {
   const selectedJob = jobs.find(j => j._id === jobId);
   const totalWeight = Object.values(customWeights).reduce((a, b) => a + b, 0);
   const progressPercent = totalCandidates > 0 ? Math.round((evaluatedCount / totalCandidates) * 100) : 0;
+
+  const getPersistedSession = () => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const raw = window.localStorage.getItem(SCREENING_SESSION_KEY);
+      return raw ? JSON.parse(raw) as { bgJobId: string; jobId: string; startedAt: number } : null;
+    } catch {
+      return null;
+    }
+  };
 
   // Sync job weights
   useEffect(() => {
@@ -930,12 +941,54 @@ function ScreeningContent() {
     return () => clearInterval(t);
   }, [running]);
 
+  // Persist active screening session so we can restore after navigation.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!running || !pendingBgJobId || !jobId) return;
+
+    window.localStorage.setItem(
+      SCREENING_SESSION_KEY,
+      JSON.stringify({
+        bgJobId: pendingBgJobId,
+        jobId,
+        startedAt: Date.now() - (elapsedTime * 1000),
+      })
+    );
+  }, [running, pendingBgJobId, jobId, elapsedTime]);
+
+  // Reattach to active background job when returning to this page.
+  useEffect(() => {
+    const persisted = getPersistedSession();
+    const activeScreeningIds = Object.values(activeJobs)
+      .filter(job => job.jobType === 'screening')
+      .map(job => job.bgJobId);
+
+    const hasPersistedActiveJob = !!(persisted?.bgJobId && activeScreeningIds.includes(persisted.bgJobId));
+    const fallbackActiveBgJobId = activeScreeningIds[0];
+    const bgJobIdToRestore = hasPersistedActiveJob ? persisted!.bgJobId : fallbackActiveBgJobId;
+
+    if (!bgJobIdToRestore || running) return;
+
+    dispatch(resumeRunning(bgJobIdToRestore));
+
+    if (!jobId && persisted?.jobId) {
+      setJobId(persisted.jobId);
+    }
+
+    if (persisted?.startedAt) {
+      setElapsedTime(Math.max(0, Math.floor((Date.now() - persisted.startedAt) / 1000)));
+    }
+  }, [activeJobs, running, dispatch, jobId]);
+
   // Navigate to results on completion
   useEffect(() => {
     if (!pendingBgJobId) return;
     const done = notifications.find(n => n.bgJobId === pendingBgJobId);
     if (!done) return;
     dispatch(stopRunning());
+    if (typeof window !== 'undefined') {
+      window.localStorage.removeItem(SCREENING_SESSION_KEY);
+    }
     if (done.link) router.push(done.link);
   }, [notifications, pendingBgJobId]);
 

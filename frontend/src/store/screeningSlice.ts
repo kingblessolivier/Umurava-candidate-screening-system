@@ -139,6 +139,11 @@ const screeningSlice = createSlice({
       s.running = false;
       s.pendingBgJobId = null;
     },
+    // Reattach UI to an already-running background screening job
+    resumeRunning: (s, action: { payload: string }) => {
+      s.running = true;
+      s.pendingBgJobId = action.payload;
+    },
     // Pagination reducers
     setSearchQuery: (state, action) => {
       state.searchQuery = action.payload;
@@ -202,6 +207,7 @@ export const {
   setEvaluatedCount,
   resetLiveState,
   stopRunning,
+  resumeRunning,
   setSearchQuery,
   setPage,
   setLimit,

@@ -292,7 +292,7 @@ export default function EmailModal({
             className="relative w-full max-w-4xl max-h-[88vh] flex flex-col bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden"
           >
             {/* ── Header ── */}
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-gradient-to-r from-blue-600 to-indigo-600 flex-shrink-0">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-blue-600 flex-shrink-0">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center">
                   <Mail className="w-5 h-5 text-white" />
@@ -609,7 +609,7 @@ export default function EmailModal({
                       className={cn(
                         "flex items-center gap-2 px-5 py-2 text-xs font-bold text-white rounded-xl transition-all shadow-sm",
                         canSend && !(results !== null && allSent)
-                          ? "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-blue-500/20"
+                          ? "bg-blue-600 hover:bg-blue-700 shadow-blue-500/20"
                           : "bg-gray-300 cursor-not-allowed"
                       )}
                     >

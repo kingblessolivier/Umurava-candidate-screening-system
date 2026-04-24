@@ -70,6 +70,28 @@ export default function NewJobPage() {
     }
   }, []);
 
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const isMod = event.ctrlKey || event.metaKey;
+      if (!isMod) return;
+
+      if (event.key.toLowerCase() === "s") {
+        event.preventDefault();
+        save();
+        toast.success("Draft saved");
+      }
+
+      if (event.key === "Enter" && event.shiftKey) {
+        event.preventDefault();
+        const formEl = document.querySelector("form");
+        if (formEl) formEl.requestSubmit();
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [save]);
+
   const handleRestoreDraft = (data: Record<string, any>) => {
     setForm(data as FormState);
     setShowDraftRecovery(false);
@@ -216,6 +238,9 @@ export default function NewJobPage() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+            Shortcuts: <span className="font-medium">Ctrl/Cmd+S</span> save draft, <span className="font-medium">Ctrl/Cmd+Shift+Enter</span> submit
+          </div>
           {/* Basic Info */}
           <Section title="Basic Information">
             <div className="grid grid-cols-2 gap-4">

@@ -15,8 +15,8 @@ export function useDashboard() {
     dispatch(fetchDashboardStats());
   }, [dispatch]);
 
-  const refreshDashboard = () => {
-    dispatch(fetchDashboardStats());
+  const refreshDashboard = async () => {
+    await dispatch(fetchDashboardStats());
   };
 
   return {

@@ -5,7 +5,7 @@ import { useDashboard } from '@/hooks/useDashboard';
 import { useJobs } from '@/hooks/useJobs';
 import {
   Users, Briefcase, TrendingUp, Target, ArrowRight, Plus,
-  Download, RefreshCw, BarChart3, MapPin,
+  RefreshCw, BarChart3, MapPin,
 } from 'lucide-react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
@@ -26,23 +26,33 @@ const stagger = {
 
 // ─── KPI Card ─────────────────────────────────────────────────────────────────
 function KPICard({
-  label, value, sub, icon: Icon, palette,
+  label, value, sub, icon: Icon, palette, loading = false,
 }: {
   label: string;
   value: string | number;
   sub?: string;
   icon: React.ElementType;
   palette: { bg: string; icon: string; border: string };
+  loading?: boolean;
 }) {
   return (
     <motion.div
       variants={fade}
-      className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex items-start justify-between hover:shadow-md transition-shadow"
+      className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 flex items-start justify-between hover:shadow-md transition-shadow"
     >
       <div>
-        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">{label}</p>
-        <p className="text-2xl font-bold text-gray-900 mt-2 leading-none">{value}</p>
-        {sub && <p className="text-[11px] text-gray-400 mt-1">{sub}</p>}
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-[0.12em]">{label}</p>
+        {loading ? (
+          <div className="mt-3 space-y-2 animate-pulse">
+            <div className="h-7 w-20 rounded bg-gray-200" />
+            <div className="h-3 w-32 rounded bg-gray-100" />
+          </div>
+        ) : (
+          <>
+            <p className="text-2xl font-bold text-gray-900 mt-2 leading-none">{value}</p>
+            {sub && <p className="text-xs text-gray-500 mt-1.5">{sub}</p>}
+          </>
+        )}
       </div>
       <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${palette.bg} border ${palette.border}`}>
         <Icon className={`w-4 h-4 ${palette.icon}`} strokeWidth={1.75} />
@@ -236,7 +246,14 @@ function DepartmentDonut({ jobs }: { jobs: { department?: string }[] }) {
     deptCount[d] = (deptCount[d] || 0) + 1;
   });
   const data = Object.entries(deptCount).map(([name, value]) => ({ name, value }));
-  if (data.length === 0) data.push({ name: 'Engineering', value: 1 });
+  if (data.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-10 text-center">
+        <BarChart3 className="w-7 h-7 text-gray-200 mb-2" />
+        <p className="text-sm text-gray-500">No department data available</p>
+      </div>
+    );
+  }
 
   return (
     <ResponsiveContainer width="100%" height={160}>
@@ -266,13 +283,12 @@ function DepartmentDonut({ jobs }: { jobs: { department?: string }[] }) {
 
 // ─── Source Chart ─────────────────────────────────────────────────────────────
 function SourceChart({ sources }: { sources: { source: string; count: number }[] }) {
-  const data = sources.length > 0 ? sources : [{ source: 'No data', count: 0 }];
   return (
     <ResponsiveContainer width="100%" height={160}>
-      <BarChart data={data} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
+      <BarChart data={sources} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-        <XAxis dataKey="source" tick={{ fill: '#9ca3af', fontSize: 10 }} axisLine={false} tickLine={false} />
-        <YAxis tick={{ fill: '#9ca3af', fontSize: 10 }} axisLine={false} tickLine={false} />
+        <XAxis dataKey="source" tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} />
+        <YAxis tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} />
         <Tooltip contentStyle={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '11px' }} />
         <Bar dataKey="count" fill="#6366f1" radius={[3, 3, 0, 0]} name="Candidates" barSize={24} />
       </BarChart>
@@ -293,9 +309,9 @@ function Card({
   return (
     <motion.div
       variants={fade}
-      className={`bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden ${className}`}
+      className={`bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden ${className}`}
     >
-      <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
+      <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           {accent && (
             <div className="w-1 h-4 rounded-full" style={{ backgroundColor: accent }} />
@@ -352,11 +368,11 @@ function EvaluationsTable({ rows, loading }: {
       <table className="w-full">
         <thead>
           <tr className="bg-gray-50/60">
-            <th className="text-left px-4 py-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Position</th>
-            <th className="text-right px-3 py-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Reviewed</th>
-            <th className="text-right px-3 py-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Shortlisted</th>
-            <th className="text-right px-3 py-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Rate</th>
-            <th className="text-right px-4 py-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Date</th>
+            <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Position</th>
+            <th className="text-right px-3 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Reviewed</th>
+            <th className="text-right px-3 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Shortlisted</th>
+            <th className="text-right px-3 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Rate</th>
+            <th className="text-right px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Date</th>
             <th className="px-3 py-2" />
           </tr>
         </thead>
@@ -428,7 +444,7 @@ function PositionsTable({ jobs }: { jobs: any[] }) {
             {['Position', 'Department', 'Level', 'Location', 'Type', 'Status', ''].map((h, i) => (
               <th
                 key={h + i}
-                className={`py-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider ${i === 0 || i === 6 ? 'px-4' : 'px-3'} ${i === 0 ? 'text-left' : i === 6 ? 'text-right' : 'text-left'}`}
+                className={`py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider ${i === 0 || i === 6 ? 'px-4' : 'px-3'} ${i === 0 ? 'text-left' : i === 6 ? 'text-right' : 'text-left'}`}
               >
                 {h}
               </th>
@@ -519,35 +535,35 @@ export default function DashboardPage() {
 
   useEffect(() => { setLastUpdated(new Date()); }, [dashboard]);
 
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
     setRefreshing(true);
-    refreshDashboard();
-    setTimeout(() => setRefreshing(false), 1200);
+    try {
+      await refreshDashboard();
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   return (
     <div className="min-h-screen bg-slate-50">
 
       {/* ── Page Header ──────────────────────────────────────────────────────── */}
-      <div className="bg-white border-b border-gray-100 px-6 py-3.5">
-        <div className="flex items-center justify-between">
+      <div className="bg-white border-b border-gray-200 px-6 py-3.5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h1 className="text-base font-bold text-gray-900 tracking-tight">Hiring Overview</h1>
-            <p className="text-[11px] text-gray-400 mt-0.5">
+            <p className="text-[11px] text-gray-500 mt-0.5">
               Updated {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             <button
               onClick={handleRefresh}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-all"
+              disabled={refreshing}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-all disabled:opacity-60"
             >
               <RefreshCw className={`w-3 h-3 ${refreshing ? 'animate-spin' : ''}`} />
               Refresh
-            </button>
-            <button className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-all">
-              <Download className="w-3 h-3" />
-              Export
             </button>
             <Link
               href="/screening"
@@ -575,6 +591,7 @@ export default function DashboardPage() {
             sub={`${stats?.totalJobs ?? 0} total roles`}
             icon={Briefcase}
             palette={{ bg: 'bg-indigo-50', icon: 'text-indigo-600', border: 'border-indigo-100' }}
+            loading={loading}
           />
           <KPICard
             label="Candidates in Pipeline"
@@ -582,6 +599,7 @@ export default function DashboardPage() {
             sub="across all positions"
             icon={Users}
             palette={{ bg: 'bg-emerald-50', icon: 'text-emerald-600', border: 'border-emerald-100' }}
+            loading={loading}
           />
           <KPICard
             label="Selection Rate"
@@ -589,6 +607,7 @@ export default function DashboardPage() {
             sub="shortlisted / reviewed"
             icon={TrendingUp}
             palette={{ bg: 'bg-amber-50', icon: 'text-amber-600', border: 'border-amber-100' }}
+            loading={loading}
           />
           <KPICard
             label="Avg. Quality Score"
@@ -596,6 +615,7 @@ export default function DashboardPage() {
             sub="candidate fit (out of 100)"
             icon={Target}
             palette={{ bg: 'bg-violet-50', icon: 'text-violet-600', border: 'border-violet-100' }}
+            loading={loading}
           />
         </motion.div>
 

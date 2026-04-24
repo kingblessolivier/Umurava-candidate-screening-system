@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '@/store';
 import { createCandidate } from '@/store/candidatesSlice';
@@ -8,6 +8,8 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import toast from 'react-hot-toast';
+import { useAutoSave } from '@/hooks/useAutoSave';
+import { DraftRecoveryModal } from '@/components/ui/DraftRecoveryModal';
 
 interface Props {
   isOpen: boolean;
@@ -19,6 +21,8 @@ export function CreateCandidateModal({ isOpen, onClose }: Props) {
   const { items: jobs } = useSelector((s: RootState) => s.jobs);
 
   const [saving, setSaving] = useState(false);
+  const [showDraftRecovery, setShowDraftRecovery] = useState(false);
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [section, setSection] = useState<'basic' | 'skills' | 'experience' | 'education' | 'projects' | 'extras'>('basic');
   const [form, setForm] = useState({
     firstName: '',
@@ -41,6 +45,26 @@ export function CreateCandidateModal({ isOpen, onClose }: Props) {
     github: '',
     portfolio: '',
   });
+
+  const { getDraft, clearDraft, save } = useAutoSave({
+    key: 'candidate-draft',
+    data: form as unknown as Record<string, any>,
+    interval: 2000,
+    enabled: isOpen,
+    onSave: () => {
+      setAutoSaveStatus('saving');
+      setTimeout(() => setAutoSaveStatus('saved'), 400);
+      setTimeout(() => setAutoSaveStatus('idle'), 1800);
+    },
+  });
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const draft = getDraft();
+    if (draft?.data) {
+      setShowDraftRecovery(true);
+    }
+  }, [isOpen, getDraft]);
 
   const set = (field: keyof typeof form, value: string) =>
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -121,6 +145,32 @@ export function CreateCandidateModal({ isOpen, onClose }: Props) {
     return true;
   };
 
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      const isMod = event.ctrlKey || event.metaKey;
+      if (!isMod) return;
+
+      if (event.key.toLowerCase() === 's') {
+        event.preventDefault();
+        save();
+        toast.success('Draft saved');
+      }
+
+      if (event.key === 'Enter' && event.shiftKey) {
+        event.preventDefault();
+        const formEl = document.querySelector('form');
+        if (formEl) {
+          formEl.requestSubmit();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, save]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) {
@@ -188,6 +238,7 @@ export function CreateCandidateModal({ isOpen, onClose }: Props) {
         source: 'platform',
       }));
       if (result.meta.requestStatus === 'fulfilled') {
+        clearDraft();
         toast.success('Candidate created');
         handleClose();
       } else {
@@ -214,14 +265,36 @@ export function CreateCandidateModal({ isOpen, onClose }: Props) {
   );
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={handleClose}
-      title="Add Candidate"
-      subtitle="For JSON/CSV/Resume import, use Upload Candidates."
-      size="xl"
-    >
+    <>
+      <DraftRecoveryModal
+        draftKey="candidate-draft"
+        onRestore={(data) => {
+          setForm(data as typeof form);
+          setShowDraftRecovery(false);
+          toast.success('Candidate draft restored');
+        }}
+        onDiscard={() => setShowDraftRecovery(false)}
+        isOpen={showDraftRecovery}
+      />
+
+      <Modal
+        isOpen={isOpen}
+        onClose={handleClose}
+        title="Add Candidate"
+        subtitle="For JSON/CSV/Resume import, use Upload Candidates."
+        size="xl"
+      >
       <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="text-[11px] text-gray-500">
+            Shortcuts: <span className="font-medium">Ctrl/Cmd+S</span> save draft, <span className="font-medium">Ctrl/Cmd+Shift+Enter</span> submit
+          </div>
+          {autoSaveStatus !== 'idle' && (
+            <div className={`text-[11px] font-medium ${autoSaveStatus === 'saved' ? 'text-green-600' : 'text-blue-600'}`}>
+              {autoSaveStatus === 'saved' ? 'Draft saved' : 'Saving draft...'}
+            </div>
+          )}
+        </div>
         <div className="flex flex-wrap gap-2">
           {sectionBtn('basic', 'Basic')}
           {sectionBtn('skills', 'Skills')}
@@ -431,6 +504,7 @@ export function CreateCandidateModal({ isOpen, onClose }: Props) {
           </Button>
         </div>
       </form>
-    </Modal>
+      </Modal>
+    </>
   );
 }

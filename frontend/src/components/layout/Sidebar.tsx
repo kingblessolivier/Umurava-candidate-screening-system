@@ -30,7 +30,7 @@ function SidebarSkeleton({ isCollapsed }: { isCollapsed: boolean }) {
       className={cn(
         'fixed left-0 top-0 h-screen flex flex-col z-40 transition-all duration-300 ease-out',
         'bg-blue-600 text-white',
-        isCollapsed ? 'w-[72px]' : 'w-[240px]'
+        isCollapsed ? 'w-[68px]' : 'w-[224px]'
       )}
     >
       {/* Logo skeleton */}
@@ -113,21 +113,21 @@ export function Sidebar({ isCollapsed }: { isCollapsed: boolean }) {
       )}
     >
         {/* Logo */}
-        <div className="px-4 py-5 border-b border-blue-500">
+        <div className="px-3 py-4 border-b border-blue-500/80">
           <Link
             href="/"
             className={cn(
-              'flex items-center gap-3 px-2 py-2 rounded-lg transition-all duration-200',
-              'hover:bg-blue-500',
+              'flex items-center gap-2.5 px-2 py-1.5 rounded-lg transition-all duration-200',
+              'hover:bg-blue-500/90',
               isCollapsed && 'justify-center'
             )}
           >
-            <div className="w-10 h-10 rounded-lg bg-blue-500 flex items-center justify-center shadow-lg flex-shrink-0">
-              <Sparkles className="w-5 h-5 text-white" />
+            <div className="w-9 h-9 rounded-lg bg-blue-500 flex items-center justify-center shadow-lg flex-shrink-0">
+              <Sparkles className="w-4.5 h-4.5 text-white" />
             </div>
             {!isCollapsed && (
               <div className="flex flex-col">
-                <span className="font-bold text-white text-sm leading-tight">TalentAI</span>
+                <span className="font-bold text-white text-xs leading-tight tracking-wide">TalentAI</span>
                 <span className="text-[10px] text-blue-200 leading-tight">Smart Screening</span>
               </div>
             )}
@@ -135,9 +135,9 @@ export function Sidebar({ isCollapsed }: { isCollapsed: boolean }) {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+        <nav className="flex-1 px-2.5 py-3 space-y-1.5 overflow-y-auto">
           {!isCollapsed && (
-            <p className="px-3 mb-3 text-[10px] font-semibold text-blue-300 uppercase tracking-wider">
+            <p className="px-2.5 mb-2 text-[9px] font-semibold text-blue-300 uppercase tracking-[0.14em]">
               Menu
             </p>
           )}
@@ -150,10 +150,10 @@ export function Sidebar({ isCollapsed }: { isCollapsed: boolean }) {
                  key={href}
                  href={href}
                  className={cn(
-                   'relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-200',
+                  'relative flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs transition-all duration-200 border border-transparent',
                    isActive
-                     ? 'bg-blue-500 text-white font-semibold'
-                     : 'text-blue-100',
+                    ? 'bg-blue-500 text-white font-semibold border-blue-400/60 shadow-sm'
+                    : 'text-blue-100 hover:bg-blue-500/70',
                    isCollapsed && 'justify-center px-2'
                  )}
                  title={isCollapsed ? label : undefined}
@@ -167,17 +167,17 @@ export function Sidebar({ isCollapsed }: { isCollapsed: boolean }) {
                 )}
 
                 <div className={cn(
-                  'w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 transition-all duration-200',
+                  'w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 transition-all duration-200',
                   isActive
                     ? 'bg-blue-400'
-                    : 'bg-blue-500'
+                    : 'bg-blue-500/90'
                 )}>
-                  <Icon className="w-4 h-4" />
+                  <Icon className="w-3.5 h-3.5" />
                 </div>
 
                 {!isCollapsed && (
                   <>
-                    <span className="flex-1">{label}</span>
+                    <span className="flex-1 leading-none">{label}</span>
                     {isActive && (
                       <span className="w-1.5 h-1.5 rounded-full bg-white" />
                     )}
@@ -188,20 +188,20 @@ export function Sidebar({ isCollapsed }: { isCollapsed: boolean }) {
           })}
         </nav>
         {/* Logout */}
-        <div className="px-3 py-4 border-t border-blue-500">
+        <div className="px-2.5 py-3 border-t border-blue-500/80">
           <button
             onClick={onLogout}
             className={cn(
-              'group w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm',
-              'text-blue-100 hover:bg-red-600 hover:text-white transition-all duration-200',
+              'group w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs border border-transparent',
+              'text-blue-100 hover:bg-red-600 hover:text-white hover:border-red-500/70 transition-all duration-200',
               isCollapsed && 'justify-center px-2'
             )}
             title={isCollapsed ? 'Log out' : undefined}
           >
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-blue-500 group-hover:bg-red-500 transition-colors duration-200">
-              <LogOut className="w-4 h-4" />
+            <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 bg-blue-500 group-hover:bg-red-500 transition-colors duration-200">
+              <LogOut className="w-3.5 h-3.5" />
             </div>
-            {!isCollapsed && <span className="text-xs">Log out</span>}
+            {!isCollapsed && <span className="text-[11px] leading-none">Log out</span>}
           </button>
         </div>
       </aside>
