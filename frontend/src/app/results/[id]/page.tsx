@@ -12,7 +12,7 @@ import {
   MessageSquare, CheckCircle, XCircle, AlertTriangle, Shield, Eye,
   TrendingDown, Lightbulb, BarChart3, Download, Check,
   CheckSquare, Square, Sparkles, Filter, Brain, Activity,
-  Database, Trophy, FileText, Server, Mail,
+  Database, Trophy, FileText, Server, Mail, Scale,
 } from "lucide-react";
 import { AIThinkingReviewModal } from "@/components/screening/AIThinkingReviewModal";
 import EmailModal from "@/components/email/EmailModal";
@@ -1049,6 +1049,283 @@ function CandidateDetail({ candidate }: { candidate: CandidateScore }) {
         </div>
       </td>
     </tr>
+  );
+}
+
+// ─── Comparison modal ─────────────────────────────────────────────────────────
+type CompareEntry =
+  | { kind: "shortlisted"; candidate: CandidateScore }
+  | { kind: "rejected";    candidate: RejectedCandidate };
+
+function CompareModal({ entries, onClose }: { entries: CompareEntry[]; onClose: () => void }) {
+  if (entries.length < 2) return null;
+
+  const BREAKDOWN_KEYS: Array<[string, keyof CandidateScore["breakdown"]]> = [
+    ["SKILLS",       "skillsScore"      ],
+    ["EXPERIENCE",   "experienceScore"  ],
+    ["EDUCATION",    "educationScore"   ],
+    ["PROJECTS",     "projectsScore"    ],
+    ["AVAILABILITY", "availabilityScore"],
+  ];
+
+  function bestBreakdownScore(key: keyof CandidateScore["breakdown"]): number {
+    let best = -1;
+    for (const e of entries) {
+      if (e.kind === "shortlisted") {
+        const v = e.candidate.breakdown[key];
+        if (v > best) best = v;
+      }
+    }
+    return best;
+  }
+
+  const bestFinal = Math.max(...entries.map(e => e.candidate.finalScore));
+  const shortlistedCount = entries.filter(e => e.kind === "shortlisted").length;
+  const hasCrossPool = entries.some(e => e.kind === "shortlisted") && entries.some(e => e.kind === "rejected");
+
+  return (
+    <div
+      className="fixed inset-0 z-[300] bg-black/70 backdrop-blur-sm overflow-y-auto"
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="min-h-screen flex items-start justify-center p-4 py-8">
+        <div className="relative w-full max-w-7xl bg-white shadow-2xl border border-gray-200">
+
+          {/* Header */}
+          <div className="sticky top-0 z-10 flex items-center justify-between px-5 py-3.5 bg-[#0f172a] border-b border-[#1e293b]">
+            <div className="flex items-center gap-3">
+              <Scale className="w-4 h-4 text-blue-400" />
+              <span className="text-[11px] font-bold font-mono tracking-widest text-white uppercase">CANDIDATE COMPARISON</span>
+              <span className="px-2 py-0.5 text-[9px] font-mono font-bold bg-blue-600 text-white">
+                {entries.length} CANDIDATES
+              </span>
+              {hasCrossPool && (
+                <span className="px-2 py-0.5 text-[9px] font-mono font-bold bg-amber-600 text-white">
+                  CROSS-POOL · SHORTLISTED vs REJECTED
+                </span>
+              )}
+            </div>
+            <button
+              onClick={onClose}
+              className="p-1.5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+            >
+              <XCircle className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Columns */}
+          <div
+            className="grid divide-x divide-gray-200"
+            style={{ gridTemplateColumns: `repeat(${entries.length}, minmax(0, 1fr))` }}
+          >
+            {entries.map((entry, col) => {
+              const isShortlisted = entry.kind === "shortlisted";
+              const cand = entry.candidate;
+              const name = cand.candidateName?.trim() || cand.email.split("@")[0];
+              const isBestFinal = cand.finalScore === bestFinal && entries.length > 1;
+
+              return (
+                <div key={col} className="flex flex-col min-w-0">
+
+                  {/* Candidate header */}
+                  <div
+                    className="p-4 border-b border-gray-200 flex-shrink-0"
+                    style={{ background: isShortlisted ? "#f0fdf4" : "#fef2f2" }}
+                  >
+                    <div className="mb-2.5">
+                      <span
+                        className="text-[9px] font-bold font-mono px-2 py-0.5 uppercase tracking-wider"
+                        style={isShortlisted
+                          ? { background: "#dcfce7", color: "#16a34a", border: "1px solid #86efac" }
+                          : { background: "#fee2e2", color: "#dc2626", border: "1px solid #fca5a5" }}
+                      >
+                        {isShortlisted ? "✓ SHORTLISTED" : "✗ NOT SHORTLISTED"}
+                      </span>
+                    </div>
+                    <p className="text-sm font-bold font-mono text-gray-900 truncate" title={name}>{name}</p>
+                    <p className="text-[10px] font-mono text-gray-500 truncate mt-0.5">{cand.email}</p>
+                    <div className="flex items-center gap-2.5 mt-3 flex-wrap">
+                      {isShortlisted && (
+                        <span
+                          className="text-[10px] font-bold font-mono px-2 py-0.5"
+                          style={{
+                            background: (cand as CandidateScore).rank <= 3 ? "#fef3c7" : "#f3f4f6",
+                            color:      (cand as CandidateScore).rank <= 3 ? "#d97706" : "#6b7280",
+                          }}
+                        >
+                          RANK #{(cand as CandidateScore).rank}
+                        </span>
+                      )}
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-3xl font-bold font-mono tabular-nums" style={{ color: scoreColor(cand.finalScore) }}>
+                          {cand.finalScore}
+                        </span>
+                        <span className="text-[11px] font-mono text-gray-400">/100</span>
+                      </div>
+                      {isBestFinal && (
+                        <span className="text-[9px] font-bold font-mono px-1.5 py-0.5 bg-amber-100 text-amber-700 border border-amber-200">HIGHEST</span>
+                      )}
+                    </div>
+                    {isShortlisted && (cand as CandidateScore).recommendation && (
+                      <div className="mt-2.5">
+                        <RecBadge rec={(cand as CandidateScore).recommendation} />
+                      </div>
+                    )}
+                    {!isShortlisted && (
+                      <div className="mt-2 flex items-center gap-1.5 text-[10px] font-mono text-red-600">
+                        <TrendingDown className="w-3 h-3" />
+                        {Math.round((cand as RejectedCandidate).closestShortlistScore - cand.finalScore)} PTS BELOW CUTOFF
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Score breakdown — shortlisted only */}
+                  {isShortlisted && (
+                    <div className="border-b border-gray-200">
+                      <div className="px-3 py-2 bg-gray-50 border-b border-gray-200">
+                        <span className="text-[9px] font-bold font-mono text-gray-500 uppercase tracking-wider">SCORE BREAKDOWN</span>
+                      </div>
+                      <div className="p-3 space-y-2.5">
+                        {BREAKDOWN_KEYS.map(([label, key]) => {
+                          const val = (cand as CandidateScore).breakdown[key];
+                          const best = bestBreakdownScore(key);
+                          const isBest = val === best && shortlistedCount > 1;
+                          return (
+                            <div key={key}>
+                              <div className="flex items-center justify-between mb-0.5">
+                                <span className="text-[9px] font-mono text-gray-400 uppercase">{label}</span>
+                                {isBest && <span className="text-[8px] font-bold font-mono text-amber-500">BEST</span>}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <div className="flex-1 h-1.5 bg-gray-100 overflow-hidden">
+                                  <div className="h-full" style={{ width: `${val}%`, background: scoreColor(val) }} />
+                                </div>
+                                <span className="text-[11px] font-mono font-bold w-7 text-right tabular-nums" style={{ color: scoreColor(val) }}>{val}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Shortlisted: strengths & gaps */}
+                  {isShortlisted && (
+                    <div className="border-b border-gray-200">
+                      <div className="px-3 py-2 bg-gray-50 border-b border-gray-200">
+                        <span className="text-[9px] font-bold font-mono text-gray-500 uppercase tracking-wider">STRENGTHS & GAPS</span>
+                      </div>
+                      <div className="p-3 space-y-3">
+                        {(cand as CandidateScore).strengths?.length > 0 && (
+                          <div>
+                            <p className="text-[9px] font-bold font-mono text-green-600 mb-1.5">STRENGTHS</p>
+                            <ul className="space-y-1">
+                              {(cand as CandidateScore).strengths.slice(0, 4).map((s, i) => (
+                                <li key={i} className="text-[10px] font-mono text-gray-600 flex items-start gap-1.5">
+                                  <span className="text-green-500 flex-shrink-0 mt-px">+</span>{s}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {(cand as CandidateScore).gaps?.length > 0 && (
+                          <div>
+                            <p className="text-[9px] font-bold font-mono text-red-600 mb-1.5">GAPS</p>
+                            <ul className="space-y-1">
+                              {(cand as CandidateScore).gaps.slice(0, 3).map((g, i) => (
+                                <li key={i} className="text-[10px] font-mono text-gray-600 flex items-start gap-1.5">
+                                  <span className="text-red-500 flex-shrink-0 mt-px">-</span>{g}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Shortlisted: skills */}
+                  {isShortlisted && (cand as CandidateScore).skillGapAnalysis && (
+                    <div className="border-b border-gray-200">
+                      <div className="px-3 py-2 bg-gray-50 border-b border-gray-200">
+                        <span className="text-[9px] font-bold font-mono text-gray-500 uppercase tracking-wider">SKILLS</span>
+                      </div>
+                      <div className="p-3 flex flex-wrap gap-1">
+                        {(cand as CandidateScore).skillGapAnalysis.matched.slice(0, 6).map(s => (
+                          <span key={s} className="text-[9px] px-1.5 py-0.5 font-mono font-bold"
+                            style={{ background: "#dcfce7", color: "#16a34a", border: "1px solid #bbf7d0" }}>✓ {s}</span>
+                        ))}
+                        {(cand as CandidateScore).skillGapAnalysis.missing.slice(0, 4).map(s => (
+                          <span key={s} className="text-[9px] px-1.5 py-0.5 font-mono font-bold"
+                            style={{ background: "#fee2e2", color: "#dc2626", border: "1px solid #fecaca" }}>✗ {s}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Shortlisted: AI summary */}
+                  {isShortlisted && (cand as CandidateScore).summary && (
+                    <div className="border-b border-gray-200">
+                      <div className="px-3 py-2 bg-gray-50 border-b border-gray-200">
+                        <span className="text-[9px] font-bold font-mono text-gray-500 uppercase tracking-wider">AI SUMMARY</span>
+                      </div>
+                      <p className="text-[10px] font-mono leading-relaxed text-gray-600 p-3">
+                        {(cand as CandidateScore).summary}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Rejected: why not selected */}
+                  {!isShortlisted && (
+                    <>
+                      <div className="border-b border-gray-200">
+                        <div className="px-3 py-2 bg-red-50 border-b border-red-200">
+                          <span className="text-[9px] font-bold font-mono text-red-600 uppercase tracking-wider flex items-center gap-1">
+                            <TrendingDown className="w-3 h-3" /> WHY NOT SELECTED
+                          </span>
+                        </div>
+                        <p className="text-[10px] font-mono leading-relaxed text-gray-600 p-3">
+                          {(cand as RejectedCandidate).whyNotSelected}
+                        </p>
+                      </div>
+                      {(cand as RejectedCandidate).topMissingSkills?.length > 0 && (
+                        <div className="border-b border-gray-200">
+                          <div className="px-3 py-2 bg-red-50 border-b border-red-200">
+                            <span className="text-[9px] font-bold font-mono text-red-600 uppercase tracking-wider">MISSING SKILLS</span>
+                          </div>
+                          <div className="p-3 flex flex-wrap gap-1">
+                            {(cand as RejectedCandidate).topMissingSkills.map(s => (
+                              <span key={s} className="text-[9px] px-1.5 py-0.5 font-mono font-bold"
+                                style={{ background: "#fee2e2", color: "#dc2626", border: "1px solid #fecaca" }}>✗ {s}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {(cand as RejectedCandidate).improvementSuggestions?.length > 0 && (
+                        <div className="border-b border-gray-200">
+                          <div className="px-3 py-2 bg-blue-50 border-b border-blue-200">
+                            <span className="text-[9px] font-bold font-mono text-blue-600 uppercase tracking-wider flex items-center gap-1">
+                              <Lightbulb className="w-3 h-3" /> HOW TO IMPROVE
+                            </span>
+                          </div>
+                          <ul className="p-3 space-y-1.5">
+                            {(cand as RejectedCandidate).improvementSuggestions.map((s, i) => (
+                              <li key={i} className="text-[10px] font-mono text-gray-600 flex items-start gap-1.5">
+                                <span className="text-blue-500 flex-shrink-0 mt-px">→</span>{s}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 

@@ -104,7 +104,7 @@ export const CreateCandidateSchema = z.object({
 export const RunScreeningSchema = z.object({
   jobId: z.string().min(1, 'Job ID is required'),
   candidateIds: z.array(z.string()).optional(),
-  shortlistSize: z.number().min(1).max(20).default(10),
+  shortlistSize: z.number().min(1).default(10),
 });
 
 // ============================================

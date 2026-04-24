@@ -303,19 +303,19 @@ function StepJobSelection({
                 <input
                   type="number"
                   min={1}
-                  max={Math.min(20, candidateCount || 20)}
+                  max={candidateCount || undefined}
                   value={shortlistSize}
-                  onChange={e => setShortlistSize(Math.max(1, Math.min(20, Number(e.target.value))))}
+                  onChange={e => setShortlistSize(Math.max(1, Math.min(candidateCount || Infinity, Number(e.target.value))))}
                   className="w-14 text-center text-xs font-mono font-bold text-gray-900 py-1.5 outline-none bg-white"
                 />
                 <button
-                  onClick={() => setShortlistSize(Math.min(20, candidateCount || 20, shortlistSize + 1))}
+                  onClick={() => setShortlistSize(Math.min(candidateCount || shortlistSize + 1, shortlistSize + 1))}
                   className="px-2 py-1.5 bg-gray-50 hover:bg-gray-100 border-l border-gray-200 text-gray-600 transition-colors"
                 >
                   <ChevronUp className="w-3 h-3" />
                 </button>
               </div>
-              <span className="text-[10px] text-[#64748b]">candidates (max 20)</span>
+              <span className="text-[10px] text-[#64748b]">candidates{candidateCount > 0 ? ` (max ${candidateCount})` : ""}</span>
               {shortlistSize > candidateCount && candidateCount > 0 && (
                 <span className="text-[10px] text-[#dc2626]">⚠ EXCEEDS POOL SIZE</span>
               )}

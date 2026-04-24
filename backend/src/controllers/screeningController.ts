@@ -24,8 +24,8 @@ export const runScreening = async (req: Request, res: Response) => {
     if (!jobId) {
       return res.status(400).json({ success: false, error: "jobId is required" });
     }
-    if (shortlistSize < 1 || shortlistSize > 20) {
-      return res.status(400).json({ success: false, error: "shortlistSize must be between 1 and 20" });
+    if (shortlistSize < 1) {
+      return res.status(400).json({ success: false, error: "shortlistSize must be at least 1" });
     }
 
     // Validate job + candidates before accepting the job so we can fail fast
