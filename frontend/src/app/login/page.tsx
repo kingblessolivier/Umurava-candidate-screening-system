@@ -6,7 +6,7 @@ import { login } from "@/store/authSlice";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import toast from "react-hot-toast";
-import { Loader2, Eye, EyeOff, Shield } from "lucide-react";
+import { Loader2, Eye, EyeOff, Shield, Sparkles } from "lucide-react";
 
 export default function LoginPage() {
   const dispatch = useDispatch<AppDispatch>();
@@ -34,13 +34,13 @@ export default function LoginPage() {
         {/* Left Side - Blue Panel */}
         <div className="hidden lg:flex w-1/2 bg-blue-600 relative flex-col justify-center px-12">
           {/* Logo */}
-          <div className="flex items-center gap-3 mb-8">
-            <div className="w-14 h-14 rounded bg-blue-500 flex items-center justify-center shadow-xl">
-              <span className="text-white font-bold text-2xl">T</span>
+          <div className="flex items-center gap-2.5 mb-8">
+            <div className="w-9 h-9 rounded-lg bg-blue-500 flex items-center justify-center shadow-lg flex-shrink-0">
+              <Sparkles className="w-4.5 h-4.5 text-white" />
             </div>
-            <div>
-              <span className="text-2xl font-bold text-white block">TalentAI</span>
-              <span className="text-[10px] text-blue-200 tracking-widest uppercase">Enterprise Hiring Platform</span>
+            <div className="flex flex-col">
+              <span className="font-bold text-white text-xs leading-tight tracking-wide">TalentAI</span>
+              <span className="text-[10px] text-blue-200 leading-tight">Smart Screening</span>
             </div>
           </div>
 
@@ -69,13 +69,13 @@ export default function LoginPage() {
         <div className="w-full lg:w-1/2 flex items-center justify-center px-4 py-8 sm:px-6 lg:px-8 bg-white">
           <div className="w-full max-w-sm">
             {/* Mobile Logo */}
-            <div className="flex items-center gap-3 mb-8 lg:hidden">
-              <div className="w-12 h-12 rounded bg-blue-600 flex items-center justify-center">
-                <span className="text-white font-bold text-xl">T</span>
+            <div className="flex items-center gap-2.5 mb-8 lg:hidden">
+              <div className="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center flex-shrink-0">
+                <Sparkles className="w-4.5 h-4.5 text-white" />
               </div>
-              <div>
-                <span className="text-xl font-bold text-gray-900 block">TalentAI</span>
-                <span className="text-[9px] text-gray-500 tracking-widest uppercase">Login</span>
+              <div className="flex flex-col">
+                <span className="font-bold text-gray-900 text-xs leading-tight tracking-wide">TalentAI</span>
+                <span className="text-[10px] text-gray-500 leading-tight">Smart Screening</span>
               </div>
             </div>
 
