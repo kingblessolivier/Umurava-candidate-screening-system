@@ -388,9 +388,9 @@ export function AIThinkingReviewModal({
               </div>
               <button
                 onClick={onClose}
-                className="px-4 py-1.5 rounded-lg bg-slate-700/60 hover:bg-slate-600/60 text-slate-300 text-xs font-medium transition-colors"
+                className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-slate-700/60 hover:bg-slate-600/60 text-slate-300 text-xs font-medium transition-colors"
               >
-                Close
+                <X className="w-3.5 h-3.5" /> Close
               </button>
             </div>
           </motion.div>

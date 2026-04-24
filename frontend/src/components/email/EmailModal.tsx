@@ -349,9 +349,9 @@ export default function EmailModal({
                 {allSent && (
                   <button
                     onClick={handleClose}
-                    className="px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded-lg transition-all"
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded-lg transition-all"
                   >
-                    Done
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Done
                   </button>
                 )}
               </div>
@@ -599,9 +599,9 @@ export default function EmailModal({
                     <button
                       onClick={handleClose}
                       disabled={sending}
-                      className="px-4 py-2 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all disabled:opacity-50"
+                      className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all disabled:opacity-50"
                     >
-                      Cancel
+                      <X className="w-3.5 h-3.5" /> Cancel
                     </button>
                     <button
                       onClick={handleSend}

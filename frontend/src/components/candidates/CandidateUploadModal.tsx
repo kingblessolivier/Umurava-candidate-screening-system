@@ -12,6 +12,7 @@ import {
   XCircle,
   Loader2,
   Bell,
+  RotateCcw,
 } from 'lucide-react';
 import { AppDispatch, RootState } from '@/store';
 import { bulkImportJSON, uploadCSV, uploadPDFs, UploadOutcome } from '@/store/candidatesSlice';
@@ -279,9 +280,9 @@ export function CandidateUploadModal({
               <button
                 type="button"
                 onClick={() => setJsonText(SAMPLE_JSON)}
-                className="text-xs text-blue-600 hover:text-blue-700"
+                className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700"
               >
-                Restore Sample
+                <RotateCcw className="w-3 h-3" /> Restore Sample
               </button>
             </div>
             <textarea

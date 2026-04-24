@@ -493,10 +493,10 @@ export function CreateCandidateModal({ isOpen, onClose }: Props) {
 
         <div className="flex gap-3 pt-2">
           <Button type="button" variant="ghost" onClick={handleClose} className="flex-1" size="sm">
-            Cancel
+            <XIcon className="w-3.5 h-3.5 mr-1" /> Cancel
           </Button>
           <Button type="submit" variant="primary" isLoading={saving} className="flex-1" size="sm">
-            Create Candidate
+            <UserPlus className="w-3.5 h-3.5 mr-1" /> Create Candidate
           </Button>
         </div>
       </form>

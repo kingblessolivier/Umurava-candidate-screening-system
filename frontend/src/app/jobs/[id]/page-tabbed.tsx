@@ -104,7 +104,7 @@ export default function JobDetailPageTabbed() {
         if (!Array.isArray(parsed)) throw new Error('JSON must be an array');
         const result = await dispatch(bulkImportJSON(parsed)).unwrap();
         toast.dismiss();
-        toast.success(`${result.created} candidates imported!`);
+        toast.success('created' in result ? `${result.created} candidates imported!` : result.message);
         await dispatch(fetchCandidates());
         setShowAddCandidates(false);
       }

@@ -6,7 +6,7 @@ import { RootState } from '@/store';
 import { Candidate } from '@/types';
 import {
   Mail, Phone, MapPin, Briefcase, Calendar,
-  GraduationCap, Trophy, ExternalLink, Edit2, Save, X, CheckCircle2,
+  GraduationCap, Trophy, ExternalLink, Edit2, Save, X, CheckCircle2, Trash2, Plus,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -355,7 +355,7 @@ export function CandidateDetailModal({ candidate, isOpen, onClose, onUpdate }: P
                     </div>
                     <div className="md:col-span-2">
                       <Button size="sm" variant="ghost" onClick={() => removeArrayItem('skills', i)}>
-                        Remove
+                        <Trash2 className="w-3.5 h-3.5 mr-1" /> Remove
                       </Button>
                     </div>
                   </div>
@@ -365,7 +365,7 @@ export function CandidateDetailModal({ candidate, isOpen, onClose, onUpdate }: P
                   variant="outline"
                   onClick={() => addArrayItem('skills', { name: '', level: 'Intermediate', yearsOfExperience: 0 })}
                 >
-                  Add Skill
+                  <Plus className="w-3.5 h-3.5 mr-1" /> Add Skill
                 </Button>
               </div>
             ) : (
@@ -414,7 +414,7 @@ export function CandidateDetailModal({ candidate, isOpen, onClose, onUpdate }: P
                     </div>
                     <div className="md:col-span-2">
                       <Button size="sm" variant="ghost" onClick={() => removeArrayItem('languages', i)}>
-                        Remove
+                        <Trash2 className="w-3.5 h-3.5 mr-1" /> Remove
                       </Button>
                     </div>
                   </div>
@@ -424,7 +424,7 @@ export function CandidateDetailModal({ candidate, isOpen, onClose, onUpdate }: P
                   variant="outline"
                   onClick={() => addArrayItem('languages', { name: '', proficiency: 'Conversational' })}
                 >
-                  Add Language
+                  <Plus className="w-3.5 h-3.5 mr-1" /> Add Language
                 </Button>
               </div>
             ) : (
@@ -477,7 +477,7 @@ export function CandidateDetailModal({ candidate, isOpen, onClose, onUpdate }: P
                         placeholder="Technologies (comma separated)"
                       />
                       <Button size="sm" variant="ghost" onClick={() => removeArrayItem('experience', i)}>
-                        Remove Experience
+                        <Trash2 className="w-3.5 h-3.5 mr-1" /> Remove Experience
                       </Button>
                     </div>
                   ) : (
@@ -513,7 +513,7 @@ export function CandidateDetailModal({ candidate, isOpen, onClose, onUpdate }: P
                   variant="outline"
                   onClick={() => addArrayItem('experience', { company: '', role: '', startDate: '', endDate: '', isCurrent: false, description: '', technologies: [] })}
                 >
-                  Add Experience
+                  <Plus className="w-3.5 h-3.5 mr-1" /> Add Experience
                 </Button>
               )}
             </div>
@@ -540,7 +540,7 @@ export function CandidateDetailModal({ candidate, isOpen, onClose, onUpdate }: P
                         <Input type="number" step="0.01" value={String(edu.gpa || '')} onChange={(e) => updateArrayItem('education', i, 'gpa', e.target.value ? Number(e.target.value) : undefined)} placeholder="GPA" />
                       </div>
                       <Button size="sm" variant="ghost" onClick={() => removeArrayItem('education', i)}>
-                        Remove Education
+                        <Trash2 className="w-3.5 h-3.5 mr-1" /> Remove Education
                       </Button>
                     </div>
                   ) : (
@@ -566,7 +566,7 @@ export function CandidateDetailModal({ candidate, isOpen, onClose, onUpdate }: P
                   variant="outline"
                   onClick={() => addArrayItem('education', { institution: '', degree: '', fieldOfStudy: '', startYear: undefined, endYear: undefined, gpa: undefined })}
                 >
-                  Add Education
+                  <Plus className="w-3.5 h-3.5 mr-1" /> Add Education
                 </Button>
               )}
             </div>
@@ -589,7 +589,7 @@ export function CandidateDetailModal({ candidate, isOpen, onClose, onUpdate }: P
                       <Input type="date" value={cert.issueDate || ''} onChange={(e) => updateArrayItem('certifications', i, 'issueDate', e.target.value)} />
                       <div className="md:col-span-3">
                         <Button size="sm" variant="ghost" onClick={() => removeArrayItem('certifications', i)}>
-                          Remove Certification
+                          <Trash2 className="w-3.5 h-3.5 mr-1" /> Remove Certification
                         </Button>
                       </div>
                     </div>
@@ -611,7 +611,7 @@ export function CandidateDetailModal({ candidate, isOpen, onClose, onUpdate }: P
                   variant="outline"
                   onClick={() => addArrayItem('certifications', { name: '', issuer: '', issueDate: '' })}
                 >
-                  Add Certification
+                  <Plus className="w-3.5 h-3.5 mr-1" /> Add Certification
                 </Button>
               )}
             </div>
@@ -644,7 +644,7 @@ export function CandidateDetailModal({ candidate, isOpen, onClose, onUpdate }: P
                         placeholder="Technologies (comma separated)"
                       />
                       <Button size="sm" variant="ghost" onClick={() => removeArrayItem('projects', i)}>
-                        Remove Project
+                        <Trash2 className="w-3.5 h-3.5 mr-1" /> Remove Project
                       </Button>
                     </div>
                   ) : (
@@ -688,7 +688,7 @@ export function CandidateDetailModal({ candidate, isOpen, onClose, onUpdate }: P
                   variant="outline"
                   onClick={() => addArrayItem('projects', { name: '', description: '', technologies: [], role: '', link: '', startDate: '', endDate: '', impact: '' })}
                 >
-                  Add Project
+                  <Plus className="w-3.5 h-3.5 mr-1" /> Add Project
                 </Button>
               )}
             </div>
