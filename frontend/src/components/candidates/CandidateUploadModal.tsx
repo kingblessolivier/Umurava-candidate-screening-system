@@ -14,7 +14,7 @@ import {
   Bell,
 } from 'lucide-react';
 import { AppDispatch, RootState } from '@/store';
-import { bulkImportJSON, uploadCSV, uploadPDFs } from '@/store/candidatesSlice';
+import { bulkImportJSON, uploadCSV, uploadPDFs, UploadOutcome } from '@/store/candidatesSlice';
 import { Modal } from '@/components/ui/Modal';
 
 type UploadTab = 'csv' | 'pdf' | 'json';
@@ -66,6 +66,7 @@ export function CandidateUploadModal({
   const [jsonText, setJsonText] = useState(SAMPLE_JSON);
   const [selectedJobId, setSelectedJobId] = useState(defaultJobId || '');
   const [pdfQueued, setPdfQueued] = useState(false);
+  const [importQueued, setImportQueued] = useState(false);
   const [result, setResult] = useState<{ created: number; skipped: number; errors: string[] } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -98,12 +99,14 @@ export function CandidateUploadModal({
   const resetTransientState = () => {
     setFiles([]);
     setPdfQueued(false);
+    setImportQueued(false);
     setResult(null);
   };
 
   const handleUpload = async () => {
     setResult(null);
     setPdfQueued(false);
+    setImportQueued(false);
 
     try {
       if (!selectedJobId) {
@@ -130,11 +133,14 @@ export function CandidateUploadModal({
           jobId: selectedJobId,
         }));
 
-        const res = (await dispatch(bulkImportJSON(withJobId)).unwrap()) as {
-          created: number;
-          skipped: number;
-          errors: string[];
-        };
+        const res = (await dispatch(bulkImportJSON(withJobId)).unwrap()) as UploadOutcome;
+
+        if ('jobId' in res) {
+          setImportQueued(true);
+          toast.success(res.message);
+          onUploaded?.();
+          return;
+        }
 
         setResult(res);
         if (res.created > 0) toast.success(`${res.created} candidates imported`);
@@ -148,11 +154,14 @@ export function CandidateUploadModal({
           return;
         }
 
-        const res = (await dispatch(uploadCSV({ file: files[0], jobId: selectedJobId })).unwrap()) as {
-          created: number;
-          skipped: number;
-          errors: string[];
-        };
+        const res = (await dispatch(uploadCSV({ file: files[0], jobId: selectedJobId })).unwrap()) as UploadOutcome;
+
+        if ('jobId' in res) {
+          setImportQueued(true);
+          toast.success(res.message);
+          onUploaded?.();
+          return;
+        }
 
         setResult(res);
         if (res.created > 0) toast.success(`${res.created} candidates imported`);
@@ -308,6 +317,16 @@ export function CandidateUploadModal({
             <div>
               <p className="text-xs font-semibold text-blue-800">Resumes received</p>
               <p className="text-xs text-blue-700">Candidates will appear once processing is complete.</p>
+            </div>
+          </div>
+        )}
+
+        {importQueued && (
+          <div className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 flex items-start gap-2">
+            <Bell className="w-4 h-4 text-blue-500 mt-0.5" />
+            <div>
+              <p className="text-xs font-semibold text-blue-800">Import queued</p>
+              <p className="text-xs text-blue-700">CSV/JSON candidates are being processed in the background.</p>
             </div>
           </div>
         )}

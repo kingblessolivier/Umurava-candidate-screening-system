@@ -14,6 +14,17 @@ import * as XLSX from "xlsx";
 
 type AuthedRequest = Request & { user?: { _id: string } };
 
+type ImportSummary = {
+  created: number;
+  skipped: number;
+  errors: string[];
+};
+
+const getJobId = (req: Request) =>
+  (req.query.jobId as string) || (req.headers["x-job-id"] as string) || "";
+
+const isDuplicateKeyError = (err: unknown) => (err as { code?: number }).code === 11000;
+
 // ─── CRUD ──────────────────────────────────────────────────────────────────────
 
 export const listCandidates = async (req: Request, res: Response) => {
@@ -115,33 +126,82 @@ export const bulkImportJSON = async (req: Request, res: Response) => {
     }
 
     const { Job } = await import("../models/Job");
-    const results = { created: 0, skipped: 0, errors: [] as string[] };
-
-    for (const profile of profiles) {
-      try {
-        // Validate jobId is present
-        if (!profile.jobId) {
-          results.errors.push(`${profile.email}: Missing jobId`);
-          continue;
-        }
-
-        // Verify job exists
-        const jobExists = await Job.findById(profile.jobId);
-        if (!jobExists) {
-          results.errors.push(`${profile.email}: Job ${profile.jobId} not found`);
-          continue;
-        }
-
-        await Candidate.create({ ...profile, source: "json" });
-        results.created++;
-      } catch (err: unknown) {
-        const code = (err as { code?: number }).code;
-        if (code === 11000) results.skipped++;
-        else results.errors.push(`${profile.email}: ${err instanceof Error ? err.message : "Unknown error"}`);
-      }
+    const jobId = getJobId(req) || profiles.find((profile) => profile.jobId)?.jobId || "";
+    if (!jobId) {
+      return res.status(400).json({ success: false, error: "jobId is required" });
     }
 
-    res.json({ success: true, data: results });
+    const jobExists = await Job.findById(jobId).lean();
+    if (!jobExists) {
+      return res.status(404).json({ success: false, error: `Job ${jobId} not found` });
+    }
+
+    const userId = (req as AuthedRequest).user!._id;
+    const jobTitle = (jobExists as { title?: string }).title ?? jobId;
+    const bgJob = createJob("json_import", userId, {
+      jobId,
+      jobTitle,
+      candidateCount: profiles.length,
+    });
+
+    res.status(202).json({
+      success: true,
+      data: {
+        jobId: bgJob.id,
+        status: "pending",
+        message: `Importing ${profiles.length} candidate(s) in the background. You'll be notified when done.`,
+      },
+    });
+
+    const candidateSnapshots = profiles.map((profile) => ({
+      ...profile,
+      jobId,
+    }));
+
+    setImmediate(async () => {
+      try {
+        updateJob(bgJob.id, "running");
+
+        const results: ImportSummary = { created: 0, skipped: 0, errors: [] };
+
+        for (const profile of candidateSnapshots) {
+          try {
+            await Candidate.create({ ...profile, source: "json" });
+            results.created++;
+          } catch (err: unknown) {
+            if (isDuplicateKeyError(err)) results.skipped++;
+            else results.errors.push(`${profile.email}: ${err instanceof Error ? err.message : "Unknown error"}`);
+          }
+        }
+
+        updateJob(bgJob.id, "done", results);
+        sendNotificationToUser(userId, {
+          type: "job_update",
+          jobId: bgJob.id,
+          jobType: "json_import",
+          status: "done",
+          title: "JSON Import Complete",
+          message: `${results.created} of ${candidateSnapshots.length} candidate(s) imported for "${jobTitle}".${results.errors.length ? ` ${results.errors.length} failed.` : ""}`,
+          metadata: bgJob.metadata,
+          result: results,
+          timestamp: new Date().toISOString(),
+        });
+      } catch (err) {
+        const error = err instanceof Error ? err.message : "JSON import failed";
+        updateJob(bgJob.id, "failed", undefined, error);
+        sendNotificationToUser(userId, {
+          type: "job_update",
+          jobId: bgJob.id,
+          jobType: "json_import",
+          status: "failed",
+          title: "JSON Import Failed",
+          message: error,
+          metadata: bgJob.metadata,
+          error,
+          timestamp: new Date().toISOString(),
+        });
+      }
+    });
   } catch (err) {
     res.status(500).json({ success: false, error: "Bulk import failed" });
   }
@@ -173,59 +233,107 @@ export const uploadCSV = async (req: Request, res: Response) => {
     }
 
     const { Job } = await import("../models/Job");
-    const results = { created: 0, skipped: 0, errors: [] as string[] };
-    const defaultJobId = (req.query.jobId as string) || (req.headers["x-job-id"] as string) || "";
-
-    for (const row of rows) {
-      const email = row.email || row.Email;
-      if (!email) { results.errors.push("Row missing email — skipped"); continue; }
-
-      try {
-        const jobId = row.jobId || row.JobId || row.job_id || defaultJobId;
-        if (!jobId) {
-          results.errors.push(`${email}: Missing jobId — skipped`);
-          continue;
-        }
-
-        // Verify job exists
-        const jobExists = await Job.findById(jobId);
-        if (!jobExists) {
-          results.errors.push(`${email}: Job ${jobId} not found — skipped`);
-          continue;
-        }
-
-        const skills = (row.skills || row.Skills || "")
-          .split(",")
-          .map(s => s.trim())
-          .filter(Boolean)
-          .map(s => ({ name: s, level: "Intermediate" as const, yearsOfExperience: 1 }));
-
-        await Candidate.create({
-          firstName:  row.firstName  || row.first_name  || row["First Name"]  || "Unknown",
-          lastName:   row.lastName   || row.last_name   || row["Last Name"]   || "Unknown",
-          email:      email.toLowerCase().trim(),
-          headline:   row.headline   || row.Headline    || "",
-          location:   row.location   || row.Location    || "",
-          bio:        row.bio        || row.Bio         || "",
-          jobId,
-          skills,
-          experience: [],
-          education:  [],
-          availability: {
-            status: "Available",
-            type:   (row.availabilityType || row.type || "Full-time") as "Full-time",
-          },
-          source: "csv",
-        });
-        results.created++;
-      } catch (err: unknown) {
-        const code = (err as { code?: number }).code;
-        if (code === 11000) results.skipped++;
-        else results.errors.push(`${email}: ${err instanceof Error ? err.message : "Unknown"}`);
-      }
+    const jobId = getJobId(req);
+    if (!jobId) {
+      return res.status(400).json({ success: false, error: "jobId is required" });
     }
 
-    res.json({ success: true, data: results });
+    const jobExists = await Job.findById(jobId).lean();
+    if (!jobExists) {
+      return res.status(404).json({ success: false, error: `Job ${jobId} not found` });
+    }
+
+    const userId = (req as AuthedRequest).user!._id;
+    const jobTitle = (jobExists as { title?: string }).title ?? jobId;
+    const bgJob = createJob("csv_import", userId, {
+      jobId,
+      jobTitle,
+      rowCount: rows.length,
+    });
+
+    res.status(202).json({
+      success: true,
+      data: {
+        jobId: bgJob.id,
+        status: "pending",
+        message: `Importing ${rows.length} candidate row(s) in the background. You'll be notified when done.`,
+      },
+    });
+
+    const rowSnapshots = rows.map((row) => ({ ...row }));
+
+    setImmediate(async () => {
+      try {
+        updateJob(bgJob.id, "running");
+
+        const results: ImportSummary = { created: 0, skipped: 0, errors: [] };
+
+        for (const row of rowSnapshots) {
+          const email = row.email || row.Email;
+          if (!email) {
+            results.errors.push("Row missing email — skipped");
+            continue;
+          }
+
+          try {
+            const skills = (row.skills || row.Skills || "")
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean)
+              .map((s) => ({ name: s, level: "Intermediate" as const, yearsOfExperience: 1 }));
+
+            await Candidate.create({
+              firstName: row.firstName || row.first_name || row["First Name"] || "Unknown",
+              lastName: row.lastName || row.last_name || row["Last Name"] || "Unknown",
+              email: email.toLowerCase().trim(),
+              headline: row.headline || row.Headline || "",
+              location: row.location || row.Location || "",
+              bio: row.bio || row.Bio || "",
+              jobId,
+              skills,
+              experience: [],
+              education: [],
+              availability: {
+                status: "Available",
+                type: (row.availabilityType || row.type || "Full-time") as "Full-time",
+              },
+              source: "csv",
+            });
+            results.created++;
+          } catch (err: unknown) {
+            if (isDuplicateKeyError(err)) results.skipped++;
+            else results.errors.push(`${email}: ${err instanceof Error ? err.message : "Unknown"}`);
+          }
+        }
+
+        updateJob(bgJob.id, "done", results);
+        sendNotificationToUser(userId, {
+          type: "job_update",
+          jobId: bgJob.id,
+          jobType: "csv_import",
+          status: "done",
+          title: "CSV Import Complete",
+          message: `${results.created} of ${rowSnapshots.length} candidate row(s) imported for "${jobTitle}".${results.errors.length ? ` ${results.errors.length} failed.` : ""}`,
+          metadata: bgJob.metadata,
+          result: results,
+          timestamp: new Date().toISOString(),
+        });
+      } catch (err) {
+        const error = err instanceof Error ? err.message : "CSV/Excel processing failed";
+        updateJob(bgJob.id, "failed", undefined, error);
+        sendNotificationToUser(userId, {
+          type: "job_update",
+          jobId: bgJob.id,
+          jobType: "csv_import",
+          status: "failed",
+          title: "CSV Import Failed",
+          message: error,
+          metadata: bgJob.metadata,
+          error,
+          timestamp: new Date().toISOString(),
+        });
+      }
+    });
   } catch (err) {
     res.status(500).json({ success: false, error: "CSV/Excel processing failed" });
   }

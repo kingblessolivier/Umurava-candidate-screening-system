@@ -2,7 +2,7 @@
 import { Suspense, useEffect, useState, useCallback, useRef } from "react";
 import { useDispatch, useSelector }       from "react-redux";
 import { AppDispatch, RootState }         from "@/store";
-import { uploadCSV, uploadPDFs, bulkImportJSON, fetchCandidates } from "@/store/candidatesSlice";
+import { uploadCSV, uploadPDFs, bulkImportJSON, fetchCandidates, UploadOutcome } from "@/store/candidatesSlice";
 import { useRouter, useSearchParams }     from "next/navigation";
 import { useJobs }                        from "@/hooks/useJobs";
 import toast                              from "react-hot-toast";
@@ -39,7 +39,9 @@ function UploadContent() {
   const [jsonText, setJsonText] = useState(SAMPLE_JSON);
   const [csvJobId, setCsvJobId] = useState(jobIdFromRoute);
   const [pdfJobId, setPdfJobId] = useState("");
+  const [jsonJobId, setJsonJobId] = useState(jobIdFromRoute);
   const [pdfQueued, setPdfQueued] = useState(false);
+  const [importQueued, setImportQueued] = useState(false);
   const [result, setResult]     = useState<{ created: number; skipped: number; errors: string[] } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -47,6 +49,7 @@ function UploadContent() {
     if (jobIdFromRoute) {
       setCsvJobId(jobIdFromRoute);
       setPdfJobId(jobIdFromRoute);
+      setJsonJobId(jobIdFromRoute);
     }
   }, [jobIdFromRoute]);
 
@@ -63,12 +66,22 @@ function UploadContent() {
   const handleUpload = async () => {
     setResult(null);
     setPdfQueued(false);
+    setImportQueued(false);
     try {
       if (tab === "json") {
         let parsed: unknown;
         try { parsed = JSON.parse(jsonText); } catch { return toast.error("Invalid JSON"); }
         if (!Array.isArray(parsed)) return toast.error("JSON must be an array of candidate objects");
-        const res = await dispatch(bulkImportJSON(parsed)).unwrap() as { created: number; skipped: number; errors: string[] };
+        const payload = parsed.map((candidate) => ({
+          ...(typeof candidate === "object" && candidate ? candidate : {}),
+          jobId: jsonJobId,
+        }));
+        const res = await dispatch(bulkImportJSON(payload)).unwrap() as UploadOutcome;
+        if ("jobId" in res) {
+          setImportQueued(true);
+          toast.success(res.message);
+          return;
+        }
         setResult(res);
         await dispatch(fetchCandidates({}));
         if (res.created > 0) {
@@ -78,7 +91,12 @@ function UploadContent() {
       } else if (tab === "csv") {
         if (!files[0]) return toast.error("Select a CSV or Excel file first");
         if (!csvJobId) return toast.error("Select a job position for the CSV import");
-        const res = await dispatch(uploadCSV({ file: files[0], jobId: csvJobId })).unwrap() as { created: number; skipped: number; errors: string[] };
+        const res = await dispatch(uploadCSV({ file: files[0], jobId: csvJobId })).unwrap() as UploadOutcome;
+        if ("jobId" in res) {
+          setImportQueued(true);
+          toast.success(res.message);
+          return;
+        }
         setResult(res);
         await dispatch(fetchCandidates({}));
         if (res.created > 0) {
@@ -133,12 +151,12 @@ function UploadContent() {
       </div>
 
       {/* Job selector */}
-      {(tab === "csv" || tab === "pdf") && (
+      {(tab === "csv" || tab === "pdf" || tab === "json") && (
         <div className="space-y-1.5">
           <label className="text-xs font-medium text-gray-400">Job Position (required)</label>
           <select
-            value={tab === "csv" ? csvJobId : pdfJobId}
-            onChange={e => tab === "csv" ? setCsvJobId(e.target.value) : setPdfJobId(e.target.value)}
+            value={tab === "csv" ? csvJobId : tab === "pdf" ? pdfJobId : jsonJobId}
+            onChange={e => tab === "csv" ? setCsvJobId(e.target.value) : tab === "pdf" ? setPdfJobId(e.target.value) : setJsonJobId(e.target.value)}
             className="w-full px-3 py-2.5 rounded-xl text-sm text-white outline-none"
             style={{ background: "var(--bg-surface)", border: "1px solid var(--border)" }}
           >
@@ -150,7 +168,9 @@ function UploadContent() {
           <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
             {tab === "csv"
               ? "CSV rows will be linked to the selected job."
-              : "Resumes will be parsed by AI and linked to the selected job."}
+              : tab === "pdf"
+                ? "Resumes will be parsed by AI and linked to the selected job."
+                : "JSON candidates will be linked to the selected job."}
           </p>
         </div>
       )}
@@ -249,6 +269,17 @@ function UploadContent() {
               </button>
             </div>
           </motion.div>
+        )}
+        {importQueued && (
+          <div className="rounded-2xl p-5 flex items-start gap-4" style={{ background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.25)" }}>
+            <Bell className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-blue-300">Processing in the background</p>
+              <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+                CSV/JSON candidates are being imported now. You can navigate away and wait for the notification.
+              </p>
+            </div>
+          </div>
         )}
       </AnimatePresence>
 

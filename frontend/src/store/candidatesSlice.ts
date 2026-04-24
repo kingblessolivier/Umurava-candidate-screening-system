@@ -2,6 +2,10 @@ import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import { api } from "@/lib/api";
 import { Candidate } from "@/types";
 
+export type ImportResult = { created: number; skipped: number; errors: string[] };
+export type QueuedImportResult = { jobId: string; status: string; message: string };
+export type UploadOutcome = ImportResult | QueuedImportResult;
+
 interface CandidatesState { 
   items: Candidate[]; 
   total: number; 
@@ -39,7 +43,7 @@ export const uploadCSV = createAsyncThunk("candidates/uploadCSV", async ({ file,
   const form = new FormData();
   form.append("file", file);
   const url = jobId ? `/candidates/upload/csv?jobId=${jobId}` : "/candidates/upload/csv";
-  const { data } = await api.post<{ data: { created: number; skipped: number; errors: string[] } }>(
+  const { data } = await api.post<{ data: UploadOutcome }>(
     url, form, { headers: { "Content-Type": "multipart/form-data" } }
   );
   return data.data;
@@ -61,7 +65,7 @@ export const uploadPDFs = createAsyncThunk(
 );
 
 export const bulkImportJSON = createAsyncThunk("candidates/bulkJSON", async (profiles: Partial<Candidate>[]) => {
-  const { data } = await api.post<{ data: { created: number; skipped: number; errors: string[] } }>(
+  const { data } = await api.post<{ data: UploadOutcome }>(
     "/candidates/bulk", profiles
   );
   return data.data;

@@ -11,6 +11,7 @@ import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { AppDispatch, RootState } from '@/store';
 import { fetchJobs } from '@/store/jobsSlice';
+import { api } from '@/lib/api';
 import { useCandidates } from '@/hooks/useCandidates';
 import { CandidateDetailModal } from '@/components/candidates/CandidateDetailModal';
 import { CreateCandidateModal } from '@/components/candidates/CreateCandidateModal';
@@ -61,10 +62,17 @@ export default function CandidatesPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string } | null>(null);
+  const [selectedCandidateIds, setSelectedCandidateIds] = useState<Set<string>>(new Set());
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState<null | { scope: 'selected' | 'all'; count: number }>(null);
+  const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
 
   useEffect(() => {
     if (jobs.length === 0) dispatch(fetchJobs());
   }, [dispatch, jobs.length]);
+
+  useEffect(() => {
+    setSelectedCandidateIds(new Set());
+  }, [filterJobId, searchQuery, page, viewMode]);
 
   const jobMap = useMemo(() => {
     return jobs.reduce((acc, job) => {
@@ -109,6 +117,103 @@ export default function CandidatesPage() {
       }
       return result;
     });
+  };
+
+  const toggleCandidateSelection = (candidateId: string, checked: boolean) => {
+    setSelectedCandidateIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(candidateId);
+      else next.delete(candidateId);
+      return next;
+    });
+  };
+
+  const toggleSelectAllVisible = (checked: boolean) => {
+    setSelectedCandidateIds(() => {
+      if (!checked) return new Set();
+      return new Set(candidates.map((candidate) => candidate._id));
+    });
+  };
+
+  const deleteCandidateIds = async (candidateIds: string[]) => {
+    if (!candidateIds.length) return;
+
+    const deletingToast = toast.loading(`Deleting ${candidateIds.length} candidate${candidateIds.length === 1 ? '' : 's'}...`);
+    try {
+      await Promise.all(candidateIds.map((id) => handleDeleteCandidate(id).unwrap()));
+      await refreshCandidates();
+      setSelectedCandidateIds((prev) => {
+        const next = new Set(prev);
+        candidateIds.forEach((id) => next.delete(id));
+        return next;
+      });
+      toast.success(`Deleted ${candidateIds.length} candidate${candidateIds.length === 1 ? '' : 's'}`);
+    } catch {
+      toast.error('Failed to delete selected candidates');
+    } finally {
+      toast.dismiss(deletingToast);
+    }
+  };
+
+  const getAllCandidateIdsForCurrentFilter = async () => {
+    const firstPage = await api.get('/candidates', {
+      params: {
+        page: 1,
+        limit: 100,
+        search: searchQuery || undefined,
+        jobId: filterJobId || undefined,
+      },
+    });
+
+    const totalCount = firstPage.data.total || 0;
+    const totalPagesForFilter = Math.max(1, Math.ceil(totalCount / 100));
+    const allCandidates = [...(firstPage.data.data || [])];
+
+    for (let currentPage = 2; currentPage <= totalPagesForFilter; currentPage += 1) {
+      const pageResponse = await api.get('/candidates', {
+        params: {
+          page: currentPage,
+          limit: 100,
+          search: searchQuery || undefined,
+          jobId: filterJobId || undefined,
+        },
+      });
+      allCandidates.push(...(pageResponse.data.data || []));
+    }
+
+    return allCandidates.map((candidate: Candidate) => candidate._id).filter(Boolean);
+  };
+
+  const handleBulkDelete = async () => {
+    const candidateIds = Array.from(selectedCandidateIds);
+    setBulkDeleteConfirm({ scope: 'selected', count: candidateIds.length });
+    if (!candidateIds.length) return;
+  };
+
+  const handleDeleteAll = async () => {
+    const candidateIds = await getAllCandidateIdsForCurrentFilter();
+    if (!candidateIds.length) {
+      toast('No candidates to delete');
+      return;
+    }
+    setBulkDeleteConfirm({ scope: 'all', count: candidateIds.length });
+  };
+
+  const confirmBulkDelete = async () => {
+    if (!bulkDeleteConfirm) return;
+    setBulkDeleteLoading(true);
+    try {
+      const candidateIds =
+        bulkDeleteConfirm.scope === 'selected'
+          ? Array.from(selectedCandidateIds)
+          : await getAllCandidateIdsForCurrentFilter();
+
+      await deleteCandidateIds(candidateIds);
+      setSelectedCandidateIds(new Set());
+    } finally {
+      setBulkDeleteLoading(false);
+      setBulkDeleteConfirm(null);
+    }
   };
 
   const renderLoadingSkeleton = () => (
@@ -208,6 +313,44 @@ export default function CandidatesPage() {
         </div>
       </div>
 
+      {candidates.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2">
+          <div className="flex items-center gap-3 text-xs text-gray-600">
+            <span>{selectedCandidateIds.size} selected</span>
+            <span>{candidates.length} on this page</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => toggleSelectAllVisible(selectedCandidateIds.size !== candidates.length)}
+              leftIcon={<Users className="w-3.5 h-3.5" />}
+            >
+              {selectedCandidateIds.size === candidates.length ? 'Clear Selection' : 'Select All'}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={handleBulkDelete}
+              disabled={selectedCandidateIds.size === 0}
+              leftIcon={<Trash2 className="w-3.5 h-3.5" />}
+              className="text-red-600 hover:text-red-700"
+            >
+              Delete Selected
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={handleDeleteAll}
+              leftIcon={<Trash2 className="w-3.5 h-3.5" />}
+              className="text-red-600 hover:text-red-700"
+            >
+              Delete All
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Candidates Display */}
       {loading ? (
         renderLoadingSkeleton()
@@ -231,7 +374,14 @@ export default function CandidatesPage() {
             >
               <Card isHoverable className="overflow-hidden h-full flex flex-col">
                 <div className="p-3 flex-1 flex flex-col">
-                  <div className="flex items-start justify-between mb-2">
+                  <div className="flex items-start justify-between mb-2 gap-2">
+                    <input
+                      type="checkbox"
+                      checked={selectedCandidateIds.has(candidate._id)}
+                      onChange={(e) => toggleCandidateSelection(candidate._id, e.target.checked)}
+                      className="mt-1 w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      aria-label={`Select ${candidate.firstName} ${candidate.lastName}`}
+                    />
                     <div className="flex items-center gap-2 flex-1 min-w-0">
                       <Avatar name={`${candidate.firstName} ${candidate.lastName}`} size="sm" />
                       <div className="min-w-0 flex-1">
@@ -295,6 +445,15 @@ export default function CandidatesPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-gray-200 bg-gray-50">
+                  <th className="px-3 py-2 text-left w-10">
+                    <input
+                      type="checkbox"
+                      checked={candidates.length > 0 && selectedCandidateIds.size === candidates.length}
+                      onChange={(e) => toggleSelectAllVisible(e.target.checked)}
+                      className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      aria-label="Select all candidates on this page"
+                    />
+                  </th>
                   <th className="px-3 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider">Name</th>
                   <th className="px-3 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider">Email</th>
                   <th className="px-3 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider">Location</th>
@@ -306,6 +465,15 @@ export default function CandidatesPage() {
               <tbody>
                 {candidates.map((candidate, index) => (
                   <tr key={candidate._id} className={cn('border-b border-gray-100 hover:bg-gray-50 transition', index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50')}>
+                    <td className="px-3 py-2 align-middle">
+                      <input
+                        type="checkbox"
+                        checked={selectedCandidateIds.has(candidate._id)}
+                        onChange={(e) => toggleCandidateSelection(candidate._id, e.target.checked)}
+                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        aria-label={`Select ${candidate.firstName} ${candidate.lastName}`}
+                      />
+                    </td>
                     <td className="px-3 py-2">
                       <div className="flex items-center gap-2">
                         <Avatar name={`${candidate.firstName} ${candidate.lastName}`} size="sm" />
@@ -401,6 +569,21 @@ export default function CandidatesPage() {
         confirmLabel="Remove"
         variant="danger"
         isLoading={!!deleteLoading}
+      />
+
+      <ConfirmModal
+        isOpen={!!bulkDeleteConfirm}
+        onClose={() => setBulkDeleteConfirm(null)}
+        onConfirm={confirmBulkDelete}
+        title={bulkDeleteConfirm?.scope === 'all' ? 'Remove All Candidates' : 'Remove Selected Candidates'}
+        message={
+          bulkDeleteConfirm?.scope === 'all'
+            ? `Remove all ${bulkDeleteConfirm.count} candidate${bulkDeleteConfirm.count === 1 ? '' : 's'} from the current filter? This cannot be undone.`
+            : `Remove ${bulkDeleteConfirm?.count || 0} selected candidate${(bulkDeleteConfirm?.count || 0) === 1 ? '' : 's'}? This cannot be undone.`
+        }
+        confirmLabel="Remove"
+        variant="danger"
+        isLoading={bulkDeleteLoading}
       />
     </div>
   );

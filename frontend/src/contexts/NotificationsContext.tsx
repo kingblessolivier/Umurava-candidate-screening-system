@@ -22,13 +22,13 @@ export interface AppNotification {
   timestamp: string;
   read: boolean;
   link?: string;
-  jobType?: 'screening' | 'pdf_upload';
+  jobType?: 'screening' | 'pdf_upload' | 'csv_import' | 'json_import';
 }
 
 interface SSEEvent {
   type: string;
   jobId: string;
-  jobType: 'screening' | 'pdf_upload';
+  jobType: 'screening' | 'pdf_upload' | 'csv_import' | 'json_import';
   status: 'done' | 'failed' | 'running' | string;
   title: string;
   message: string;
@@ -41,7 +41,7 @@ interface SSEEvent {
 // Raw running-status events — used by the screening page to show real AI thoughts
 export interface SSELiveEvent {
   jobId: string;
-  jobType: 'screening' | 'pdf_upload';
+  jobType: 'screening' | 'pdf_upload' | 'csv_import' | 'json_import';
   message: string;
   metadata: Record<string, unknown>;
   timestamp: string;
@@ -153,9 +153,9 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
 
           setNotifications((prev) => [notif, ...prev]);
 
-          if (data.status === 'done') {
+            if (data.status === 'done') {
             toast.success(data.title, { duration: 5000 });
-            if (data.jobType === 'pdf_upload') {
+            if (data.jobType === 'pdf_upload' || data.jobType === 'csv_import' || data.jobType === 'json_import') {
               dispatch(fetchCandidates());
             }
           } else {

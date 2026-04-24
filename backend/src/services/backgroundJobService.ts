@@ -1,7 +1,7 @@
 import { Response } from "express";
 import crypto from "crypto";
 
-export type JobType = "screening" | "pdf_upload";
+export type JobType = "screening" | "pdf_upload" | "csv_import" | "json_import";
 export type JobStatus = "pending" | "running" | "done" | "failed";
 
 export interface BackgroundJob {

@@ -14,7 +14,7 @@ import {
 import EmailModal from '@/components/email/EmailModal';
 import { AppDispatch, RootState } from '@/store';
 import { deleteJob } from '@/store/jobsSlice';
-import { fetchCandidates, createCandidate, uploadCSV, updateCandidate, deleteCandidate, bulkImportJSON } from '@/store/candidatesSlice';
+import { fetchCandidates, createCandidate, uploadCSV, updateCandidate, deleteCandidate, bulkImportJSON, UploadOutcome } from '@/store/candidatesSlice';
 import { fetchResults } from '@/store/screeningSlice';
 import { useJobs } from '@/hooks/useJobs';
 import { Pagination } from '@/components/ui/Pagination';
@@ -112,7 +112,10 @@ export default function JobsPage() {
   // When SSE confirms pdf_upload is done, refresh immediately and stop polling
   const lastNotifRef = React.useRef<string | null>(null);
   useEffect(() => {
-    const latest = notifications.find((n) => n.jobType === 'pdf_upload' && n.type === 'success');
+    const latest = notifications.find((n) =>
+      (n.jobType === 'pdf_upload' || n.jobType === 'csv_import' || n.jobType === 'json_import') &&
+      n.type === 'success'
+    );
     if (!latest || latest.id === lastNotifRef.current) return;
     lastNotifRef.current = latest.id;
     setCandidateRefreshKey((k) => k + 1);
@@ -2238,6 +2241,13 @@ function CandidateModal({ jobId, onClose, onSave, onResumeQueued }: any) {
         toast.error((result.payload as string) || 'Failed to upload file');
         return;
       }
+      const payload = result.payload as UploadOutcome;
+      if ('jobId' in payload) {
+        toast.success(payload.message);
+        onClose();
+        return;
+      }
+
       await dispatch(fetchCandidates());
       onSave();
     } finally {
@@ -2262,6 +2272,14 @@ function CandidateModal({ jobId, onClose, onSave, onResumeQueued }: any) {
         toast.error((result.payload as string) || 'JSON import failed');
         return;
       }
+
+      const queued = result.payload as UploadOutcome;
+      if ('jobId' in queued) {
+        toast.success(queued.message);
+        onClose();
+        return;
+      }
+
       await dispatch(fetchCandidates());
       onSave();
     } catch {
