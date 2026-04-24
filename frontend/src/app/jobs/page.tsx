@@ -8,7 +8,8 @@ import {
   Briefcase, Plus, Search, Users, Zap, Edit2, Trash2, Archive,
   MapPin, Clock, Building2, X, Check, FileText, ArrowRight,
   Eye, Share2, MoreVertical, TrendingUp, BarChart3, ChevronLeft,
-  ChevronRight, Filter, Settings, Download, MessageSquare, Mail
+  ChevronRight, Filter, Settings, Download, MessageSquare, Mail,
+  Bell, Upload, Loader2, UserPlus, FileSpreadsheet, FileCode2,
 } from 'lucide-react';
 import EmailModal from '@/components/email/EmailModal';
 import { AppDispatch, RootState } from '@/store';
@@ -23,8 +24,8 @@ import { CandidateDetailModal } from '@/components/candidates/CandidateDetailMod
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
 import { Candidate } from '@/types';
-import { Bell } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { useNotifications } from '@/contexts/NotificationsContext';
 
 export default function JobsPage() {
   const dispatch = useDispatch<AppDispatch>();
@@ -32,6 +33,7 @@ export default function JobsPage() {
   const { jobs, loading, searchQuery, page, totalPages, handleSearch, handlePageChange, handleDeleteJob, handleCreateJob, handleUpdateJob } = useJobs();
   const { items: candidates } = useSelector((s: RootState) => s.candidates);
   const screeningResults = useSelector((s: RootState) => s.screening.results);
+  const { notifications } = useNotifications();
 
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
@@ -96,16 +98,26 @@ export default function JobsPage() {
 
     let attempts = 0;
     const maxAttempts = 24; // 24 * 5s = 2 minutes
-    const timer = setInterval(async () => {
+    const timer = setInterval(() => {
       attempts += 1;
-      await dispatch(fetchCandidates());
+      setCandidateRefreshKey((k) => k + 1);
       if (attempts >= maxAttempts) {
         setQueuedParsingJobId(null);
       }
     }, 5000);
 
     return () => clearInterval(timer);
-  }, [queuedParsingJobId, dispatch]);
+  }, [queuedParsingJobId]);
+
+  // When SSE confirms pdf_upload is done, refresh immediately and stop polling
+  const lastNotifRef = React.useRef<string | null>(null);
+  useEffect(() => {
+    const latest = notifications.find((n) => n.jobType === 'pdf_upload' && n.type === 'success');
+    if (!latest || latest.id === lastNotifRef.current) return;
+    lastNotifRef.current = latest.id;
+    setCandidateRefreshKey((k) => k + 1);
+    setQueuedParsingJobId(null);
+  }, [notifications]);
 
   const filteredJobs = useMemo(() => {
     return jobs.filter(job => {
@@ -2264,7 +2276,7 @@ function CandidateModal({ jobId, onClose, onSave, onResumeQueued }: any) {
       isOpen={true}
       onClose={onClose}
       title="Add Candidate"
-      subtitle={jobId ? `Attached to job ${jobId.slice(-8)}` : 'Choose import mode'}
+      subtitle="Choose how you want to add candidates"
       size="xl"
       showCloseButton={true}
       className="p-0"
@@ -2273,22 +2285,23 @@ function CandidateModal({ jobId, onClose, onSave, onResumeQueued }: any) {
       <div className="px-5 py-4 border-b border-gray-100 bg-gray-50">
         <div className="grid grid-cols-4 gap-2">
           {[
-            { id: 'manual', label: 'Manual' },
-            { id: 'resume', label: 'Resume AI' },
-            { id: 'csv', label: 'CSV/Excel' },
-            { id: 'json', label: 'JSON' },
-          ].map((option) => (
+            { id: 'manual',  label: 'Fill In Form',      icon: UserPlus        },
+            { id: 'resume',  label: 'Upload Resumes',    icon: Upload          },
+            { id: 'csv',     label: 'Spreadsheet',       icon: FileSpreadsheet },
+            { id: 'json',    label: 'Data File',         icon: FileCode2       },
+          ].map(({ id, label, icon: Icon }) => (
             <button
-              key={option.id}
+              key={id}
               type="button"
-              onClick={() => setMode(option.id as typeof mode)}
-              className={`rounded-lg border px-3 py-2 text-xs font-semibold transition-all duration-200 ${
-                mode === option.id
+              onClick={() => setMode(id as typeof mode)}
+              className={`flex flex-col items-center gap-1.5 rounded-lg border px-3 py-3 text-xs font-semibold transition-all duration-200 ${
+                mode === id
                   ? 'border-blue-600 bg-blue-600 text-white shadow-sm'
                   : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:text-gray-900'
               }`}
             >
-              {option.label}
+              <Icon className="w-4 h-4" />
+              {label}
             </button>
           ))}
         </div>
@@ -2481,9 +2494,9 @@ function CandidateModal({ jobId, onClose, onSave, onResumeQueued }: any) {
             <div onDragOver={(e) => e.preventDefault()} onDrop={handleResumeDrop} className="rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 p-8 text-center transition-colors hover:border-blue-300 hover:bg-blue-50/40">
               <FileText className="mx-auto mb-2 h-8 w-8 text-gray-500" />
               <p className="text-sm font-semibold text-gray-900">Drop PDF resumes</p>
-              <p className="mt-1 text-xs text-gray-500">AI parsing runs in background and candidates are attached to this job.</p>
+              <p className="mt-1 text-xs text-gray-500">Resumes will be read and candidates added to this job.</p>
               <label className="mt-4 inline-flex cursor-pointer items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-xs font-medium text-white hover:bg-blue-700">
-                <Plus className="h-3.5 w-3.5" /> Browse PDFs
+                <Upload className="h-3.5 w-3.5" /> Select Resumes
                 <input type="file" accept=".pdf" multiple onChange={handleResumeSelect} className="hidden" />
               </label>
             </div>
@@ -2492,14 +2505,14 @@ function CandidateModal({ jobId, onClose, onSave, onResumeQueued }: any) {
                 {selectedResumes.map((file, i) => (
                   <div key={`${file.name}-${i}`} className="flex items-center justify-between border-b border-gray-100 px-3 py-2 last:border-b-0">
                     <span className="text-xs text-gray-700">{file.name}</span>
-                    <button type="button" onClick={() => setSelectedResumes((prev) => prev.filter((_, idx) => idx !== i))} className="text-xs text-gray-500 hover:text-red-600">Remove</button>
+                    <button type="button" onClick={() => setSelectedResumes((prev) => prev.filter((_, idx) => idx !== i))} className="flex items-center gap-1 text-xs text-gray-400 hover:text-red-500 transition-colors"><X className="w-3 h-3" />Remove</button>
                   </div>
                 ))}
               </div>
             )}
             {resumeQueued && (
               <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800">
-                Resumes were queued for AI parsing. You can close this modal and continue working.
+                Resumes uploaded. Candidates will appear once processing is complete.
               </div>
             )}
           </div>
@@ -2549,7 +2562,7 @@ function CandidateModal({ jobId, onClose, onSave, onResumeQueued }: any) {
 
         {mode === 'json' && (
           <div className="space-y-3 animate-in fade-in duration-200">
-            <p className="text-xs text-gray-600">Paste a JSON array. The selected jobId will be injected into every profile automatically.</p>
+            <p className="text-xs text-gray-600">Paste a JSON array of candidates. They will be linked to this job automatically.</p>
             <textarea value={jsonText} onChange={(e) => setJsonText(e.target.value)} rows={18} className="w-full rounded-xl border border-gray-300 p-3 font-mono text-xs outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500" />
           </div>
         )}
@@ -2557,7 +2570,7 @@ function CandidateModal({ jobId, onClose, onSave, onResumeQueued }: any) {
 
       <div className="flex items-center justify-between border-t border-gray-100 bg-gray-50 px-5 py-3">
         <span className="text-[11px] text-gray-500">
-          {mode === 'manual' ? 'Enter candidate details manually.' : 'Import mode will attach all records to this job.'}
+          {mode === 'manual' ? 'Fill in the candidate details below.' : 'All imported candidates will be linked to this job.'}
         </span>
         <div className="flex items-center gap-2">
           <button type="button" onClick={onClose} className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50">Cancel</button>
@@ -2567,8 +2580,8 @@ function CandidateModal({ jobId, onClose, onSave, onResumeQueued }: any) {
             </button>
           )}
           {mode === 'resume' && (
-            <button type="button" onClick={handleResumeUpload} disabled={resumeParsing || selectedResumes.length === 0} className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50">
-              {resumeParsing ? 'Queueing...' : 'Queue Resume Parsing'}
+            <button type="button" onClick={handleResumeUpload} disabled={resumeParsing || selectedResumes.length === 0} className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+              {resumeParsing ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Uploading...</> : <><Upload className="w-3.5 h-3.5" />Upload Resumes</>}
             </button>
           )}
           {mode === 'csv' && (

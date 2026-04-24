@@ -10,6 +10,9 @@ import { Input } from '@/components/ui/Input';
 import toast from 'react-hot-toast';
 import { useAutoSave } from '@/hooks/useAutoSave';
 import { DraftRecoveryModal } from '@/components/ui/DraftRecoveryModal';
+import {
+  UserPlus, User, Zap, Briefcase, GraduationCap, FolderOpen, Settings2, Plus, X as XIcon,
+} from 'lucide-react';
 
 interface Props {
   isOpen: boolean;
@@ -234,14 +237,24 @@ export function CreateCandidateModal({ isOpen, onClose }: Props) {
   };
 
   const inputClass = 'w-full px-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white';
+  const SECTION_ICONS: Record<typeof section, React.ReactNode> = {
+    basic: <User className="w-3 h-3" />,
+    skills: <Zap className="w-3 h-3" />,
+    experience: <Briefcase className="w-3 h-3" />,
+    education: <GraduationCap className="w-3 h-3" />,
+    projects: <FolderOpen className="w-3 h-3" />,
+    extras: <Settings2 className="w-3 h-3" />,
+  };
+
   const sectionBtn = (id: typeof section, label: string) => (
     <button
       type="button"
       onClick={() => setSection(id)}
-      className={`rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${
+      className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${
         section === id ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-200 bg-white text-gray-600 hover:text-gray-800'
       }`}
     >
+      {SECTION_ICONS[id]}
       {label}
     </button>
   );
@@ -265,6 +278,7 @@ export function CreateCandidateModal({ isOpen, onClose }: Props) {
         title="Add Candidate"
         subtitle="For JSON/CSV/Resume import, use Upload Candidates."
         size="xl"
+        icon={<UserPlus className="w-4 h-4" />}
       >
       <form ref={formRef} onSubmit={handleSubmit} className="space-y-4">
         <div className="flex items-center justify-between">
@@ -330,7 +344,7 @@ export function CreateCandidateModal({ isOpen, onClose }: Props) {
           <div className="space-y-3 animate-in fade-in duration-200">
             <div className="flex items-center justify-between">
               <p className="text-xs font-semibold text-gray-800">Skills</p>
-              <button type="button" onClick={addSkill} className="text-xs text-blue-700 font-medium">+ Add Skill</button>
+              <button type="button" onClick={addSkill} className="flex items-center gap-1 text-xs text-blue-700 font-medium"><Plus className="w-3 h-3" />Add Skill</button>
             </div>
             {form.skills.map((skill, i) => (
               <div key={i} className="grid grid-cols-[1fr_auto_auto_auto] gap-2">
@@ -339,13 +353,13 @@ export function CreateCandidateModal({ isOpen, onClose }: Props) {
                   <option>Beginner</option><option>Intermediate</option><option>Advanced</option><option>Expert</option>
                 </select>
                 <input type="number" min={0} className="w-20 px-2 py-2 text-xs border border-gray-200 rounded-lg" value={skill.yearsOfExperience} onChange={(e) => updateSkill(i, 'yearsOfExperience', Number(e.target.value))} />
-                <button type="button" onClick={() => removeSkill(i)} className="px-2 text-xs text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">Remove</button>
+                <button type="button" onClick={() => removeSkill(i)} className="p-2 text-gray-400 border border-gray-200 rounded-lg hover:bg-red-50 hover:text-red-500 hover:border-red-200 transition-colors"><XIcon className="w-3 h-3" /></button>
               </div>
             ))}
 
             <div className="flex items-center justify-between pt-2">
               <p className="text-xs font-semibold text-gray-800">Languages</p>
-              <button type="button" onClick={addLang} className="text-xs text-blue-700 font-medium">+ Add Language</button>
+              <button type="button" onClick={addLang} className="flex items-center gap-1 text-xs text-blue-700 font-medium"><Plus className="w-3 h-3" />Add Language</button>
             </div>
             {form.languages.map((lang, i) => (
               <div key={i} className="grid grid-cols-[1fr_auto_auto] gap-2">
@@ -353,7 +367,7 @@ export function CreateCandidateModal({ isOpen, onClose }: Props) {
                 <select className={inputClass} value={lang.proficiency} onChange={(e) => updateLang(i, 'proficiency', e.target.value)}>
                   <option>Basic</option><option>Conversational</option><option>Fluent</option><option>Native</option>
                 </select>
-                <button type="button" onClick={() => removeLang(i)} className="px-2 text-xs text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">Remove</button>
+                <button type="button" onClick={() => removeLang(i)} className="p-2 text-gray-400 border border-gray-200 rounded-lg hover:bg-red-50 hover:text-red-500 hover:border-red-200 transition-colors"><XIcon className="w-3 h-3" /></button>
               </div>
             ))}
           </div>
@@ -363,7 +377,7 @@ export function CreateCandidateModal({ isOpen, onClose }: Props) {
           <div className="space-y-3 animate-in fade-in duration-200">
             <div className="flex items-center justify-between">
               <p className="text-xs font-semibold text-gray-800">Work Experience</p>
-              <button type="button" onClick={addExp} className="text-xs text-blue-700 font-medium">+ Add Experience</button>
+              <button type="button" onClick={addExp} className="flex items-center gap-1 text-xs text-blue-700 font-medium"><Plus className="w-3 h-3" />Add Experience</button>
             </div>
             {form.experience.map((exp, i) => (
               <div key={i} className="rounded-lg border border-gray-200 p-3 space-y-2">
@@ -381,7 +395,7 @@ export function CreateCandidateModal({ isOpen, onClose }: Props) {
                 </label>
                 <textarea rows={2} className={`${inputClass} resize-none`} placeholder="Description" value={exp.description} onChange={(e) => updateExp(i, 'description', e.target.value)} />
                 <input className={inputClass} placeholder="Technologies (comma-separated)" value={exp.technologies} onChange={(e) => updateExp(i, 'technologies', e.target.value)} />
-                <button type="button" onClick={() => removeExp(i)} className="text-xs text-gray-600 hover:text-red-600">Remove experience</button>
+                <button type="button" onClick={() => removeExp(i)} className="flex items-center gap-1 text-xs text-gray-500 hover:text-red-600 transition-colors"><XIcon className="w-3 h-3" />Remove Entry</button>
               </div>
             ))}
           </div>
@@ -391,7 +405,7 @@ export function CreateCandidateModal({ isOpen, onClose }: Props) {
           <div className="space-y-3 animate-in fade-in duration-200">
             <div className="flex items-center justify-between">
               <p className="text-xs font-semibold text-gray-800">Education</p>
-              <button type="button" onClick={addEdu} className="text-xs text-blue-700 font-medium">+ Add Education</button>
+              <button type="button" onClick={addEdu} className="flex items-center gap-1 text-xs text-blue-700 font-medium"><Plus className="w-3 h-3" />Add Education</button>
             </div>
             {form.education.map((edu, i) => (
               <div key={i} className="rounded-lg border border-gray-200 p-3 space-y-2">
@@ -404,7 +418,7 @@ export function CreateCandidateModal({ isOpen, onClose }: Props) {
                   <input type="number" className={inputClass} value={edu.startYear} onChange={(e) => updateEdu(i, 'startYear', Number(e.target.value))} />
                   <input type="number" className={inputClass} value={edu.endYear} onChange={(e) => updateEdu(i, 'endYear', Number(e.target.value))} />
                 </div>
-                <button type="button" onClick={() => removeEdu(i)} className="text-xs text-gray-600 hover:text-red-600">Remove education</button>
+                <button type="button" onClick={() => removeEdu(i)} className="flex items-center gap-1 text-xs text-gray-500 hover:text-red-600 transition-colors"><XIcon className="w-3 h-3" />Remove Entry</button>
               </div>
             ))}
           </div>
@@ -414,7 +428,7 @@ export function CreateCandidateModal({ isOpen, onClose }: Props) {
           <div className="space-y-3 animate-in fade-in duration-200">
             <div className="flex items-center justify-between">
               <p className="text-xs font-semibold text-gray-800">Projects</p>
-              <button type="button" onClick={addProj} className="text-xs text-blue-700 font-medium">+ Add Project</button>
+              <button type="button" onClick={addProj} className="flex items-center gap-1 text-xs text-blue-700 font-medium"><Plus className="w-3 h-3" />Add Project</button>
             </div>
             {form.projects.map((proj, i) => (
               <div key={i} className="rounded-lg border border-gray-200 p-3 space-y-2">
@@ -429,7 +443,7 @@ export function CreateCandidateModal({ isOpen, onClose }: Props) {
                   <input type="month" className={inputClass} value={proj.startDate} onChange={(e) => updateProj(i, 'startDate', e.target.value)} />
                   <input type="month" className={inputClass} value={proj.endDate} onChange={(e) => updateProj(i, 'endDate', e.target.value)} />
                 </div>
-                <button type="button" onClick={() => removeProj(i)} className="text-xs text-gray-600 hover:text-red-600">Remove project</button>
+                <button type="button" onClick={() => removeProj(i)} className="flex items-center gap-1 text-xs text-gray-500 hover:text-red-600 transition-colors"><XIcon className="w-3 h-3" />Remove Entry</button>
               </div>
             ))}
           </div>
@@ -456,14 +470,14 @@ export function CreateCandidateModal({ isOpen, onClose }: Props) {
             <div className="rounded-lg border border-gray-200 p-3 space-y-2">
               <div className="flex items-center justify-between">
                 <p className="text-xs font-semibold text-gray-800">Certifications</p>
-                <button type="button" onClick={addCert} className="text-xs text-blue-700 font-medium">+ Add Certification</button>
+                <button type="button" onClick={addCert} className="flex items-center gap-1 text-xs text-blue-700 font-medium"><Plus className="w-3 h-3" />Add Certification</button>
               </div>
               {form.certifications.map((cert, i) => (
                 <div key={i} className="grid grid-cols-3 gap-2">
                   <input className={inputClass} placeholder="Name" value={cert.name} onChange={(e) => updateCert(i, 'name', e.target.value)} />
                   <input className={inputClass} placeholder="Issuer" value={cert.issuer} onChange={(e) => updateCert(i, 'issuer', e.target.value)} />
                   <input type="month" className={inputClass} value={cert.issueDate} onChange={(e) => updateCert(i, 'issueDate', e.target.value)} />
-                  <button type="button" onClick={() => removeCert(i)} className="col-span-3 text-left text-xs text-gray-600 hover:text-red-600">Remove certification</button>
+                  <button type="button" onClick={() => removeCert(i)} className="col-span-3 flex items-center gap-1 text-xs text-gray-500 hover:text-red-600 transition-colors"><XIcon className="w-3 h-3" />Remove Entry</button>
                 </div>
               ))}
             </div>

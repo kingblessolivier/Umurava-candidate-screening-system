@@ -168,7 +168,7 @@ export function CandidateUploadModal({
       await dispatch(uploadPDFs({ files, jobId: selectedJobId })).unwrap();
       setPdfQueued(true);
       setFiles([]);
-      toast.success('Resumes queued for AI parsing');
+      toast.success('Resumes uploaded successfully');
       onUploaded?.();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Upload failed');
@@ -182,7 +182,7 @@ export function CandidateUploadModal({
       title="Upload Candidates"
       subtitle="Import using CSV, PDF resumes, or JSON"
       size="xl"
-      headerAccent="emerald"
+      icon={<Upload className="w-4 h-4" />}
       panelClassName="bg-white"
       className="p-0"
     >
@@ -248,7 +248,7 @@ export function CandidateUploadModal({
             <p className="text-sm font-semibold text-gray-800">
               {tab === 'csv' ? 'Drop CSV/Excel file' : 'Drop PDF resumes'}
             </p>
-            <p className="text-xs text-gray-500 mt-1">or click to browse</p>
+            <p className="text-xs text-gray-500 mt-1">or click to select files</p>
 
             {files.length > 0 && (
               <div className="mt-4 space-y-1 text-left max-w-md mx-auto">
@@ -272,7 +272,7 @@ export function CandidateUploadModal({
                 onClick={() => setJsonText(SAMPLE_JSON)}
                 className="text-xs text-blue-600 hover:text-blue-700"
               >
-                Reset sample
+                Restore Sample
               </button>
             </div>
             <textarea
@@ -293,7 +293,7 @@ export function CandidateUploadModal({
         >
           {uploading ? (
             <>
-              <Loader2 className="w-4 h-4 animate-spin" /> Processing...
+              <Loader2 className="w-4 h-4 animate-spin" /> Uploading...
             </>
           ) : (
             <>
@@ -306,8 +306,8 @@ export function CandidateUploadModal({
           <div className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 flex items-start gap-2">
             <Bell className="w-4 h-4 text-blue-500 mt-0.5" />
             <div>
-              <p className="text-xs font-semibold text-blue-800">PDF parsing started</p>
-              <p className="text-xs text-blue-700">The system is processing resumes in the background.</p>
+              <p className="text-xs font-semibold text-blue-800">Resumes received</p>
+              <p className="text-xs text-blue-700">Candidates will appear once processing is complete.</p>
             </div>
           </div>
         )}

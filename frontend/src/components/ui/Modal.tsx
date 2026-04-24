@@ -13,7 +13,7 @@ interface ModalProps {
   size?: "sm" | "md" | "lg" | "xl" | "2xl";
   children: React.ReactNode;
   showCloseButton?: boolean;
-  headerAccent?: "blue" | "violet" | "emerald" | "amber" | "rose";
+  icon?: React.ReactNode;
   className?: string;
   panelClassName?: string;
 }
@@ -34,7 +34,7 @@ export function Modal({
   size = "md",
   children,
   showCloseButton = true,
-  headerAccent = "blue",
+  icon,
   className,
   panelClassName,
 }: ModalProps) {
@@ -53,14 +53,6 @@ export function Modal({
       document.body.style.overflow = "";
     };
   }, [isOpen, onClose]);
-
-  const accentColors = {
-    blue: "bg-blue-600",
-    violet: "bg-violet-600",
-    emerald: "bg-emerald-600",
-    amber: "bg-amber-600",
-    rose: "bg-rose-600",
-  };
 
   return (
     <AnimatePresence>
@@ -102,14 +94,12 @@ export function Modal({
               <div className="flex items-center justify-between px-5 pt-5 pb-4">
                 <div className="flex items-center gap-3">
                   {title && (
-                    <div
-                      className={cn(
-                        "w-8 h-8 rounded-lg flex items-center justify-center text-gray-600 text-xs font-semibold bg-gray-100 border border-gray-200",
-                        accentColors[headerAccent] && "border-transparent"
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-gray-100 border border-gray-200 text-gray-500">
+                      {icon ?? (
+                        <span className="text-xs font-semibold">
+                          {title.split(" ").map((w) => w[0]).join("").slice(0, 2)}
+                        </span>
                       )}
-                      style={headerAccent !== 'blue' ? { backgroundColor: `var(--modal-accent-${headerAccent}, #f1f5f9)`, color: `var(--modal-accent-text-${headerAccent}, #475569)` } : {}}
-                    >
-                      {title.split(" ").map((w) => w[0]).join("").slice(0, 2)}
                     </div>
                   )}
                   <div>
@@ -258,7 +248,6 @@ export function SlidePanel({
   subtitle,
   children,
   width = "md",
-  accentColor = "blue",
 }: SlidePanelProps) {
   const widths = { sm: "max-w-sm", md: "max-w-md", lg: "max-w-lg" };
 
@@ -266,14 +255,6 @@ export function SlidePanel({
     if (isOpen) document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = ""; };
   }, [isOpen]);
-
-  const accentColors = {
-    blue: "bg-blue-600",
-    violet: "bg-violet-600",
-    emerald: "bg-emerald-600",
-    amber: "bg-amber-600",
-    rose: "bg-rose-600",
-  };
 
   return (
     <AnimatePresence>

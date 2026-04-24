@@ -95,7 +95,7 @@ export default function JobDetailPageTabbed() {
       } else if (file.name.endsWith('.pdf')) {
         const result = await dispatch(uploadPDFs({ files: [file], jobId })).unwrap();
         toast.dismiss();
-        toast.success(`Processing ${file.name} in background...`);
+        toast.success(`${file.name} uploaded. Candidates will appear shortly.`);
         setPdfQueued(true);
         setShowAddCandidates(false);
       } else if (file.name.endsWith('.json')) {

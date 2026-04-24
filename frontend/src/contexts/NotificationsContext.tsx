@@ -8,6 +8,9 @@ import React, {
   useRef,
   useCallback,
 } from 'react';
+import { useDispatch } from 'react-redux';
+import { AppDispatch } from '@/store';
+import { fetchCandidates } from '@/store/candidatesSlice';
 import toast from 'react-hot-toast';
 
 export interface AppNotification {
@@ -63,6 +66,7 @@ const NotificationsContext = createContext<NotificationsContextValue>({
 });
 
 export function NotificationsProvider({ children }: { children: React.ReactNode }) {
+  const dispatch = useDispatch<AppDispatch>();
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   // Active (running) jobs updated in-place — one entry per bgJobId
   const [activeJobs, setActiveJobs] = useState<Record<string, AppNotification>>({});
@@ -151,6 +155,9 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
 
           if (data.status === 'done') {
             toast.success(data.title, { duration: 5000 });
+            if (data.jobType === 'pdf_upload') {
+              dispatch(fetchCandidates());
+            }
           } else {
             toast.error(data.title, { duration: 5000 });
           }
