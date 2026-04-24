@@ -45,17 +45,15 @@ export function useCandidates(jobId?: string) {
   );
 
   const handleDeleteCandidate = useCallback(
-    async (id: string) => {
-      const result = await dispatch(deleteCandidate(id));
-      return result;
+    (id: string) => {
+      return dispatch(deleteCandidate(id));
     },
     [dispatch]
   );
 
   const handleUpdateCandidate = useCallback(
-    async (id: string, updates: Partial<Candidate>) => {
-      const result = await dispatch(updateCandidate({ id, updates }));
-      return result;
+    (id: string, updates: Partial<Candidate>) => {
+      return dispatch(updateCandidate({ id, updates }));
     },
     [dispatch]
   );
