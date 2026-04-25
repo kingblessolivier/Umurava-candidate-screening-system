@@ -23,6 +23,7 @@ export interface AppNotification {
   read: boolean;
   link?: string;
   jobType?: 'screening' | 'pdf_upload' | 'csv_import' | 'json_import';
+  metadata?: Record<string, unknown>;
 }
 
 interface SSEEvent {
@@ -106,6 +107,7 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
                 timestamp: data.timestamp,
                 read: false,
                 jobType: data.jobType,
+                metadata: data.metadata,
               },
             }));
 
@@ -123,7 +125,7 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
             return;
           }
 
-          if (data.status !== 'done' && data.status !== 'failed') return;
+          if (data.status !== 'done' && data.status !== 'failed' && data.status !== 'cancelled') return;
 
           // ── Done / Failed: remove from active jobs, add to completed list ─
           setActiveJobs((prev) => {
@@ -149,6 +151,7 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
             read: false,
             link,
             jobType: data.jobType,
+            metadata: data.metadata,
           };
 
           setNotifications((prev) => [notif, ...prev]);

@@ -206,6 +206,18 @@ export interface RejectedCandidate {
   email: string;
   finalScore: number;
   rank: number;                    // Overall rank among all candidates
+  breakdown: ScoreBreakdown;
+  confidenceScore: number;
+  strengths: string[];
+  gaps: string[];
+  risks: string[];
+  recommendation: "Strongly Recommended" | "Recommended" | "Consider" | "Not Recommended";
+  summary: string;
+  reasoning: string;
+  interviewQuestions: string[];
+  skillGapAnalysis: SkillGapAnalysis;
+  biasFlags: BiasFlag[];
+  riskFlags: RiskFlag[];
   scoreGap: number;                // Points below the cutoff score
   whyNotSelected: string;          // Honest, specific, candidate-readable explanation
   topMissingSkills: string[];
@@ -230,6 +242,8 @@ export interface ThinkingSnapshot {
   candidateNames: string[];
   thinking: string;
   timestamp: string;
+  snapshotId?: string;
+  isFinal?: boolean;
 }
 
 export interface ScreeningResult {

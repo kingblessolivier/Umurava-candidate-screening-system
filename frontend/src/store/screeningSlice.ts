@@ -99,6 +99,17 @@ const screeningSlice = createSlice({
         s.thoughts = s.thoughts.slice(-50);
       }
     },
+    upsertThought: (s, action: { payload: Thought }) => {
+      const idx = s.thoughts.findIndex(t => t.id === action.payload.id);
+      if (idx >= 0) {
+        s.thoughts[idx] = { ...s.thoughts[idx], ...action.payload };
+      } else {
+        s.thoughts.push(action.payload);
+        if (s.thoughts.length > 50) {
+          s.thoughts = s.thoughts.slice(-50);
+        }
+      }
+    },
     addThoughts: (s, action: { payload: Thought[] }) => {
       s.thoughts.push(...action.payload);
       if (s.thoughts.length > 50) {
@@ -112,7 +123,17 @@ const screeningSlice = createSlice({
       s.liveScores = action.payload;
     },
     updatePartialShortlist: (s, action: { payload: CandidateScore[] }) => {
-      s.partialShortlist = action.payload;
+      const byCandidateId = new Map<string, CandidateScore>();
+      for (const candidate of action.payload) {
+        const existing = byCandidateId.get(candidate.candidateId);
+        if (!existing || candidate.finalScore > existing.finalScore) {
+          byCandidateId.set(candidate.candidateId, candidate);
+        }
+      }
+      s.partialShortlist = Array.from(byCandidateId.values()).sort((a, b) => {
+        if ((a.rank ?? 0) !== (b.rank ?? 0)) return (a.rank ?? 0) - (b.rank ?? 0);
+        return b.finalScore - a.finalScore;
+      });
     },
     incrementEvaluatedCount: (s) => {
       s.evaluatedCount += 1;
@@ -197,6 +218,7 @@ export const {
   clearCurrent,
   setTotalCandidates,
   addThought,
+  upsertThought,
   addThoughts,
   clearThoughts,
   addThinkingSnapshot,

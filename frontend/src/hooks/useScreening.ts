@@ -9,6 +9,7 @@ import {
   fetchResult as fetchResultThunk,
   setTotalCandidates,
   addThought,
+  upsertThought,
   addThoughts,
   clearThoughts,
   addThinkingSnapshot,
@@ -78,6 +79,13 @@ export function useScreening() {
     [dispatch]
   );
 
+  const upsertScreeningThought = useCallback(
+    (thought: Thought) => {
+      dispatch(upsertThought(thought));
+    },
+    [dispatch]
+  );
+
   const addScreeningThoughts = useCallback(
     (thoughts: Thought[]) => {
       dispatch(addThoughts(thoughts));
@@ -142,6 +150,7 @@ export function useScreening() {
     fetchResult,
     setTotalCandidatesCount,
     addScreeningThought,
+    upsertScreeningThought,
     addScreeningThoughts,
     clearScreeningThoughts,
     addThinkingSnapshotToLog,

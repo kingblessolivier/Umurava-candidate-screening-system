@@ -213,7 +213,7 @@ function StepCard({ thought, isLatest }: { thought: Thought; isLatest: boolean }
 // ─── Main Component ───────────────────────────────────────────────────────────
 export function AIThinkingStream({ thoughts, isRunning }: AIThinkingStreamProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const thinkingCount = thoughts.filter(t => t.type === 'thinking').length;
+  const thinkingCount = thoughts.filter(t => t.type === 'thinking' && !!t.thinkingContent?.trim()).length;
   const stepCount = thoughts.filter(t => t.type !== 'thinking').length;
 
   useEffect(() => {
@@ -233,7 +233,7 @@ export function AIThinkingStream({ thoughts, isRunning }: AIThinkingStreamProps)
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-white">AI Thinking</span>
+                <span className="text-xs font-bold text-white">Screening Activity</span>
                 {isRunning && (
                   <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-violet-500/20 border border-violet-500/30">
                     <span className="w-1 h-1 rounded-full bg-violet-400 animate-pulse" />
@@ -241,7 +241,11 @@ export function AIThinkingStream({ thoughts, isRunning }: AIThinkingStreamProps)
                   </span>
                 )}
               </div>
-              <p className="text-[10px] text-slate-400 mt-0.5">Real Gemini reasoning tokens</p>
+              {thinkingCount > 0 && (
+                <p className="text-[10px] text-slate-400 mt-0.5">
+                  {`${thinkingCount} real Gemini reasoning snapshot${thinkingCount > 1 ? 's' : ''} captured`}
+                </p>
+              )}
             </div>
           </div>
 
@@ -274,7 +278,7 @@ export function AIThinkingStream({ thoughts, isRunning }: AIThinkingStreamProps)
           {thoughts.map((thought, index) => {
             const isLatest = index === thoughts.length - 1;
 
-            if (thought.type === 'thinking') {
+            if (thought.type === 'thinking' && thought.thinkingContent?.trim()) {
               return (
                 <ThinkingBlock key={thought.id} thought={thought} isLatest={isLatest} />
               );
@@ -292,8 +296,8 @@ export function AIThinkingStream({ thoughts, isRunning }: AIThinkingStreamProps)
             <div className="w-14 h-14 rounded-2xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center mb-4">
               <Brain className="w-7 h-7 text-violet-400 animate-pulse" />
             </div>
-            <p className="text-sm font-semibold text-gray-700 mb-1">Waiting for AI…</p>
-            <p className="text-[11px] text-gray-400">Gemini is processing candidates</p>
+            <p className="text-sm font-semibold text-gray-700 mb-1">Waiting for activity…</p>
+            <p className="text-[11px] text-gray-400">Gemini events will appear here as screening progresses</p>
           </div>
         )}
 
@@ -303,7 +307,7 @@ export function AIThinkingStream({ thoughts, isRunning }: AIThinkingStreamProps)
               <Brain className="w-7 h-7 text-gray-300" />
             </div>
             <p className="text-sm font-medium text-gray-500">No screening running</p>
-            <p className="text-[11px] text-gray-400 mt-1">Start a screening to see AI reasoning</p>
+            <p className="text-[11px] text-gray-400 mt-1">Start screening to see activity and Gemini reasoning snapshots</p>
           </div>
         )}
       </div>

@@ -157,8 +157,9 @@ function WorkflowBar({ step, running }: { step: 'setup' | 'criteria' | 'review';
 }
 
 function StatusBar({ totalCandidates, evaluatedCount, model }: { totalCandidates: number; evaluatedCount: number; model: string }) {
-  const [clock, setClock] = useState(nowHMS());
+  const [clock, setClock] = useState('00:00:00');
   useEffect(() => {
+    setClock(nowHMS());
     const t = setInterval(() => setClock(nowHMS()), 1000);
     return () => clearInterval(t);
   }, []);
@@ -577,7 +578,7 @@ function StepReview({
     'Confidence score per assessment',
     'Rejection explanations with improvement paths',
     'Aggregate insights and score distribution',
-    'Live Gemini reasoning journal (thinking tokens)',
+    'Live Gemini activity timeline with reasoning snapshots when available',
   ];
 
   return (
@@ -661,6 +662,7 @@ function StepReview({
 
 function ExecutionConsole({
   thoughts, liveScores, partialShortlist, evaluatedCount, totalCandidates, elapsed, selectedJobTitle, progressPercent,
+  shortlistSize,
   onTerminate, terminating,
 }: {
   thoughts: Parameters<typeof AIThinkingStream>[0]['thoughts'];
@@ -671,6 +673,7 @@ function ExecutionConsole({
   elapsed: number;
   selectedJobTitle?: string;
   progressPercent: number;
+  shortlistSize: number;
   onTerminate: () => void;
   terminating: boolean;
 }) {
@@ -733,7 +736,16 @@ function ExecutionConsole({
                   : 'bg-white text-red-600 border-red-300 hover:bg-red-50'
             )}
           >
-            <span className="w-1.5 h-1.5 rounded-full bg-current" />
+            <span className="relative flex h-2.5 w-2.5 items-center justify-center">
+              <span
+                className={cn(
+                  'absolute inline-flex h-full w-full rounded-full bg-current opacity-60',
+                  !terminating && 'animate-ping',
+                  armed && 'opacity-80'
+                )}
+              />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-current" />
+            </span>
             {terminating ? 'TERMINATING…' : armed ? 'CONFIRM?' : 'TERMINATE'}
           </button>
         </div>
@@ -788,19 +800,22 @@ function ExecutionConsole({
         {/* CANDIDATE REGISTRY */}
         <div className="border border-gray-200 bg-white flex flex-col overflow-hidden">
           <div className="px-3 py-2 bg-gray-50 border-b border-gray-200 flex-shrink-0">
-            <span className="text-[10px] font-bold text-gray-600 tracking-widest">CANDIDATE REGISTRY</span>
+            <span className="text-[10px] font-bold text-gray-600 tracking-widest">LIVE CANDIDATE REGISTRY</span>
           </div>
 
           {/* Table header */}
-          <div className="grid grid-cols-[24px_1fr_52px] bg-gray-50 border-b border-gray-200 flex-shrink-0">
+          <div className="grid grid-cols-[24px_1fr_52px_64px] bg-gray-50 border-b border-gray-200 flex-shrink-0">
             <div className="px-2 py-1.5 border-r border-gray-200 text-center">
               <span className="text-[8px] font-bold text-gray-400">RK</span>
             </div>
             <div className="px-2 py-1.5 border-r border-gray-200">
               <span className="text-[8px] font-bold text-gray-400">CANDIDATE</span>
             </div>
-            <div className="px-2 py-1.5 text-center">
+            <div className="px-2 py-1.5 border-r border-gray-200 text-center">
               <span className="text-[8px] font-bold text-gray-400">SCORE</span>
+            </div>
+            <div className="px-2 py-1.5 text-center">
+              <span className="text-[8px] font-bold text-gray-400">STATUS</span>
             </div>
           </div>
 
@@ -813,7 +828,7 @@ function ExecutionConsole({
               </div>
             ) : (
               partialShortlist.map((c, i) => (
-                <div key={c.candidateId} className="grid grid-cols-[24px_1fr_52px] border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
+                <div key={`${c.candidateId}-${c.rank ?? i}-${i}`} className="grid grid-cols-[24px_1fr_52px_64px] border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
                   <div className="px-2 py-2.5 border-r border-gray-100 text-center">
                     <span className={cn(
                       'text-[9px] font-mono font-bold',
@@ -831,6 +846,13 @@ function ExecutionConsole({
                       {c.finalScore.toFixed(1)}
                     </span>
                   </div>
+                  <div className="px-2 py-2.5 text-center border-l border-gray-100">
+                    {(c.rank ?? i + 1) <= shortlistSize ? (
+                      <span className="text-[8px] font-mono font-bold text-green-600">SELECTED</span>
+                    ) : (
+                      <span className="text-[8px] font-mono font-bold text-gray-400">UNSELECTED</span>
+                    )}
+                  </div>
                 </div>
               ))
             )}
@@ -838,7 +860,7 @@ function ExecutionConsole({
 
           <div className="px-3 py-2 bg-gray-50 border-t border-gray-200 flex-shrink-0">
             <span className="text-[9px] font-mono text-gray-500">
-              SHORTLIST: <span className="font-bold text-gray-900">{partialShortlist.length}</span> CANDIDATES
+              EVALUATED: <span className="font-bold text-gray-900">{partialShortlist.length}</span> · TARGET SHORTLIST: <span className="font-bold text-gray-900">{shortlistSize}</span>
             </span>
           </div>
         </div>
@@ -931,6 +953,7 @@ function NavBar({
 
 function ScreeningContent() {
   const SCREENING_SESSION_KEY = 'talentai_active_screening_session';
+  const SCREENING_LIVE_STATE_KEY = 'talentai_live_screening_state';
   const router   = useRouter();
   const dispatch = useDispatch<AppDispatch>();
   const params   = useSearchParams();
@@ -949,8 +972,8 @@ function ScreeningContent() {
   const pendingBgJobId = useSelector((s: RootState) => s.screening.pendingBgJobId);
 
   const {
-    handleRunScreening, running, thoughts, liveScores, partialShortlist,
-    evaluatedCount, totalCandidates, setTotalCandidatesCount, addScreeningThought,
+    handleRunScreening, running, thoughts, thinkingLog, liveScores, partialShortlist,
+    evaluatedCount, totalCandidates, setTotalCandidatesCount, addScreeningThought, addScreeningThoughts, upsertScreeningThought,
     clearScreeningThoughts, addThinkingSnapshotToLog, setLiveScores, setPartialShortlist,
     setEvaluatedCountTo, resetLiveScreeningState,
   } = useScreening();
@@ -958,12 +981,38 @@ function ScreeningContent() {
   const selectedJob = jobs.find(j => j._id === jobId);
   const totalWeight = Object.values(customWeights).reduce((a, b) => a + b, 0);
   const progressPercent = totalCandidates > 0 ? Math.round((evaluatedCount / totalCandidates) * 100) : 0;
+  const cancelledBgJobIds = React.useRef<Set<string>>(new Set());
+  const restoredLiveStateForJob = React.useRef<Set<string>>(new Set());
 
   const getPersistedSession = () => {
     if (typeof window === 'undefined') return null;
     try {
       const raw = window.localStorage.getItem(SCREENING_SESSION_KEY);
       return raw ? JSON.parse(raw) as { bgJobId: string; jobId: string; startedAt: number } : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const getPersistedLiveState = () => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const raw = window.localStorage.getItem(SCREENING_LIVE_STATE_KEY);
+      return raw
+        ? JSON.parse(raw) as {
+            bgJobId: string;
+            jobId: string;
+            shortlistSize: number;
+            thoughts: typeof thoughts;
+            thinkingLog: typeof thinkingLog;
+            liveScores: typeof liveScores;
+            partialShortlist: typeof partialShortlist;
+            evaluatedCount: number;
+            totalCandidates: number;
+            elapsedTime: number;
+            updatedAt: number;
+          }
+        : null;
     } catch {
       return null;
     }
@@ -1002,29 +1051,120 @@ function ScreeningContent() {
     );
   }, [running, pendingBgJobId, jobId, elapsedTime]);
 
+  // Persist full live state so returning to screening doesn't look like a fresh run.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!running || !pendingBgJobId || !jobId) return;
+
+    window.localStorage.setItem(
+      SCREENING_LIVE_STATE_KEY,
+      JSON.stringify({
+        bgJobId: pendingBgJobId,
+        jobId,
+        shortlistSize,
+        thoughts,
+        thinkingLog,
+        liveScores,
+        partialShortlist,
+        evaluatedCount,
+        totalCandidates,
+        elapsedTime,
+        updatedAt: Date.now(),
+      })
+    );
+  }, [
+    running,
+    pendingBgJobId,
+    jobId,
+    shortlistSize,
+    thoughts,
+    thinkingLog,
+    liveScores,
+    partialShortlist,
+    evaluatedCount,
+    totalCandidates,
+    elapsedTime,
+  ]);
+
   // Reattach to active background job when returning to this page.
   useEffect(() => {
     const persisted = getPersistedSession();
-    const activeScreeningIds = Object.values(activeJobs)
+    const activeScreeningJobs = Object.values(activeJobs)
       .filter(job => job.jobType === 'screening')
-      .map(job => job.bgJobId);
+      .map(job => ({
+        bgJobId: job.bgJobId,
+        jobId: typeof job.metadata?.jobId === 'string' ? job.metadata.jobId : undefined,
+        shortlistSize: typeof job.metadata?.shortlistSize === 'number' ? job.metadata.shortlistSize : undefined,
+      }));
+    const activeScreeningIds = new Set(activeScreeningJobs.map(job => job.bgJobId));
 
-    const hasPersistedBgJob = !!persisted?.bgJobId;
-    const fallbackActiveBgJobId = activeScreeningIds[0];
-    const bgJobIdToRestore = hasPersistedBgJob ? persisted!.bgJobId : fallbackActiveBgJobId;
-
+    const fallbackActive = activeScreeningJobs[0];
+    const bgJobIdToRestore = persisted?.bgJobId ?? fallbackActive?.bgJobId;
     if (!bgJobIdToRestore || running) return;
+
+    // Do not restore a job the user just cancelled from this session.
+    if (cancelledBgJobIds.current.has(bgJobIdToRestore)) return;
+
+    // If the persisted job is no longer active, clear stale session data.
+    if (!activeScreeningIds.has(bgJobIdToRestore)) {
+      if (typeof window !== 'undefined') {
+        window.localStorage.removeItem(SCREENING_SESSION_KEY);
+      }
+      return;
+    }
 
     dispatch(resumeRunning(bgJobIdToRestore));
 
-    if (!jobId && persisted?.jobId) {
-      setJobId(persisted.jobId);
+    const selectedActive = activeScreeningJobs.find(job => job.bgJobId === bgJobIdToRestore);
+    const restoredJobId = persisted?.jobId ?? selectedActive?.jobId;
+    if (!jobId && restoredJobId) {
+      setJobId(restoredJobId);
+    }
+
+    if (selectedActive?.shortlistSize && selectedActive.shortlistSize > 0) {
+      setShortlistSize(selectedActive.shortlistSize);
     }
 
     if (persisted?.startedAt) {
       setElapsedTime(Math.max(0, Math.floor((Date.now() - persisted.startedAt) / 1000)));
     }
   }, [activeJobs, running, dispatch, jobId]);
+
+  // Restore latest persisted live state once per active background job.
+  useEffect(() => {
+    if (!running || !pendingBgJobId) return;
+    if (restoredLiveStateForJob.current.has(pendingBgJobId)) return;
+
+    const persisted = getPersistedLiveState();
+    if (!persisted || persisted.bgJobId !== pendingBgJobId) return;
+
+    restoredLiveStateForJob.current.add(pendingBgJobId);
+    resetLiveScreeningState();
+    clearScreeningThoughts();
+
+    if (persisted.thoughts?.length) addScreeningThoughts(persisted.thoughts);
+    if (persisted.thinkingLog?.length) {
+      for (const snapshot of persisted.thinkingLog) {
+        addThinkingSnapshotToLog(snapshot);
+      }
+    }
+    setLiveScores(persisted.liveScores);
+    setPartialShortlist(persisted.partialShortlist);
+    setEvaluatedCountTo(persisted.evaluatedCount);
+    setTotalCandidatesCount(persisted.totalCandidates);
+    setElapsedTime((prev) => Math.max(prev, persisted.elapsedTime || 0));
+  }, [
+    running,
+    pendingBgJobId,
+    addScreeningThoughts,
+    addThinkingSnapshotToLog,
+    clearScreeningThoughts,
+    resetLiveScreeningState,
+    setEvaluatedCountTo,
+    setLiveScores,
+    setPartialShortlist,
+    setTotalCandidatesCount,
+  ]);
 
   // Navigate to results on completion
   useEffect(() => {
@@ -1034,6 +1174,7 @@ function ScreeningContent() {
     dispatch(stopRunning());
     if (typeof window !== 'undefined') {
       window.localStorage.removeItem(SCREENING_SESSION_KEY);
+      window.localStorage.removeItem(SCREENING_LIVE_STATE_KEY);
     }
     if (done.link) router.push(done.link);
   }, [notifications, pendingBgJobId]);
@@ -1042,6 +1183,7 @@ function ScreeningContent() {
 
   const handleTerminate = async () => {
     if (!pendingBgJobId || terminating) return;
+    cancelledBgJobIds.current.add(pendingBgJobId);
     setTerminating(true);
     try {
       await api.post(`/background-jobs/${pendingBgJobId}/cancel`);
@@ -1049,18 +1191,25 @@ function ScreeningContent() {
       // Even if the request fails, reset the UI — the user wants to stop
     }
     dispatch(stopRunning());
-    if (typeof window !== 'undefined') window.localStorage.removeItem(SCREENING_SESSION_KEY);
+    if (typeof window !== 'undefined') {
+      window.localStorage.removeItem(SCREENING_SESSION_KEY);
+      window.localStorage.removeItem(SCREENING_LIVE_STATE_KEY);
+    }
     setTerminating(false);
     setElapsedTime(0);
   };
 
   const handleRun = async () => {
     if (!jobId || candidateCount === 0 || candidateCount < shortlistSize || totalWeight !== 100) return;
+    restoredLiveStateForJob.current.clear();
     resetLiveScreeningState();
     setTotalCandidatesCount(candidateCount);
     seenEventTimestamps.current.clear();
     setElapsedTime(0);
     clearScreeningThoughts();
+    if (typeof window !== 'undefined') {
+      window.localStorage.removeItem(SCREENING_LIVE_STATE_KEY);
+    }
     const result = await handleRunScreening({ jobId, shortlistSize });
     if (result.meta.requestStatus !== 'fulfilled') {
       // Error surfaced via notifications/toast
@@ -1081,15 +1230,24 @@ function ScreeningContent() {
         liveScores?: typeof liveScores;
         partialShortlist?: CandidateScore[];
         evaluatedCount?: number;
-        thinkingSnapshot?: { stage: 'evaluating'|'reranking'|'rejection'; batchIndex: number; batchLabel: string; candidateNames: string[]; thinking: string; timestamp: string };
+        thinkingSnapshot?: { stage: 'evaluating'|'reranking'|'rejection'; batchIndex: number; batchLabel: string; candidateNames: string[]; thinking: string; timestamp: string; snapshotId?: string; isFinal?: boolean };
       } | undefined;
       if (!pe) continue;
 
       const ts = nowHMS();
 
       if (pe.type === 'thinking' && pe.thinkingSnapshot) {
-        addThinkingSnapshotToLog(pe.thinkingSnapshot);
-        addScreeningThought({ id: `thinking-${key}`, type: 'thinking', message: pe.thinkingSnapshot.batchLabel, timestamp: ts, status: 'completed', thinkingContent: pe.thinkingSnapshot.thinking });
+        if (pe.thinkingSnapshot.isFinal !== false) {
+          addThinkingSnapshotToLog(pe.thinkingSnapshot);
+        }
+        upsertScreeningThought({
+          id: `thinking-${pe.thinkingSnapshot.snapshotId ?? key}`,
+          type: 'thinking',
+          message: pe.thinkingSnapshot.batchLabel,
+          timestamp: ts,
+          status: pe.thinkingSnapshot.isFinal === false ? 'processing' : 'completed',
+          thinkingContent: pe.thinkingSnapshot.thinking,
+        });
         continue;
       }
 
@@ -1124,6 +1282,7 @@ function ScreeningContent() {
               elapsed={elapsedTime}
               selectedJobTitle={selectedJob?.title}
               progressPercent={progressPercent}
+              shortlistSize={shortlistSize}
               onTerminate={handleTerminate}
               terminating={terminating}
             />

@@ -81,6 +81,7 @@ export function TopNav({
         <div className="flex items-center gap-2.5">
           <button
             onClick={onOpenMobileSidebar}
+            suppressHydrationWarning
             className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 lg:hidden"
             aria-label="Open sidebar"
           >
@@ -88,6 +89,7 @@ export function TopNav({
           </button>
           <button
             onClick={onToggleSidebar}
+            suppressHydrationWarning
             className="hidden lg:inline-flex rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
             aria-label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
@@ -117,6 +119,7 @@ export function TopNav({
                 setShowNotifications(!showNotifications);
                 setShowProfileMenu(false);
               }}
+              suppressHydrationWarning
               className={cn(
                 'relative rounded-lg p-1.5 transition-colors hover:bg-slate-100',
                 unreadCount > 0 ? 'text-blue-600' : 'text-slate-500'
@@ -145,6 +148,7 @@ export function TopNav({
                   {notifications.length > 0 && (
                     <button
                       onClick={() => { clearAll(); setShowNotifications(false); }}
+                      suppressHydrationWarning
                       className="text-xs font-medium text-slate-500 hover:text-slate-800"
                     >
                       Clear all
@@ -188,7 +192,7 @@ export function TopNav({
                               <div className="mt-2 h-1 overflow-hidden rounded-full bg-blue-100">
                                 <div className="h-full w-2/3 animate-pulse rounded-full bg-blue-500" />
                               </div>
-                              <p className="text-[10px] text-slate-400 mt-1">{formatTimestamp(job.timestamp)}</p>
+                              <p className="text-[10px] text-slate-400 mt-1">{mounted ? formatTimestamp(job.timestamp) : ''}</p>
                             </div>
                             <Loader2 className="w-4 h-4 text-blue-500 animate-spin flex-shrink-0 mt-0.5" />
                           </div>
@@ -218,7 +222,7 @@ export function TopNav({
                               <p className="text-sm font-medium text-slate-900">{n.title}</p>
                               <p className="text-xs text-slate-600 mt-0.5 line-clamp-2">{n.message}</p>
                               <div className="flex items-center justify-between mt-1">
-                                <p className="text-xs text-slate-400">{formatTimestamp(n.timestamp)}</p>
+                                <p className="text-xs text-slate-400">{mounted ? formatTimestamp(n.timestamp) : ''}</p>
                                 {n.link && (
                                   <span className="text-xs text-blue-600 font-medium">View results →</span>
                                 )}
@@ -243,6 +247,7 @@ export function TopNav({
                 setShowProfileMenu(!showProfileMenu);
                 setShowNotifications(false);
               }}
+              suppressHydrationWarning
               className="group flex items-center gap-1.5 rounded-xl border border-slate-200/80 bg-white px-2 py-1 shadow-sm shadow-slate-100 transition-colors hover:border-slate-300 hover:bg-slate-50"
             >
               <Avatar name={displayName} size="sm" />
@@ -290,6 +295,7 @@ export function TopNav({
                 <div className="p-1.5">
                   <button
                     onClick={onLogout}
+                    suppressHydrationWarning
                     className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-red-600 transition-colors hover:bg-red-50"
                   >
                     <LogOut className="w-4 h-4" />

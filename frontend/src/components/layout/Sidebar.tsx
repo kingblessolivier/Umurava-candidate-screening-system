@@ -128,6 +128,7 @@ export function Sidebar({
             type="button"
             onClick={onCloseMobile}
             aria-label="Close sidebar"
+            suppressHydrationWarning
             className="rounded-lg p-1.5 text-blue-100 hover:bg-blue-500/80 hover:text-white transition-colors"
           >
             <X className="w-4 h-4" />
@@ -214,6 +215,7 @@ export function Sidebar({
         <div className="px-2.5 py-3 border-t border-blue-500/80">
           <button
             onClick={onLogout}
+            suppressHydrationWarning
             className={cn(
               'group w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs border border-transparent',
               'text-blue-100 hover:bg-red-600 hover:text-white hover:border-red-500/70 transition-all duration-200',

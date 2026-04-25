@@ -59,7 +59,61 @@ interface GenerateOptions {
   temperature?: number;
   maxOutputTokens?: number;
   thinkingBudget?: number; // 0 = off, >0 = reasoning tokens
-  onThinking?: (thinking: string) => void; // fires with raw thinking tokens when available
+  onThinking?: (thinking: string, isFinal?: boolean) => void; // fires with raw thinking tokens when available
+}
+
+function mergeIncrementalText(previous: string, incoming: string): string {
+  if (!incoming) return previous;
+  if (!previous) return incoming;
+  if (incoming.startsWith(previous)) return incoming;
+  if (previous.endsWith(incoming)) return previous;
+  return `${previous}${incoming}`;
+}
+
+function extractBalancedJson(text: string): string | null {
+  const firstObject = text.search(/[\[{]/);
+  if (firstObject < 0) return null;
+
+  const source = text.slice(firstObject);
+  const stack: string[] = [];
+  let inString = false;
+  let escaped = false;
+
+  for (let i = 0; i < source.length; i++) {
+    const char = source[i];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === '\\') {
+        escaped = true;
+      } else if (char === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+
+    if (char === '{' || char === '[') {
+      stack.push(char);
+      continue;
+    }
+
+    if (char === '}' || char === ']') {
+      const open = stack.pop();
+      const isMatch = (open === '{' && char === '}') || (open === '[' && char === ']');
+      if (!isMatch) return null;
+      if (stack.length === 0) {
+        return source.slice(0, i + 1);
+      }
+    }
+  }
+
+  return null;
 }
 
 async function generate(opts: GenerateOptions): Promise<string> {
@@ -68,22 +122,62 @@ async function generate(opts: GenerateOptions): Promise<string> {
   const budget = opts.thinkingBudget ?? 0;
   const useThinking = budget > 0;
 
+  const config = {
+    systemInstruction: RECRUITER_SYSTEM_INSTRUCTION,
+    // gemini-2.5-flash only supports temperature=1 when thinking is enabled.
+    // Sending any other value causes a 400 that silently becomes empty evaluations.
+    temperature: useThinking ? 1 : (opts.temperature ?? 0.2),
+    // topP is not compatible with thinking mode on gemini-2.5
+    ...(useThinking ? {} : { topP: 0.8 }),
+    maxOutputTokens: opts.maxOutputTokens ?? 8192,
+    responseMimeType: "application/json" as const,
+    // Only include thinkingConfig when actually using thinking
+    ...(useThinking ? { thinkingConfig: { thinkingBudget: budget } } : {}),
+    safetySettings: SAFETY_SETTINGS,
+  };
+
+  // Stream when thinking is enabled so frontend can render incremental reasoning.
+  if (useThinking && opts.onThinking) {
+    const stream = await ai.models.generateContentStream({
+      model,
+      contents: opts.prompt,
+      config,
+    });
+
+    let thinkingText = "";
+    let outputText = "";
+    let lastPublishedLength = 0;
+
+    for await (const chunk of stream) {
+      const parts = (chunk.candidates?.[0]?.content?.parts ?? []) as Array<{ thought?: boolean; text?: string }>;
+
+      for (const part of parts) {
+        const text = part.text ?? "";
+        if (!text) continue;
+        if (part.thought === true) {
+          thinkingText = mergeIncrementalText(thinkingText, text);
+        } else {
+          outputText = mergeIncrementalText(outputText, text);
+        }
+      }
+
+      if (thinkingText.length > lastPublishedLength) {
+        opts.onThinking(thinkingText.trim(), false);
+        lastPublishedLength = thinkingText.length;
+      }
+    }
+
+    if (thinkingText.trim()) {
+      opts.onThinking(thinkingText.trim(), true);
+    }
+
+    return outputText.trim();
+  }
+
   const response = await ai.models.generateContent({
     model,
     contents: opts.prompt,
-    config: {
-      systemInstruction: RECRUITER_SYSTEM_INSTRUCTION,
-      // gemini-2.5-flash only supports temperature=1 when thinking is enabled.
-      // Sending any other value causes a 400 that silently becomes empty evaluations.
-      temperature:     useThinking ? 1 : (opts.temperature ?? 0.2),
-      // topP is not compatible with thinking mode on gemini-2.5
-      ...(useThinking ? {} : { topP: 0.8 }),
-      maxOutputTokens:  opts.maxOutputTokens  ?? 8192,
-      responseMimeType: "application/json",
-      // Only include thinkingConfig when actually using thinking
-      ...(useThinking ? { thinkingConfig: { thinkingBudget: budget } } : {}),
-      safetySettings:   SAFETY_SETTINGS,
-    },
+    config,
   });
 
   // Extract and surface thinking tokens when thinking mode is active
@@ -94,7 +188,7 @@ async function generate(opts: GenerateOptions): Promise<string> {
       .map(p => p.text ?? "")
       .join("\n\n")
       .trim();
-    if (thinkingText) opts.onThinking(thinkingText);
+    if (thinkingText) opts.onThinking(thinkingText, true);
   }
 
   return response.text ?? "";
@@ -102,11 +196,33 @@ async function generate(opts: GenerateOptions): Promise<string> {
 
 // ─── Safe JSON parse ──────────────────────────────────────────────────────────
 function safeJSON<T>(text: string, fallback: T): T {
+  const trimmed = text.replace(/^\uFEFF/, '').trim();
+
   try {
-    const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-    return JSON.parse(fenced ? fenced[1].trim() : text.trim()) as T;
+    return JSON.parse(trimmed) as T;
   } catch {
-    console.error("[Gemini] JSON parse failed. Raw (first 500):", text.substring(0, 500));
+    const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if (fenced) {
+      try {
+        return JSON.parse(fenced[1].trim()) as T;
+      } catch {
+        // fall through to balanced extraction
+      }
+    }
+
+    const balanced = extractBalancedJson(trimmed);
+    if (balanced) {
+      try {
+        return JSON.parse(balanced) as T;
+      } catch {
+        // fall through to logging
+      }
+    }
+
+    console.error(
+      "[Gemini] JSON parse failed.",
+      { length: trimmed.length, head: trimmed.slice(0, 500), tail: trimmed.slice(-200) }
+    );
     return fallback;
   }
 }
@@ -694,7 +810,8 @@ export async function runScreeningPipeline(
     console.log(`[Screening] Evaluating batch ${batchIndex + 1}/${batches.length} (${batch.length} candidates)`);
 
     // Capture real Gemini thinking tokens and surface them via SSE
-    const onThinking = (thinking: string) => {
+    const thinkingSnapshotId = `evaluating-${batchIndex + 1}`;
+    const onThinking = (thinking: string, isFinal = true) => {
       const snapshot: ThinkingSnapshot = {
         stage: "evaluating",
         batchIndex,
@@ -702,11 +819,17 @@ export async function runScreeningPipeline(
         candidateNames: batch.map(c => c.candidateName),
         thinking,
         timestamp: new Date().toISOString(),
+        snapshotId: thinkingSnapshotId,
+        isFinal,
       };
-      thinkingLog.push(snapshot);
+      if (isFinal) {
+        thinkingLog.push(snapshot);
+      }
       onProgress?.({
         type: "thinking",
-        message: `AI reasoning complete — batch ${batchIndex + 1}`,
+        message: isFinal
+          ? `AI reasoning complete — batch ${batchIndex + 1}`
+          : `AI reasoning live — batch ${batchIndex + 1}`,
         evaluatedCount: allEvaluations.length,
         thinkingSnapshot: snapshot,
       });
@@ -721,8 +844,7 @@ export async function runScreeningPipeline(
     allEvaluations.push(...(result.evaluations || []));
 
     const partialSorted = [...allEvaluations]
-      .sort((a, b) => b.finalScore - a.finalScore)
-      .slice(0, 5);
+      .sort((a, b) => b.finalScore - a.finalScore);
     onProgress?.({
       type: "scoring",
       message: `Batch ${batchIndex + 1} scored — ${allEvaluations.length}/${preprocessed.length} candidates evaluated`,
@@ -754,7 +876,8 @@ export async function runScreeningPipeline(
       evaluatedCount: allEvaluations.length,
     });
 
-    const rerankOnThinking = (thinking: string) => {
+    const rerankSnapshotId = `reranking-${batches.length}`;
+    const rerankOnThinking = (thinking: string, isFinal = true) => {
       const snapshot: ThinkingSnapshot = {
         stage: "reranking",
         batchIndex: batches.length,
@@ -762,11 +885,15 @@ export async function runScreeningPipeline(
         candidateNames: topPreprocessed.map(c => c.candidateName),
         thinking,
         timestamp: new Date().toISOString(),
+        snapshotId: rerankSnapshotId,
+        isFinal,
       };
-      thinkingLog.push(snapshot);
+      if (isFinal) {
+        thinkingLog.push(snapshot);
+      }
       onProgress?.({
         type: "thinking",
-        message: "AI re-ranking reasoning complete",
+        message: isFinal ? "AI re-ranking reasoning complete" : "AI re-ranking reasoning live",
         evaluatedCount: allEvaluations.length,
         thinkingSnapshot: snapshot,
       });
@@ -812,7 +939,43 @@ export async function runScreeningPipeline(
       skillGapAnalysis: { missing: p.skillsMissing, matched: p.skillsMatched, bonus: p.skillsBonus },
     } as unknown as CandidateScore));
 
-  const allRejected = [...rejectedFromEval, ...neverEvaluated];
+  const allRejected = [...rejectedFromEval, ...neverEvaluated]
+    .sort((a, b) => (b.finalScore ?? 0) - (a.finalScore ?? 0));
+
+  const baseRejectedCandidates: RejectedCandidate[] = allRejected.map((candidate, index) => {
+    const finalScore = candidate.finalScore ?? 0;
+    const missingSkills = candidate.skillGapAnalysis?.missing ?? [];
+    return {
+      candidateId: candidate.candidateId,
+      candidateName: candidate.candidateName,
+      email: candidateEmailMap.get(candidate.candidateId) || candidate.email || "",
+      rank: candidate.rank ?? (shortlistSize + index + 1),
+      finalScore,
+      breakdown: candidate.breakdown ?? {
+        skillsScore: 0,
+        experienceScore: 0,
+        educationScore: 0,
+        projectsScore: 0,
+        availabilityScore: 0,
+      },
+      confidenceScore: candidate.confidenceScore ?? 70,
+      strengths: candidate.strengths ?? [],
+      gaps: candidate.gaps ?? [],
+      risks: candidate.risks ?? [],
+      recommendation: candidate.recommendation ?? "Not Recommended",
+      summary: candidate.summary ?? "",
+      reasoning: candidate.reasoning ?? "",
+      interviewQuestions: candidate.interviewQuestions ?? [],
+      skillGapAnalysis: candidate.skillGapAnalysis ?? { matched: [], missing: [], bonus: [] },
+      biasFlags: candidate.biasFlags ?? [],
+      riskFlags: candidate.riskFlags ?? [],
+      scoreGap: Math.max(0, lowestShortlistScore - finalScore),
+      whyNotSelected: "",
+      topMissingSkills: missingSkills.slice(0, 5),
+      closestShortlistScore: lowestShortlistScore,
+      improvementSuggestions: [],
+    };
+  });
 
   if (allRejected.length > 0 && shortlist.length > 0) {
     onProgress?.({
@@ -821,7 +984,8 @@ export async function runScreeningPipeline(
       evaluatedCount: preprocessed.length,
     });
 
-    const rejectionOnThinking = (thinking: string) => {
+    const rejectionSnapshotId = `rejection-${batches.length + 1}`;
+    const rejectionOnThinking = (thinking: string, isFinal = true) => {
       const snapshot: ThinkingSnapshot = {
         stage: "rejection",
         batchIndex: batches.length + 1,
@@ -829,25 +993,75 @@ export async function runScreeningPipeline(
         candidateNames: allRejected.map(c => c.candidateName),
         thinking,
         timestamp: new Date().toISOString(),
+        snapshotId: rejectionSnapshotId,
+        isFinal,
       };
-      thinkingLog.push(snapshot);
+      if (isFinal) {
+        thinkingLog.push(snapshot);
+      }
       onProgress?.({
         type: "thinking",
-        message: "AI rejection reasoning complete",
+        message: isFinal ? "AI rejection reasoning complete" : "AI rejection reasoning live",
         evaluatedCount: preprocessed.length,
         thinkingSnapshot: snapshot,
       });
     };
 
     const rankingPrompt = buildRankingPrompt(job, shortlist, allRejected, lowestShortlistScore);
-    const rankResult = await generateWithRateLimit<{ rejectedCandidates: RejectedCandidate[] }>(
+    const rankResult = await generateWithRateLimit<{ rejectedCandidates: Partial<RejectedCandidate>[] }>(
       `screening:${job._id}:rejection-reasons`,
       { prompt: rankingPrompt, model: SCREENING_MODEL, temperature: 0.3, maxOutputTokens: 8192, thinkingBudget: SCREENING_THINKING_BUDGET, onThinking: rejectionOnThinking },
       { rejectedCandidates: [] }
     );
-    rejectedCandidates = (rankResult.rejectedCandidates || []).map(r => ({
-      ...r,
-      email: candidateEmailMap.get(r.candidateId) || r.email || "",
+    const aiRejectedByCandidateId = new Map(
+      (rankResult.rejectedCandidates || [])
+        .filter(r => !!r.candidateId)
+        .map(r => [r.candidateId as string, r])
+    );
+    const aiRejectedByEmail = new Map(
+      (rankResult.rejectedCandidates || [])
+        .filter(r => !!r.email)
+        .map(r => [r.email as string, r])
+    );
+
+    rejectedCandidates = baseRejectedCandidates.map(base => {
+      const ai = aiRejectedByCandidateId.get(base.candidateId) || aiRejectedByEmail.get(base.email);
+      if (!ai) {
+        return {
+          ...base,
+          whyNotSelected: `Score ${base.finalScore.toFixed(1)} fell below shortlist cutoff ${lowestShortlistScore.toFixed(1)}.`,
+        };
+      }
+
+      return {
+        ...base,
+        ...ai,
+        email: candidateEmailMap.get(base.candidateId) || ai.email || base.email,
+        rank: ai.rank ?? base.rank,
+        finalScore: ai.finalScore ?? base.finalScore,
+        breakdown: ai.breakdown ?? base.breakdown,
+        confidenceScore: ai.confidenceScore ?? base.confidenceScore,
+        strengths: ai.strengths ?? base.strengths,
+        gaps: ai.gaps ?? base.gaps,
+        risks: ai.risks ?? base.risks,
+        recommendation: ai.recommendation ?? base.recommendation,
+        summary: ai.summary ?? base.summary,
+        reasoning: ai.reasoning ?? base.reasoning,
+        interviewQuestions: ai.interviewQuestions ?? base.interviewQuestions,
+        skillGapAnalysis: ai.skillGapAnalysis ?? base.skillGapAnalysis,
+        biasFlags: ai.biasFlags ?? base.biasFlags,
+        riskFlags: ai.riskFlags ?? base.riskFlags,
+        scoreGap: ai.scoreGap ?? Math.max(0, lowestShortlistScore - (ai.finalScore ?? base.finalScore)),
+        whyNotSelected: ai.whyNotSelected || `Score ${(ai.finalScore ?? base.finalScore).toFixed(1)} fell below shortlist cutoff ${lowestShortlistScore.toFixed(1)}.`,
+        topMissingSkills: ai.topMissingSkills ?? base.topMissingSkills,
+        closestShortlistScore: ai.closestShortlistScore ?? base.closestShortlistScore,
+        improvementSuggestions: ai.improvementSuggestions ?? base.improvementSuggestions,
+      };
+    });
+  } else {
+    rejectedCandidates = baseRejectedCandidates.map(base => ({
+      ...base,
+      whyNotSelected: `Score ${base.finalScore.toFixed(1)} fell below shortlist cutoff ${lowestShortlistScore.toFixed(1)}.`,
     }));
   }
 
@@ -861,7 +1075,7 @@ export async function runScreeningPipeline(
     type: "completed",
     message: `Screening complete — ${shortlist.length} candidates shortlisted from ${preprocessed.length} applicants`,
     liveScores: computePartialLiveScores(shortlist),
-    partialShortlist: shortlist.slice(0, 5),
+    partialShortlist: [...allEvaluations].sort((a, b) => b.finalScore - a.finalScore),
     evaluatedCount: preprocessed.length,
   });
 
