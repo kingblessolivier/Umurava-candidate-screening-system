@@ -12,6 +12,7 @@ import {
   ArrowUpRight, Medal, Award,
 } from 'lucide-react';
 import EmailModal from '@/components/email/EmailModal';
+import { ConfirmModal } from '@/components/ui/Modal';
 import { ScreeningResult } from '@/types';
 
 const PAGE_SIZE = 10;
@@ -240,7 +241,8 @@ function PageNav({ page, total, onPage }: { page: number; total: number; onPage:
 export default function ResultsPage() {
   const dispatch = useDispatch<AppDispatch>();
   const { results, loading, page, total } = useSelector((s: RootState) => s.screening);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const [emailModal, setEmailModal] = useState<{
     open: boolean; recipients: { name: string; email: string }[]; jobTitle: string;
   }>({ open: false, recipients: [], jobTitle: '' });
@@ -262,14 +264,19 @@ export default function ResultsPage() {
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.preventDefault();
-    if (!confirm('Delete this evaluation result?')) return;
-    setDeletingId(id);
-    try   { await dispatch(deleteResult(id)).unwrap(); }
-    catch { /* already shown by slice */ }
-    finally { setDeletingId(null); }
+    setDeleteConfirmId(id);
   };
 
-  void deletingId;
+  const handleConfirmDelete = async () => {
+    if (!deleteConfirmId) return;
+    setDeleteLoading(true);
+    try { await dispatch(deleteResult(deleteConfirmId)).unwrap(); }
+    catch { /* already shown by slice */ }
+    finally {
+      setDeleteLoading(false);
+      setDeleteConfirmId(null);
+    }
+  };
 
   const totalScreened    = results.reduce((a, r) => a + (r.totalApplicants || 0), 0);
   const totalShortlisted = results.reduce((a, r) => a + (r.shortlistSize || 0), 0);
@@ -306,6 +313,17 @@ export default function ResultsPage() {
       <div className="px-6 py-4 space-y-4 max-w-[1200px] mx-auto">
 
         {/* ── Stats row ──────────────────────────────────────── */}
+
+      <ConfirmModal
+        isOpen={!!deleteConfirmId}
+        onClose={() => setDeleteConfirmId(null)}
+        onConfirm={handleConfirmDelete}
+        title="Delete Evaluation Result"
+        message="Delete this evaluation result? This action cannot be undone."
+        confirmLabel="Delete"
+        variant="danger"
+        isLoading={deleteLoading}
+      />
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <StatCard label="Evaluations"      value={total}           sub="all time"       icon={FileText}   color="bg-blue-50 text-blue-600"    />
           <StatCard label="Applicants"        value={totalScreened}   sub="across all jobs" icon={Users}      color="bg-gray-100 text-gray-500"   />
