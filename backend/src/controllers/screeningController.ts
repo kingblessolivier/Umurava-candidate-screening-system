@@ -17,9 +17,8 @@ type AuthedRequest = Request & { user?: { _id: string } };
 
 export const runScreening = async (req: Request, res: Response) => {
   try {
-    const { jobId, candidateIds, shortlistSize = 10 } = req.body as {
+    const { jobId, shortlistSize = 10 } = req.body as {
       jobId: string;
-      candidateIds?: string[];
       shortlistSize?: number;
     };
 
@@ -34,10 +33,8 @@ export const runScreening = async (req: Request, res: Response) => {
     const jobDoc = await JobModel.findById(jobId).lean();
     if (!jobDoc) return res.status(404).json({ success: false, error: "Job not found" });
 
-    const query: Record<string, unknown> = candidateIds?.length
-      ? { _id: { $in: candidateIds } }
-      : { jobId };
-    const candidateDocs = await Candidate.find(query).lean();
+    // AI-only mode: always evaluate the full candidate pool for the job.
+    const candidateDocs = await Candidate.find({ jobId }).lean();
 
     if (candidateDocs.length === 0) {
       return res.status(400).json({ success: false, error: "No candidates found. Upload candidates first." });

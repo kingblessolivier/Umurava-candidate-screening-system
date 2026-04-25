@@ -215,6 +215,8 @@ export function AIThinkingStream({ thoughts, isRunning }: AIThinkingStreamProps)
   const scrollRef = useRef<HTMLDivElement>(null);
   const thinkingCount = thoughts.filter(t => t.type === 'thinking' && !!t.thinkingContent?.trim()).length;
   const stepCount = thoughts.filter(t => t.type !== 'thinking').length;
+  const latestThought = thoughts.length ? thoughts[thoughts.length - 1] : null;
+  const latestConfig = latestThought ? (STEP_CONFIG[latestThought.type] ?? STEP_CONFIG.analyzing!) : null;
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -274,6 +276,28 @@ export function AIThinkingStream({ thoughts, isRunning }: AIThinkingStreamProps)
         className="flex-1 overflow-y-auto p-3 space-y-2"
         style={{ scrollbarWidth: 'thin', scrollbarColor: '#e2e8f0 transparent' }}
       >
+        {isRunning && latestThought && latestConfig && (
+          <div className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse" />
+                <span className="text-[10px] font-bold uppercase tracking-wider text-violet-700">
+                  Current AI Task
+                </span>
+              </div>
+              <span
+                className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
+                style={{ background: `${latestConfig.color}15`, color: latestConfig.color }}
+              >
+                {latestConfig.label}
+              </span>
+            </div>
+            <p className="text-[11px] text-violet-900 mt-1.5 leading-snug">
+              {latestThought.message}
+            </p>
+          </div>
+        )}
+
         <AnimatePresence mode="popLayout">
           {thoughts.map((thought, index) => {
             const isLatest = index === thoughts.length - 1;

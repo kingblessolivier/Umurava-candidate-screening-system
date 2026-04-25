@@ -23,7 +23,24 @@ const RESUME_PARSER_MODEL = normalizeModelName(
 const SCREENING_MODEL = normalizeModelName(
   process.env.SCREENING_MODEL || LEGACY_GEMINI_MODEL || "gemini-3-flash-preview"
 );
-const SCREENING_THINKING_BUDGET = parseInt(process.env.SCREENING_THINKING_BUDGET || "2048", 10);
+const SCREENING_THINKING_BUDGET = parseInt(process.env.SCREENING_THINKING_BUDGET || "1024", 10);
+const SCREENING_BATCH_SIZE = parseInt(process.env.SCREENING_BATCH_SIZE || "20", 10);
+const SCREENING_FALLBACK_MODELS = (process.env.SCREENING_FALLBACK_MODELS || "gemini-1.5-flash,gemini-1.5-pro")
+  .split(",")
+  .map((m) => normalizeModelName(m))
+  .map((m) => m.trim())
+  .filter(Boolean);
+const RESUME_PARSER_FALLBACK_MODELS = (process.env.RESUME_PARSER_FALLBACK_MODELS || "gemini-1.5-flash")
+  .split(",")
+  .map((m) => normalizeModelName(m))
+  .map((m) => m.trim())
+  .filter(Boolean);
+// Default to AI-generated rejection reasons (Option B). Set USE_AI_REJECTION_REASONS=false
+// only if you explicitly want a single generic message for all rejected candidates.
+const USE_AI_REJECTION_REASONS = (process.env.USE_AI_REJECTION_REASONS || "true").toLowerCase() === "true";
+const GENERIC_REJECTION_MESSAGE =
+  process.env.GENERIC_REJECTION_MESSAGE ||
+  "Thank you for your application. After review, you were not selected for this shortlist. This decision is based on overall fit and the current hiring threshold for the role.";
 
 // ─── System Instruction (set once, applies to all calls) ──────────────────────
 const RECRUITER_SYSTEM_INSTRUCTION = `You are an expert AI recruiter co-pilot built for a leading talent acquisition platform.
@@ -234,15 +251,54 @@ async function generateWithRateLimit<T>(
   fallback: T,
   { useCache = true }: { useCache?: boolean } = {}
 ): Promise<T> {
+  const primaryModel = normalizeModelName(opts.model ?? SCREENING_MODEL);
+  const fallbacks =
+    primaryModel === SCREENING_MODEL
+      ? SCREENING_FALLBACK_MODELS
+      : primaryModel === RESUME_PARSER_MODEL
+        ? RESUME_PARSER_FALLBACK_MODELS
+        : [];
+
+  const modelChain = [primaryModel, ...fallbacks.filter((m) => m !== primaryModel)];
+
   try {
-    const raw = await rateLimitService.executeWithRateLimit(
-      cacheKey,
-      () => generate(opts),
-      { useCache }
-    );
-    const parsed = safeJSON<T>(raw as string, fallback);
-    if (useCache) rateLimitService.cacheResult(cacheKey, parsed);
-    return parsed;
+    let lastError: unknown = null;
+
+    for (let i = 0; i < modelChain.length; i++) {
+      const model = modelChain[i];
+      const isFallback = i > 0;
+
+      try {
+        const effectiveOpts: GenerateOptions = {
+          ...opts,
+          model,
+          // When we fail over to a fallback model, disable thinking to maximize compatibility
+          // and reduce quota pressure.
+          ...(isFallback ? { thinkingBudget: 0, onThinking: undefined } : {}),
+        };
+
+        const raw = await rateLimitService.executeWithRateLimit(
+          `${cacheKey}:model:${model}`,
+          () => generate(effectiveOpts),
+          { useCache }
+        );
+        const parsed = safeJSON<T>(raw as string, fallback);
+        if (useCache) rateLimitService.cacheResult(`${cacheKey}:model:${model}`, parsed);
+        return parsed;
+      } catch (err) {
+        lastError = err;
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`[Gemini Error] ${cacheKey} (model=${model}): ${msg}`);
+
+        // Try next fallback model
+        continue;
+      }
+    }
+
+    // All models failed: return fallback response
+    const finalMsg = lastError instanceof Error ? lastError.message : String(lastError);
+    console.error(`[Gemini Error] ${cacheKey}: all models failed. Returning fallback. Last error: ${finalMsg}`);
+    return fallback;
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     console.error(`[Gemini Error] ${cacheKey}: ${msg}`);
@@ -364,7 +420,7 @@ Total Experience: ${c.totalExperienceYears.toFixed(1)} years (${c.totalExperienc
 Location: ${c.originalProfile.location}
 Availability: ${c.originalProfile.availability.status} (${c.originalProfile.availability.type})${c.originalProfile.availability.noticePeriod ? `, Notice: ${c.originalProfile.availability.noticePeriod}` : ""}
 
-Skills: ${c.originalProfile.skills.map(s => `${s.name} [${s.level}, ${s.yearsOfExperience}yr]`).join(" | ")}
+Skills: ${c.originalProfile.skills.slice(0, 20).map(s => `${s.name} [${s.level}, ${s.yearsOfExperience}yr]`).join(" | ")}
 
 Pre-Analysis:
   Skills Matched: ${c.skillsMatched.join(", ") || "None"}
@@ -373,13 +429,13 @@ Pre-Analysis:
   Pre-Computed Skill Match Ratio: ${(c.skillMatchRatio * 100).toFixed(0)}%
 
 Work Experience:
-${c.originalProfile.experience.map(e => {
+${c.originalProfile.experience.slice(0, 5).map(e => {
     const start = new Date(e.startDate + "-01");
     const end = e.isCurrent ? new Date() : new Date((e.endDate || "2024-01") + "-01");
     const months = Math.max(0, (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()));
     return `  • ${e.role} @ ${e.company} (${(months / 12).toFixed(1)} yrs | ${e.isCurrent ? "Current" : e.endDate || "Past"})
     Stack: ${e.technologies.join(", ")}
-    ${e.description.substring(0, 200)}${e.description.length > 200 ? "..." : ""}`;
+    ${e.description.substring(0, 140)}${e.description.length > 140 ? "..." : ""}`;
   }).join("\n")}
 
 Education:
@@ -388,7 +444,7 @@ ${c.originalProfile.education.map(e => `  • ${e.degree} in ${e.fieldOfStudy ||
 ${c.originalProfile.certifications?.length ? `Certifications: ${c.originalProfile.certifications.map(cert => cert.name).join(", ")}` : ""}
 
 ${c.originalProfile.projects?.length ? `Projects:
-${c.originalProfile.projects.slice(0, 3).map(p => `  • ${p.name}: ${p.description?.substring(0, 150) || ""}... [${p.technologies?.join(", ") || "N/A"}]`).join("\n")}` : ""}
+${c.originalProfile.projects.slice(0, 2).map(p => `  • ${p.name}: ${p.description?.substring(0, 110) || ""}... [${p.technologies?.slice(0, 8).join(", ") || "N/A"}]`).join("\n")}` : ""}
 
 Pre-Detected Risk Flags:
 ${c.riskFlags.length > 0 ? c.riskFlags.map(r => `  ⚠️  [${r.severity.toUpperCase()}] ${r.type}: ${r.detail}`).join("\n") : "  None detected"}
@@ -567,12 +623,8 @@ Return ONLY this JSON — no markdown, no commentary outside JSON:
       "candidateId": "id",
       "candidateName": "Full Name",
       "email": "email@example.com",
-      "finalScore": 62,
-      "rank": 4,
-      "scoreGap": 8,
       "whyNotSelected": "Specific 3-5 sentence explanation: open with a strength, explain the score gap, name the decisive differentiators vs shortlisted candidates.",
       "topMissingSkills": ["skill1", "skill2"],
-      "closestShortlistScore": ${lowestShortlistScore},
       "improvementSuggestions": [
         "Build a portfolio project demonstrating [specific missing skill] to close the most critical gap",
         "Pursue [specific certification] to validate your proficiency in [area the job requires]",
@@ -775,7 +827,7 @@ export async function runScreeningPipeline(
   shouldContinue?: () => boolean
 ): Promise<Omit<ScreeningResult, "_id" | "screeningDate" | "createdAt">> {
   const startTime = Date.now();
-  const BATCH_SIZE = 20;
+  const BATCH_SIZE = Math.max(5, Math.min(20, SCREENING_BATCH_SIZE));
   const thinkingLog: ThinkingSnapshot[] = [];
 
   onProgress?.({
@@ -837,7 +889,7 @@ export async function runScreeningPipeline(
 
     const result = await generateWithRateLimit<{ evaluations: CandidateScore[] }>(
       cacheKey,
-      { prompt, model: SCREENING_MODEL, temperature: 0.2, maxOutputTokens: 12288, thinkingBudget: SCREENING_THINKING_BUDGET, onThinking },
+      { prompt, model: SCREENING_MODEL, temperature: 0.2, maxOutputTokens: 8192, thinkingBudget: SCREENING_THINKING_BUDGET, onThinking },
       { evaluations: [] }
     );
 
@@ -902,7 +954,7 @@ export async function runScreeningPipeline(
     const finalPrompt = buildEvaluationPrompt(job, topPreprocessed);
     const finalResult = await generateWithRateLimit<{ evaluations: CandidateScore[] }>(
       `screening:${job._id}:final-ranking`,
-      { prompt: finalPrompt, model: SCREENING_MODEL, temperature: 0.2, maxOutputTokens: 12288, thinkingBudget: SCREENING_THINKING_BUDGET, onThinking: rerankOnThinking },
+      { prompt: finalPrompt, model: SCREENING_MODEL, temperature: 0.2, maxOutputTokens: 8192, thinkingBudget: SCREENING_THINKING_BUDGET, onThinking: rerankOnThinking },
       { evaluations: allEvaluations.slice(0, shortlistSize) }
     );
     allEvaluations = finalResult.evaluations || allEvaluations.slice(0, shortlistSize);
@@ -977,7 +1029,14 @@ export async function runScreeningPipeline(
     };
   });
 
-  if (allRejected.length > 0 && shortlist.length > 0) {
+  // Option: use a single generic message for all rejected candidates (non-AI).
+  if (!USE_AI_REJECTION_REASONS) {
+    rejectedCandidates = baseRejectedCandidates.map((base) => ({
+      ...base,
+      whyNotSelected: GENERIC_REJECTION_MESSAGE,
+      improvementSuggestions: [],
+    }));
+  } else if (allRejected.length > 0 && shortlist.length > 0) {
     onProgress?.({
       type: "generating",
       message: `Generating feedback for ${allRejected.length} candidate${allRejected.length !== 1 ? "s" : ""} not shortlisted…`,
@@ -1035,26 +1094,10 @@ export async function runScreeningPipeline(
 
       return {
         ...base,
-        ...ai,
-        email: candidateEmailMap.get(base.candidateId) || ai.email || base.email,
-        rank: ai.rank ?? base.rank,
-        finalScore: ai.finalScore ?? base.finalScore,
-        breakdown: ai.breakdown ?? base.breakdown,
-        confidenceScore: ai.confidenceScore ?? base.confidenceScore,
-        strengths: ai.strengths ?? base.strengths,
-        gaps: ai.gaps ?? base.gaps,
-        risks: ai.risks ?? base.risks,
-        recommendation: ai.recommendation ?? base.recommendation,
-        summary: ai.summary ?? base.summary,
-        reasoning: ai.reasoning ?? base.reasoning,
-        interviewQuestions: ai.interviewQuestions ?? base.interviewQuestions,
-        skillGapAnalysis: ai.skillGapAnalysis ?? base.skillGapAnalysis,
-        biasFlags: ai.biasFlags ?? base.biasFlags,
-        riskFlags: ai.riskFlags ?? base.riskFlags,
-        scoreGap: ai.scoreGap ?? Math.max(0, lowestShortlistScore - (ai.finalScore ?? base.finalScore)),
-        whyNotSelected: ai.whyNotSelected || `Score ${(ai.finalScore ?? base.finalScore).toFixed(1)} fell below shortlist cutoff ${lowestShortlistScore.toFixed(1)}.`,
+        // Keep canonical ranking/scoring fields from computed pipeline values.
+        // AI is only allowed to enrich explanatory rejection content.
+        whyNotSelected: ai.whyNotSelected || `Score ${base.finalScore.toFixed(1)} fell below shortlist cutoff ${lowestShortlistScore.toFixed(1)}.`,
         topMissingSkills: ai.topMissingSkills ?? base.topMissingSkills,
-        closestShortlistScore: ai.closestShortlistScore ?? base.closestShortlistScore,
         improvementSuggestions: ai.improvementSuggestions ?? base.improvementSuggestions,
       };
     });

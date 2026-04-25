@@ -54,7 +54,7 @@ const initialState: ScreeningState = {
 // Returns immediately with { jobId, status: 'pending' } — result arrives via SSE notification
 export const runScreening = createAsyncThunk(
   "screening/run",
-  async (payload: { jobId: string; shortlistSize: number; candidateIds?: string[] }) => {
+  async (payload: { jobId: string; shortlistSize: number }) => {
     const { data } = await api.post<{ data: { jobId: string; status: string; message: string } }>(
       "/screening/run",
       payload

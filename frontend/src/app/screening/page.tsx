@@ -678,12 +678,35 @@ function ExecutionConsole({
   terminating: boolean;
 }) {
   const [armed, setArmed] = useState(false);
+  const [showFullRegistry, setShowFullRegistry] = useState(false);
+  const previousRanksRef = React.useRef<Record<string, number>>({});
+
+  const registryWindowSize = Math.max(shortlistSize + 5, 15);
+  const topContenders = React.useMemo(
+    () => partialShortlist.slice(0, showFullRegistry ? partialShortlist.length : registryWindowSize),
+    [partialShortlist, showFullRegistry, registryWindowSize]
+  );
+  const recentEvaluations = React.useMemo(
+    () => partialShortlist.slice(-5).reverse(),
+    [partialShortlist]
+  );
+  const cutoffCandidate = partialShortlist[shortlistSize - 1];
+  const topScore = partialShortlist[0]?.finalScore ?? 0;
 
   useEffect(() => {
     if (!armed) return;
     const t = setTimeout(() => setArmed(false), 3000);
     return () => clearTimeout(t);
   }, [armed]);
+
+  useEffect(() => {
+    if (partialShortlist.length === 0) return;
+    const nextRanks: Record<string, number> = {};
+    for (const candidate of partialShortlist) {
+      nextRanks[candidate.candidateId] = candidate.rank;
+    }
+    previousRanksRef.current = nextRanks;
+  }, [partialShortlist]);
 
   const handleTerminateClick = () => {
     if (terminating) return;
@@ -757,7 +780,7 @@ function ExecutionConsole({
         <AIThinkingStream thoughts={thoughts} isRunning={true} />
 
         {/* SCORE METRICS */}
-        <div className="border border-gray-200 bg-white flex flex-col overflow-hidden">
+        <div className="border border-gray-200 bg-white flex flex-col overflow-hidden min-h-0">
           <div className="px-3 py-2 bg-gray-50 border-b border-gray-200 flex-shrink-0">
             <span className="text-[10px] font-bold text-gray-600 tracking-widest">SCORE METRICS</span>
           </div>
@@ -774,7 +797,7 @@ function ExecutionConsole({
                   <span className="text-[9px] font-mono font-bold text-gray-500">{label}</span>
                   <span className="text-[10px] font-mono font-bold" style={{ color: c }}>{Math.round(val)}</span>
                 </div>
-                <div className="h-1.5 bg-gray-200 overflow-hidden">
+                <div className="h-1.5 bg-gray-200 overflow-hidden w-40">
                   <div className="h-full transition-all duration-700" style={{ width: `${val}%`, backgroundColor: c }} />
                 </div>
               </div>
@@ -787,7 +810,7 @@ function ExecutionConsole({
                   {evaluatedCount}/{totalCandidates}
                 </span>
               </div>
-              <div className="h-2 bg-gray-200 overflow-hidden">
+              <div className="h-2 bg-gray-200 overflow-hidden w-40">
                 <div
                   className="h-full bg-blue-500 transition-all duration-500"
                   style={{ width: totalCandidates > 0 ? `${(evaluatedCount / totalCandidates) * 100}%` : '0%' }}
@@ -800,16 +823,68 @@ function ExecutionConsole({
         {/* CANDIDATE REGISTRY */}
         <div className="border border-gray-200 bg-white flex flex-col overflow-hidden">
           <div className="px-3 py-2 bg-gray-50 border-b border-gray-200 flex-shrink-0">
-            <span className="text-[10px] font-bold text-gray-600 tracking-widest">LIVE CANDIDATE REGISTRY</span>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10px] font-bold text-gray-600 tracking-widest">LIVE CANDIDATE REGISTRY</span>
+              {partialShortlist.length > registryWindowSize && (
+                <button
+                  onClick={() => setShowFullRegistry(v => !v)}
+                  className="text-[9px] font-mono font-bold text-blue-600 hover:text-blue-700 tracking-wider"
+                >
+                  {showFullRegistry ? 'TOP VIEW' : 'FULL LIST'}
+                </button>
+              )}
+            </div>
           </div>
 
+          <div className="grid grid-cols-3 gap-px bg-gray-200 border-b border-gray-200 flex-shrink-0">
+            <div className="bg-white px-3 py-2">
+              <p className="text-[8px] font-bold text-gray-400 tracking-widest">VISIBLE</p>
+              <p className="text-[11px] font-mono font-bold text-gray-900">
+                TOP {Math.min(registryWindowSize, partialShortlist.length || registryWindowSize)}
+              </p>
+            </div>
+            <div className="bg-white px-3 py-2">
+              <p className="text-[8px] font-bold text-gray-400 tracking-widest">CUTOFF</p>
+              <p className="text-[11px] font-mono font-bold text-emerald-700">
+                {cutoffCandidate ? cutoffCandidate.finalScore.toFixed(1) : '—'}
+              </p>
+            </div>
+            <div className="bg-white px-3 py-2">
+              <p className="text-[8px] font-bold text-gray-400 tracking-widest">BEST SCORE</p>
+              <p className="text-[11px] font-mono font-bold" style={{ color: scoreColor(topScore) }}>
+                {partialShortlist.length ? topScore.toFixed(1) : '—'}
+              </p>
+            </div>
+          </div>
+
+          {recentEvaluations.length > 0 && (
+            <div className="px-3 py-2 border-b border-gray-200 bg-blue-50/40 flex-shrink-0">
+              <p className="text-[8px] font-bold text-blue-600 tracking-widest mb-1.5">RECENTLY EVALUATED</p>
+              <div className="flex flex-wrap gap-1.5">
+                {recentEvaluations.map((candidate) => (
+                  <span
+                    key={`recent-${candidate.candidateId}`}
+                    className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[8px] font-mono font-bold border rounded-sm bg-white"
+                    style={{ color: scoreColor(candidate.finalScore), borderColor: '#dbeafe' }}
+                  >
+                    <span className="text-gray-500">#{candidate.rank}</span>
+                    <span className="max-w-[80px] truncate">{candidate.candidateName}</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Table header */}
-          <div className="grid grid-cols-[24px_1fr_52px_64px] bg-gray-50 border-b border-gray-200 flex-shrink-0">
+          <div className="grid grid-cols-[24px_1fr_44px_52px_64px] bg-gray-50 border-b border-gray-200 flex-shrink-0">
             <div className="px-2 py-1.5 border-r border-gray-200 text-center">
               <span className="text-[8px] font-bold text-gray-400">RK</span>
             </div>
             <div className="px-2 py-1.5 border-r border-gray-200">
               <span className="text-[8px] font-bold text-gray-400">CANDIDATE</span>
+            </div>
+            <div className="px-2 py-1.5 border-r border-gray-200 text-center">
+              <span className="text-[8px] font-bold text-gray-400">MOVE</span>
             </div>
             <div className="px-2 py-1.5 border-r border-gray-200 text-center">
               <span className="text-[8px] font-bold text-gray-400">SCORE</span>
@@ -819,7 +894,7 @@ function ExecutionConsole({
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
+          <div className="flex-1 overflow-y-auto min-h-0" style={{ scrollbarWidth: 'thin' }}>
             {partialShortlist.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full py-8 text-center">
                 <Brain className="w-6 h-6 text-gray-300 mb-2" />
@@ -827,8 +902,11 @@ function ExecutionConsole({
                 <p className="text-[9px] text-gray-300 mt-1">AI IS EVALUATING...</p>
               </div>
             ) : (
-              partialShortlist.map((c, i) => (
-                <div key={`${c.candidateId}-${c.rank ?? i}-${i}`} className="grid grid-cols-[24px_1fr_52px_64px] border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
+              topContenders.map((c, i) => {
+                const previousRank = previousRanksRef.current[c.candidateId];
+                const movement = typeof previousRank === 'number' ? previousRank - c.rank : 0;
+                return (
+                <div key={`${c.candidateId}-${c.rank ?? i}-${i}`} className="grid grid-cols-[24px_1fr_44px_52px_64px] border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
                   <div className="px-2 py-2.5 border-r border-gray-100 text-center">
                     <span className={cn(
                       'text-[9px] font-mono font-bold',
@@ -840,6 +918,15 @@ function ExecutionConsole({
                   <div className="px-2 py-2.5 border-r border-gray-100 min-w-0">
                     <p className="text-[10px] font-medium text-gray-900 truncate">{c.candidateName}</p>
                     <p className="text-[8px] text-gray-400 font-mono truncate">{c.recommendation?.split(' ').map(w => w[0]).join('') ?? '—'}</p>
+                  </div>
+                  <div className="px-1 py-2.5 border-r border-gray-100 text-center">
+                    {movement > 0 ? (
+                      <span className="text-[8px] font-mono font-bold text-green-600">↑{movement}</span>
+                    ) : movement < 0 ? (
+                      <span className="text-[8px] font-mono font-bold text-red-600">↓{Math.abs(movement)}</span>
+                    ) : (
+                      <span className="text-[8px] font-mono font-bold text-gray-300">•</span>
+                    )}
                   </div>
                   <div className="px-2 py-2.5 text-center">
                     <span className="text-[10px] font-mono font-bold" style={{ color: scoreColor(c.finalScore) }}>
@@ -854,13 +941,13 @@ function ExecutionConsole({
                     )}
                   </div>
                 </div>
-              ))
+              )})
             )}
           </div>
 
           <div className="px-3 py-2 bg-gray-50 border-t border-gray-200 flex-shrink-0">
             <span className="text-[9px] font-mono text-gray-500">
-              EVALUATED: <span className="font-bold text-gray-900">{partialShortlist.length}</span> · TARGET SHORTLIST: <span className="font-bold text-gray-900">{shortlistSize}</span>
+              EVALUATED: <span className="font-bold text-gray-900">{partialShortlist.length}</span> · TARGET SHORTLIST: <span className="font-bold text-gray-900">{shortlistSize}</span> · DISPLAYING: <span className="font-bold text-gray-900">{topContenders.length}</span>
             </span>
           </div>
         </div>
@@ -1221,10 +1308,6 @@ function ScreeningContent() {
     if (!pendingBgJobId || liveEvents.length === 0) return;
     for (const event of liveEvents) {
       if (event.jobId !== pendingBgJobId) continue;
-      const key = `${event.jobId}:${event.timestamp}`;
-      if (seenEventTimestamps.current.has(key)) continue;
-      seenEventTimestamps.current.add(key);
-
       const pe = event.metadata.progressEvent as {
         type: string; message: string; candidateName?: string; detail?: string;
         liveScores?: typeof liveScores;
@@ -1233,6 +1316,23 @@ function ScreeningContent() {
         thinkingSnapshot?: { stage: 'evaluating'|'reranking'|'rejection'; batchIndex: number; batchLabel: string; candidateNames: string[]; thinking: string; timestamp: string; snapshotId?: string; isFinal?: boolean };
       } | undefined;
       if (!pe) continue;
+
+      // De-duplicate with semantic identity, not just timestamp.
+      // Multiple progress events can share the same millisecond timestamp.
+      const thinkingId = pe.thinkingSnapshot?.snapshotId ?? "";
+      const thinkingFinal = pe.thinkingSnapshot?.isFinal === false ? "stream" : "final";
+      const key = [
+        event.jobId,
+        event.timestamp,
+        pe.type,
+        pe.message,
+        pe.candidateName ?? "",
+        pe.detail ?? "",
+        thinkingId,
+        thinkingFinal,
+      ].join(":");
+      if (seenEventTimestamps.current.has(key)) continue;
+      seenEventTimestamps.current.add(key);
 
       const ts = nowHMS();
 
@@ -1342,6 +1442,14 @@ function ScreeningContent() {
 }
 
 export default function ScreeningPage() {
+  const [isHydrated, setIsHydrated] = useState(false);
+
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
+
+  if (!isHydrated) return null;
+
   return (
     <Suspense fallback={null}>
       <ScreeningContent />

@@ -82,11 +82,9 @@ export default function JobsPage() {
     }
   };
 
-  const handleScreenCandidates = async (candidateIds: string[], jobId: string) => {
-    toast.success(`Starting screening for ${candidateIds.length} candidate(s)...`);
-    // Navigate to screening page with selected candidates
-    const params = new URLSearchParams({ candidateIds: candidateIds.join(',') });
-    router.push(`/screening?jobId=${jobId}&${params.toString()}`);
+  const handleScreenCandidates = async (_candidateIds: string[], jobId: string) => {
+    toast.success("Starting AI screening for the full job candidate pool...");
+    router.push(`/screening?jobId=${jobId}`);
   };
 
   useEffect(() => {
@@ -883,8 +881,7 @@ function CandidatesTab({ jobId, jobTitle, onViewCandidate, onAddCandidate, onDel
   };
 
   const handleBulkScreen = () => {
-    if (selectedCandidates.size === 0) return;
-    onScreenCandidates?.(Array.from(selectedCandidates), jobId);
+    onScreenCandidates?.([], jobId);
     setSelectedCandidates(new Set());
   };
 
@@ -1745,9 +1742,14 @@ function ScreeningTab({ screeningResults, job }: any) {
                         <div className="pt-3 grid grid-cols-3 gap-2">
                           {/* Why not selected */}
                           <div className="bg-white rounded-lg border border-orange-100 p-2.5">
-                            <div className="flex items-center gap-1.5 mb-2">
-                              <AlertCircle className="w-3 h-3 text-orange-500 flex-shrink-0" />
-                              <span className="text-[10px] font-bold text-orange-700 uppercase tracking-wide">Why Not Selected</span>
+                            <div className="flex items-center justify-between gap-2 mb-2">
+                              <div className="flex items-center gap-1.5">
+                                <AlertCircle className="w-3 h-3 text-orange-500 flex-shrink-0" />
+                                <span className="text-[10px] font-bold text-orange-700 uppercase tracking-wide">Why Not Selected</span>
+                              </div>
+                              <span className="text-[8px] font-mono font-bold px-1.5 py-0.5 bg-white text-purple-700 border border-purple-200 rounded">
+                                AI-GENERATED FEEDBACK
+                              </span>
                             </div>
                             <p className="text-[11px] text-gray-600 leading-relaxed">
                               {candidate.whyNotSelected || 'No explanation provided.'}
@@ -1860,10 +1862,10 @@ function AnalyticsTab({ candidates, screeningResults, job }: any) {
     educationScore: 'bg-violet-500', projectsScore: 'bg-amber-500', availabilityScore: 'bg-cyan-500',
   };
   const recConfig: Record<string, { color: string; bar: string }> = {
-    'Strong Hire': { color: 'text-emerald-700', bar: 'bg-emerald-500' },
-    'Hire':        { color: 'text-green-700',   bar: 'bg-green-500' },
-    'Consider':    { color: 'text-amber-700',   bar: 'bg-amber-500' },
-    'Pass':        { color: 'text-red-700',     bar: 'bg-red-500' },
+    'Strongly Recommended': { color: 'text-emerald-700', bar: 'bg-emerald-500' },
+    'Recommended':          { color: 'text-green-700',   bar: 'bg-green-500' },
+    'Consider':             { color: 'text-amber-700',   bar: 'bg-amber-500' },
+    'Not Recommended':      { color: 'text-red-700',     bar: 'bg-red-500' },
   };
 
   if (!latestResult) {

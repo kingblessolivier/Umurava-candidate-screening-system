@@ -22,9 +22,9 @@ interface QueuedRequest {
 
 const CACHE_TTL = 3600;           // 1 hour
 const REQUEST_TIMEOUT = 180000;   // 3 minutes — thinking mode can be slow
-const MAX_RETRIES = 3;
-const RETRY_DELAY_MS = 3000;      // 3 seconds base (exponential backoff)
-const MAX_CONCURRENT_REQUESTS = 2;
+const MAX_RETRIES = 5;
+const RETRY_DELAY_MS = 4000;      // 4 seconds base (exponential backoff + jitter)
+const MAX_CONCURRENT_REQUESTS = 1; // safer for strict per-project AI quotas
 const REQUEST_QUEUE_LIMIT = 50;
 
 export class RateLimitedGeminiService {
@@ -62,13 +62,15 @@ export class RateLimitedGeminiService {
       }
     }
 
-    // If quota is exceeded and we're not bypassing checks, return degraded response
+    // If quota is exceeded and we're not bypassing checks, wait for reset
+    // instead of failing fast. This dramatically reduces "Too many requests"
+    // user-facing failures during long screening runs.
     if (this.isQuotaExceeded && !bypassQuotaCheck) {
       const timeUntilReset = Math.max(0, this.quotaResetTime - Date.now());
-      console.warn(`[Quota Exceeded] Returning degraded response. Reset in ${timeUntilReset}ms`);
-      throw new Error(
-        `Gemini API quota exceeded. Please retry in ${Math.ceil(timeUntilReset / 1000)} seconds.`
-      );
+      if (timeUntilReset > 0) {
+        console.warn(`[Quota Exceeded] Pausing requests for ${timeUntilReset}ms`);
+        await this.sleep(timeUntilReset + 500);
+      }
     }
 
     // Queue and execute the request
@@ -148,12 +150,21 @@ export class RateLimitedGeminiService {
       const statusText = errorObj?.statusText;
       const message = errorObj?.message || String(error);
 
-      // Handle 429 (quota exceeded)
-      if (status === 429) {
+      const lowerMessage = message.toLowerCase();
+      const isQuotaOrRateLimited =
+        status === 429 ||
+        lowerMessage.includes("429") ||
+        lowerMessage.includes("too many requests") ||
+        lowerMessage.includes("resource_exhausted") ||
+        lowerMessage.includes("quota");
+
+      // Handle 429 / quota / resource exhausted
+      if (isQuotaOrRateLimited) {
         this.handleQuotaExceeded(errorObj as { errorDetails?: unknown[] });
 
         if (retryCount < MAX_RETRIES) {
-          const backoffMs = RETRY_DELAY_MS * Math.pow(2, retryCount); // Exponential backoff
+          const jitterMs = Math.floor(Math.random() * 1500);
+          const backoffMs = RETRY_DELAY_MS * Math.pow(2, retryCount) + jitterMs; // Exponential backoff + jitter
           console.warn(
             `[Quota 429] Retrying after ${backoffMs}ms (attempt ${retryCount + 1}/${MAX_RETRIES})`
           );
@@ -169,7 +180,8 @@ export class RateLimitedGeminiService {
 
       // Handle other retryable errors (5xx)
       if (status && status >= 500 && status < 600 && retryCount < MAX_RETRIES) {
-        const backoffMs = RETRY_DELAY_MS * Math.pow(2, retryCount);
+        const jitterMs = Math.floor(Math.random() * 1000);
+        const backoffMs = RETRY_DELAY_MS * Math.pow(2, retryCount) + jitterMs;
         console.warn(
           `[Server ${status}] Retrying after ${backoffMs}ms (attempt ${retryCount + 1}/${MAX_RETRIES})`
         );
@@ -205,8 +217,8 @@ export class RateLimitedGeminiService {
         console.log("[Quota Reset] Attempting requests again");
       }, retrySeconds * 1000 + 1000);
     } else {
-      // Default: 60 seconds — conservative but not permanently locked
-      const fallbackMs = 60 * 1000;
+      // Default: 90 seconds — safer for provider-side dynamic throttling windows.
+      const fallbackMs = 90 * 1000;
       this.quotaResetTime = Date.now() + fallbackMs;
       setTimeout(() => {
         this.isQuotaExceeded = false;
