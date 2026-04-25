@@ -10,6 +10,7 @@ import { useJobCandidates } from '@/hooks/useJobCandidates';
 import { useScreening } from '@/hooks/useScreening';
 import { useNotifications } from '@/contexts/NotificationsContext';
 import { useAuth } from '@/hooks/useAuth';
+import { api } from '@/lib/api';
 import {
   AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight,
   Brain, Users, Trophy, Zap, Activity, Server,
@@ -660,6 +661,7 @@ function StepReview({
 
 function ExecutionConsole({
   thoughts, liveScores, partialShortlist, evaluatedCount, totalCandidates, elapsed, selectedJobTitle, progressPercent,
+  onTerminate, terminating,
 }: {
   thoughts: Parameters<typeof AIThinkingStream>[0]['thoughts'];
   liveScores: { skills: number; experience: number; education: number; projects: number; availability: number };
@@ -669,7 +671,24 @@ function ExecutionConsole({
   elapsed: number;
   selectedJobTitle?: string;
   progressPercent: number;
+  onTerminate: () => void;
+  terminating: boolean;
 }) {
+  const [armed, setArmed] = useState(false);
+
+  useEffect(() => {
+    if (!armed) return;
+    const t = setTimeout(() => setArmed(false), 3000);
+    return () => clearTimeout(t);
+  }, [armed]);
+
+  const handleTerminateClick = () => {
+    if (terminating) return;
+    if (!armed) { setArmed(true); return; }
+    setArmed(false);
+    onTerminate();
+  };
+
   return (
     <div className="flex flex-col gap-3 h-full">
       {/* Console header */}
@@ -701,6 +720,22 @@ function ExecutionConsole({
           <span className="text-[10px] font-mono text-gray-500">
             ELAPSED: <span className="text-gray-700 font-bold">{formatTime(elapsed)}</span>
           </span>
+          <div className="w-px h-3.5 bg-gray-200" />
+          <button
+            onClick={handleTerminateClick}
+            disabled={terminating}
+            className={cn(
+              'flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-bold tracking-widest border transition-all',
+              terminating
+                ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                : armed
+                  ? 'bg-red-600 text-white border-red-600 animate-pulse'
+                  : 'bg-white text-red-600 border-red-300 hover:bg-red-50'
+            )}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-current" />
+            {terminating ? 'TERMINATING…' : armed ? 'CONFIRM?' : 'TERMINATE'}
+          </button>
         </div>
       </div>
 
@@ -906,6 +941,7 @@ function ScreeningContent() {
   const [elapsedTime, setElapsedTime]   = useState(0);
   const [step, setStep]                 = useState<'setup' | 'criteria' | 'review'>('setup');
   const [customWeights, setCustomWeights] = useState({ skills: 25, experience: 25, education: 20, projects: 20, availability: 10 });
+  const [terminating, setTerminating]   = useState(false);
 
   const { jobs, loading: jobsLoading } = useJobs();
   const { total: candidateCount }       = useJobCandidates(jobId || null);
@@ -1004,6 +1040,20 @@ function ScreeningContent() {
 
   const seenEventTimestamps = React.useRef<Set<string>>(new Set());
 
+  const handleTerminate = async () => {
+    if (!pendingBgJobId || terminating) return;
+    setTerminating(true);
+    try {
+      await api.post(`/background-jobs/${pendingBgJobId}/cancel`);
+    } catch {
+      // Even if the request fails, reset the UI — the user wants to stop
+    }
+    dispatch(stopRunning());
+    if (typeof window !== 'undefined') window.localStorage.removeItem(SCREENING_SESSION_KEY);
+    setTerminating(false);
+    setElapsedTime(0);
+  };
+
   const handleRun = async () => {
     if (!jobId || candidateCount === 0 || candidateCount < shortlistSize || totalWeight !== 100) return;
     resetLiveScreeningState();
@@ -1074,6 +1124,8 @@ function ScreeningContent() {
               elapsed={elapsedTime}
               selectedJobTitle={selectedJob?.title}
               progressPercent={progressPercent}
+              onTerminate={handleTerminate}
+              terminating={terminating}
             />
           ) : (
             <>

@@ -153,6 +153,8 @@ export interface RejectedCandidate {
   candidateName: string;
   email: string;
   finalScore: number;
+  rank: number;
+  scoreGap: number;
   whyNotSelected: string;
   topMissingSkills: string[];
   closestShortlistScore: number;

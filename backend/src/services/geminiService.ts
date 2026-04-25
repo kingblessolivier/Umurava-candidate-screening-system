@@ -375,68 +375,92 @@ Return ONLY this JSON (no markdown, no explanation outside JSON):
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// PROMPT 3 — FINAL RANKING + WHY NOT SELECTED
+// PROMPT 3 — WHY NOT SELECTED (with full shortlist context for comparison)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function buildRankingPrompt(
   job: Job,
-  allEvaluations: CandidateScore[],
-  shortlistSize: number,
+  shortlist: CandidateScore[],
+  rejected: CandidateScore[],
   lowestShortlistScore: number
 ): string {
-  const validEvaluations = allEvaluations.filter(e => e && e.breakdown && e.finalScore !== undefined);
+  const validRejected = rejected.filter(e => e && e.breakdown && e.finalScore !== undefined);
+  if (validRejected.length === 0) return "No rejected candidates to explain.";
 
-  if (validEvaluations.length === 0) return "No valid candidate evaluations to rank.";
-
-  const evaluationSummary = validEvaluations
+  // Full ranked list so the AI can see exactly where the cutoff fell
+  const fullRankedList = [...shortlist, ...validRejected]
     .sort((a, b) => b.finalScore - a.finalScore)
-    .map((e, i) => `${i + 1}. ${e.candidateName} (${e.email}) — Score: ${e.finalScore} | Rec: ${e.recommendation} | Skills: ${e.breakdown?.skillsScore ?? "N/A"} | Exp: ${e.breakdown?.experienceScore ?? "N/A"}`)
+    .map((e, i) => {
+      const status = i < shortlist.length ? "✅ SHORTLISTED" : "❌ NOT SELECTED";
+      return `${i + 1}. [${status}] ${e.candidateName} — Score: ${e.finalScore} | Skills: ${e.breakdown?.skillsScore ?? "N/A"} | Exp: ${e.breakdown?.experienceScore ?? "N/A"} | Edu: ${e.breakdown?.educationScore ?? "N/A"} | Projects: ${e.breakdown?.projectsScore ?? "N/A"}`;
+    })
     .join("\n");
 
-  const rejected = validEvaluations
+  // Structured data for each rejected candidate (includes breakdown for richer context)
+  const rejectedContext = validRejected
     .sort((a, b) => b.finalScore - a.finalScore)
-    .slice(shortlistSize)
-    .map(e => ({
-      id: e.candidateId,
+    .map((e, i) => ({
+      rank: shortlist.length + i + 1,
+      candidateId: e.candidateId,
       name: e.candidateName,
       email: e.email,
-      score: e.finalScore,
-      missing: e.skillGapAnalysis?.missing || [],
+      finalScore: e.finalScore,
+      scoreGap: lowestShortlistScore - e.finalScore,
+      breakdown: e.breakdown,
+      recommendation: e.recommendation,
+      strengths: e.strengths || [],
       gaps: e.gaps || [],
+      missingSkills: e.skillGapAnalysis?.missing || [],
+      matchedSkills: e.skillGapAnalysis?.matched || [],
     }));
 
-  return `You are a senior recruiter finalizing a candidate shortlist for: ${job.title} (${job.experienceLevel})
+  return `You are a senior recruiter at "${job.title}" (${job.experienceLevel}) finalizing the hiring round.
 
-All candidates have been evaluated. Here is the COMPLETE ranked list:
-${evaluationSummary}
+The AI evaluation is complete. ${shortlist.length + validRejected.length} candidates were assessed.
+The top ${shortlist.length} were shortlisted. The cutoff score was ${lowestShortlistScore}.
 
-The top ${shortlistSize} candidates will be shortlisted. The cutoff score is approximately ${lowestShortlistScore}.
+━━━ COMPLETE RANKED RESULTS (context for your explanations) ━━━
+${fullRankedList}
 
-Your task: For each REJECTED candidate (rank > ${shortlistSize}), write a clear, constructive, honest "Why Not Selected" explanation.
+━━━ SHORTLISTED CANDIDATES (who beat the cutoff and why) ━━━
+${shortlist.slice(0, 5).map(s => `• ${s.candidateName} (${s.finalScore}) — strengths: ${s.strengths?.slice(0, 2).join("; ") || "N/A"}`).join("\n")}
 
-Guidelines for rejection explanations:
-- Be specific: reference actual skill gaps or score differences
-- Be constructive: end with 2-3 actionable improvement suggestions
-- Be respectful: professional tone, never dismissive
-- Be transparent: explain HOW CLOSE they were to the cutoff
+━━━ YOUR TASK ━━━
+Write a "Why Not Selected" explanation for each of the ${validRejected.length} non-shortlisted candidates below.
 
-Rejected candidates to explain:
-${JSON.stringify(rejected, null, 2)}
+Each explanation MUST:
+1. Open by acknowledging 1-2 genuine strengths from their profile (never start with a negative)
+2. State their score and exactly how far they fell below the cutoff (${lowestShortlistScore})
+3. Name the 1-3 specific, evidence-based reasons they didn't make it — reference actual profile data
+4. Compare them briefly to what shortlisted candidates offered that they didn't
+5. Close with 2-3 concrete, actionable improvement suggestions tied to THIS job's requirements
 
-Return ONLY this JSON:
+Tone rules:
+- Professional and respectful — candidates may read this feedback directly
+- Specific over generic: "Your Node.js experience is at 1 year vs the 3+ years needed" beats "lack of experience"
+- Honest but never harsh — acknowledge effort, explain the bar
+- Never invent skills or facts not present in the candidate data below
+
+━━━ CANDIDATES TO EXPLAIN ━━━
+${JSON.stringify(rejectedContext, null, 2)}
+
+Return ONLY this JSON — no markdown, no commentary outside JSON:
 {
   "rejectedCandidates": [
     {
       "candidateId": "id",
-      "candidateName": "Name",
-      "email": "email",
+      "candidateName": "Full Name",
+      "email": "email@example.com",
       "finalScore": 62,
-      "whyNotSelected": "Clear, honest, specific explanation referencing score gap and decisive gaps.",
+      "rank": 4,
+      "scoreGap": 8,
+      "whyNotSelected": "Specific 3-5 sentence explanation: open with a strength, explain the score gap, name the decisive differentiators vs shortlisted candidates.",
       "topMissingSkills": ["skill1", "skill2"],
       "closestShortlistScore": ${lowestShortlistScore},
       "improvementSuggestions": [
-        "Gain hands-on experience with [specific skill] through a portfolio project",
-        "Consider earning the [specific certification] to validate your backend skills"
+        "Build a portfolio project demonstrating [specific missing skill] to close the most critical gap",
+        "Pursue [specific certification] to validate your proficiency in [area the job requires]",
+        "Seek a role with more [relevant responsibility] to reach the ${job.experienceLevel}-level depth this position demands"
       ]
     }
   ]
@@ -623,11 +647,16 @@ function computePartialLiveScores(
   };
 }
 
+export class ScreeningCancelledError extends Error {
+  constructor() { super("Screening cancelled by user"); this.name = "ScreeningCancelledError"; }
+}
+
 export async function runScreeningPipeline(
   job: Job,
   preprocessed: PreprocessedCandidate[],
   shortlistSize: number,
-  onProgress?: ScreeningProgressFn
+  onProgress?: ScreeningProgressFn,
+  shouldContinue?: () => boolean
 ): Promise<Omit<ScreeningResult, "_id" | "screeningDate" | "createdAt">> {
   const startTime = Date.now();
   const BATCH_SIZE = 20;
@@ -648,6 +677,8 @@ export async function runScreeningPipeline(
   let allEvaluations: CandidateScore[] = [];
 
   for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+    if (shouldContinue && !shouldContinue()) throw new ScreeningCancelledError();
+
     const batch = batches[batchIndex];
     const cacheKey = `screening:${job._id}:batch-${batchIndex}:size-${batch.length}`;
     const prompt = buildEvaluationPrompt(job, batch);
@@ -708,6 +739,8 @@ export async function runScreeningPipeline(
   }
 
   // ── Step 2: Re-rank combined pool if multiple batches ─────────────────────
+  if (shouldContinue && !shouldContinue()) throw new ScreeningCancelledError();
+
   if (batches.length > 1 && allEvaluations.length > shortlistSize) {
     allEvaluations.sort((a, b) => b.finalScore - a.finalScore);
     const topIds = new Set(allEvaluations.slice(0, shortlistSize * 2).map(e => e.candidateId));
@@ -760,6 +793,7 @@ export async function runScreeningPipeline(
   const lowestShortlistScore = shortlist[shortlist.length - 1]?.finalScore ?? 0;
 
   // ── Step 4: Generate "Why Not Selected" explanations ──────────────────────
+  if (shouldContinue && !shouldContinue()) throw new ScreeningCancelledError();
   let rejectedCandidates: RejectedCandidate[] = [];
   const rejectedFromEval = allEvaluations.slice(shortlistSize);
 
@@ -805,7 +839,7 @@ export async function runScreeningPipeline(
       });
     };
 
-    const rankingPrompt = buildRankingPrompt(job, allRejected, 0, lowestShortlistScore);
+    const rankingPrompt = buildRankingPrompt(job, shortlist, allRejected, lowestShortlistScore);
     const rankResult = await generateWithRateLimit<{ rejectedCandidates: RejectedCandidate[] }>(
       `screening:${job._id}:rejection-reasons`,
       { prompt: rankingPrompt, model: SCREENING_MODEL, temperature: 0.3, maxOutputTokens: 8192, thinkingBudget: SCREENING_THINKING_BUDGET, onThinking: rejectionOnThinking },

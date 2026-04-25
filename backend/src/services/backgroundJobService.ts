@@ -2,7 +2,7 @@ import { Response } from "express";
 import crypto from "crypto";
 
 export type JobType = "screening" | "pdf_upload" | "csv_import" | "json_import";
-export type JobStatus = "pending" | "running" | "done" | "failed";
+export type JobStatus = "pending" | "running" | "done" | "failed" | "cancelled";
 
 export interface BackgroundJob {
   id: string;
@@ -32,6 +32,7 @@ export interface SSENotification {
 // In-memory stores (reset on server restart — fine for a demo/hackathon)
 const jobs = new Map<string, BackgroundJob>();
 const sseClients = new Map<string, Set<Response>>();
+const cancelledJobs = new Set<string>();
 
 export function createJob(
   type: JobType,
@@ -67,6 +68,19 @@ export function updateJob(
 
 export function getJob(jobId: string): BackgroundJob | undefined {
   return jobs.get(jobId);
+}
+
+export function cancelJob(jobId: string): void {
+  cancelledJobs.add(jobId);
+  const job = jobs.get(jobId);
+  if (job && job.status === "running") {
+    job.status = "cancelled";
+    job.updatedAt = new Date();
+  }
+}
+
+export function isCancelled(jobId: string): boolean {
+  return cancelledJobs.has(jobId);
 }
 
 export function registerSSEClient(userId: string, res: Response): void {

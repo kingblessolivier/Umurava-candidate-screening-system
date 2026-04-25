@@ -5,11 +5,12 @@ import { useDispatch, useSelector } from 'react-redux';
 import Link from 'next/link';
 import { toast } from 'react-hot-toast';
 import {
-  Briefcase, Plus, Search, Users, Zap, Edit2, Trash2, Archive,
+  Briefcase, Plus, Search, Users, Zap, Edit2, Trash2,
   MapPin, Clock, Building2, X, Check, FileText, ArrowRight,
-  Eye, Share2, MoreVertical, TrendingUp, BarChart3, ChevronLeft,
-  ChevronRight, Filter, Settings, Download, MessageSquare, Mail,
-  Bell, Upload, Loader2, UserPlus, FileSpreadsheet, FileCode2,
+  Eye, TrendingUp, BarChart3, ChevronLeft, ChevronDown,
+  ChevronRight, Filter, MessageSquare, Mail,
+  Upload, Loader2, UserPlus, FileSpreadsheet, FileCode2,
+  Lightbulb, AlertCircle, Award, Target, Activity,
 } from 'lucide-react';
 import EmailModal from '@/components/email/EmailModal';
 import { AppDispatch, RootState } from '@/store';
@@ -1435,6 +1436,10 @@ function ScreeningTab({ screeningResults, job }: any) {
     context: 'shortlist' | 'rejection' | 'general';
   }>({ open: false, recipients: [], context: 'general' });
   const [showRejected, setShowRejected] = useState(true);
+  const [expandedRejected, setExpandedRejected] = useState<Set<string>>(new Set());
+  const toggleExpand = (id: string) => {
+    setExpandedRejected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  };
 
   const latestResult = screeningResults[0];
 
@@ -1668,11 +1673,12 @@ function ScreeningTab({ screeningResults, job }: any) {
               </h3>
             </div>
             <div className="flex items-center gap-2">
+              <span className="text-[10px] text-gray-400">Click row for details</span>
               <button
                 onClick={(e) => { e.stopPropagation(); emailRejected(); }}
                 className="flex items-center gap-1 px-2 py-1 text-[10px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded-lg hover:bg-rose-100 transition-all"
               >
-                <Mail className="w-3 h-3" /> Email All Not Selected
+                <Mail className="w-3 h-3" /> Email All
               </button>
               <ChevronRight className={`w-3.5 h-3.5 text-gray-400 transition-transform ${showRejected ? 'rotate-90' : ''}`} />
             </div>
@@ -1682,37 +1688,137 @@ function ScreeningTab({ screeningResults, job }: any) {
             <div className="divide-y divide-gray-100">
               {rejected.map((candidate: any) => {
                 const isSelected = selectedIds.has(candidate.candidateId);
+                const isExpanded = expandedRejected.has(candidate.candidateId);
+                const gap = candidate.scoreGap ?? Math.round((candidate.closestShortlistScore || 0) - candidate.finalScore);
+                const cutoff = Math.round(candidate.closestShortlistScore || 0);
                 return (
-                  <div
-                    key={candidate.candidateId}
-                    className={`px-3 py-2.5 flex items-center gap-3 hover:bg-gray-50 transition-colors ${isSelected ? 'bg-rose-50/50' : ''}`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      onChange={() => toggleSelect(candidate.candidateId)}
-                      className="w-3 h-3 rounded border-gray-300 text-rose-600 focus:ring-rose-500 cursor-pointer flex-shrink-0"
-                    />
-                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-gray-400 to-gray-500 flex items-center justify-center text-white font-bold text-[10px] flex-shrink-0">
-                      {candidate.candidateName?.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() || '??'}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-gray-700 truncate">{candidate.candidateName}</p>
-                      <p className="text-[10px] text-gray-500 truncate">{candidate.email}</p>
-                    </div>
-                    <div className="flex items-center gap-3 flex-shrink-0">
-                      <div className="text-right">
-                        <p className="text-sm font-bold text-gray-500">{candidate.finalScore}%</p>
-                        <p className="text-[10px] text-gray-400">Not selected</p>
-                      </div>
+                  <div key={candidate.candidateId} className={`${isSelected ? 'bg-rose-50/30' : ''}`}>
+                    {/* Main row */}
+                    <div className="px-3 py-2.5 flex items-center gap-2.5 hover:bg-gray-50 transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleSelect(candidate.candidateId)}
+                        className="w-3 h-3 rounded border-gray-300 text-rose-600 focus:ring-rose-500 cursor-pointer flex-shrink-0"
+                      />
                       <button
-                        onClick={() => emailSingle(candidate, 'rejection')}
-                        className="p-1.5 rounded-lg hover:bg-rose-50 text-gray-400 hover:text-rose-600 transition-all"
-                        title="Send email"
+                        onClick={() => toggleExpand(candidate.candidateId)}
+                        className="flex-shrink-0 p-0.5 rounded hover:bg-gray-200 transition-colors"
                       >
-                        <Mail className="w-3.5 h-3.5" />
+                        <ChevronRight className={`w-3 h-3 text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
                       </button>
+                      <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-gray-400 to-gray-500 flex items-center justify-center text-white font-bold text-[9px] flex-shrink-0">
+                        {candidate.candidateName?.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() || '??'}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-xs font-semibold text-gray-700 truncate">{candidate.candidateName}</p>
+                          <span className="text-[10px] text-gray-400 flex-shrink-0">#{candidate.rank}</span>
+                        </div>
+                        <p className="text-[10px] text-gray-500 truncate">{candidate.email}</p>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <div className="text-right">
+                          <p className="text-xs font-bold text-gray-500">{candidate.finalScore}%</p>
+                          <p className="text-[10px] text-red-400">-{gap} pts</p>
+                        </div>
+                        <button
+                          onClick={() => toggleExpand(candidate.candidateId)}
+                          className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg border border-gray-200 hover:border-red-200 transition-all"
+                        >
+                          <MessageSquare className="w-3 h-3" />
+                          {isExpanded ? 'Hide' : 'Details'}
+                        </button>
+                        <button
+                          onClick={() => emailSingle(candidate, 'rejection')}
+                          className="p-1.5 rounded-lg hover:bg-rose-50 text-gray-400 hover:text-rose-600 transition-all"
+                          title="Send email"
+                        >
+                          <Mail className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
+
+                    {/* Expanded detail panel */}
+                    {isExpanded && (
+                      <div className="px-3 pb-3 bg-gray-50/70 border-t border-gray-100">
+                        <div className="pt-3 grid grid-cols-3 gap-2">
+                          {/* Why not selected */}
+                          <div className="bg-white rounded-lg border border-orange-100 p-2.5">
+                            <div className="flex items-center gap-1.5 mb-2">
+                              <AlertCircle className="w-3 h-3 text-orange-500 flex-shrink-0" />
+                              <span className="text-[10px] font-bold text-orange-700 uppercase tracking-wide">Why Not Selected</span>
+                            </div>
+                            <p className="text-[11px] text-gray-600 leading-relaxed">
+                              {candidate.whyNotSelected || 'No explanation provided.'}
+                            </p>
+                          </div>
+
+                          {/* Missing skills */}
+                          <div className="bg-white rounded-lg border border-red-100 p-2.5">
+                            <div className="flex items-center gap-1.5 mb-2">
+                              <Target className="w-3 h-3 text-red-500 flex-shrink-0" />
+                              <span className="text-[10px] font-bold text-red-700 uppercase tracking-wide">Missing Skills</span>
+                            </div>
+                            {candidate.topMissingSkills?.length > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                {candidate.topMissingSkills.map((skill: string) => (
+                                  <span key={skill} className="text-[10px] px-1.5 py-0.5 bg-red-50 text-red-700 border border-red-200 rounded-full font-medium">
+                                    {skill}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-[10px] text-gray-400">None identified</p>
+                            )}
+                          </div>
+
+                          {/* Improvement suggestions */}
+                          <div className="bg-white rounded-lg border border-blue-100 p-2.5">
+                            <div className="flex items-center gap-1.5 mb-2">
+                              <Lightbulb className="w-3 h-3 text-blue-500 flex-shrink-0" />
+                              <span className="text-[10px] font-bold text-blue-700 uppercase tracking-wide">Suggestions</span>
+                            </div>
+                            {candidate.improvementSuggestions?.length > 0 ? (
+                              <ol className="space-y-1">
+                                {candidate.improvementSuggestions.map((s: string, i: number) => (
+                                  <li key={i} className="flex gap-1.5 text-[10px] text-gray-600">
+                                    <span className="font-bold text-blue-500 flex-shrink-0">{i + 1}.</span>
+                                    <span>{s}</span>
+                                  </li>
+                                ))}
+                              </ol>
+                            ) : (
+                              <p className="text-[10px] text-gray-400">No suggestions available</p>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Score gap bar */}
+                        <div className="mt-2 bg-white rounded-lg border border-gray-100 p-2.5">
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className="text-[10px] font-semibold text-gray-500">Score vs Cutoff</span>
+                            <span className="text-[10px] text-gray-400">Cutoff: {cutoff}%</span>
+                          </div>
+                          <div className="relative h-2 bg-gray-100 rounded-full overflow-hidden">
+                            <div
+                              className="absolute left-0 top-0 h-full bg-gradient-to-r from-gray-300 to-gray-400 rounded-full"
+                              style={{ width: `${Math.min(100, candidate.finalScore)}%` }}
+                            />
+                            {cutoff > 0 && (
+                              <div
+                                className="absolute top-0 h-full w-0.5 bg-red-500"
+                                style={{ left: `${Math.min(100, cutoff)}%` }}
+                              />
+                            )}
+                          </div>
+                          <div className="flex items-center justify-between mt-1">
+                            <span className="text-[10px] text-gray-500">Score: {candidate.finalScore}%</span>
+                            <span className="text-[10px] text-red-500 font-semibold">{gap > 0 ? `-${gap} pts below cutoff` : 'At or above cutoff'}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -1736,57 +1842,192 @@ function ScreeningTab({ screeningResults, job }: any) {
 // Analytics Tab
 function AnalyticsTab({ candidates, screeningResults, job }: any) {
   const latestResult = screeningResults[0];
+  const insights = latestResult?.aggregateInsights;
+
   const shortlistedCount = latestResult?.shortlist?.length || 0;
-  const totalCandidates = candidates.length;
-  const shortlistRate = totalCandidates > 0 ? ((shortlistedCount / totalCandidates) * 100).toFixed(1) : 0;
+  const rejectedCount    = latestResult?.rejectedCandidates?.length || 0;
+  const totalCandidates  = candidates.length;
+  const shortlistRate    = totalCandidates > 0 ? ((shortlistedCount / totalCandidates) * 100).toFixed(1) : '0';
+  const topScore         = insights?.topCandidateScore || latestResult?.shortlist?.[0]?.finalScore || 0;
+  const avgScore         = insights?.avgCandidateScore || 0;
+
+  const categoryLabels: Record<string, string> = {
+    skillsScore: 'Skills', experienceScore: 'Experience',
+    educationScore: 'Education', projectsScore: 'Projects', availabilityScore: 'Availability',
+  };
+  const categoryColors: Record<string, string> = {
+    skillsScore: 'bg-blue-500', experienceScore: 'bg-emerald-500',
+    educationScore: 'bg-violet-500', projectsScore: 'bg-amber-500', availabilityScore: 'bg-cyan-500',
+  };
+  const recConfig: Record<string, { color: string; bar: string }> = {
+    'Strong Hire': { color: 'text-emerald-700', bar: 'bg-emerald-500' },
+    'Hire':        { color: 'text-green-700',   bar: 'bg-green-500' },
+    'Consider':    { color: 'text-amber-700',   bar: 'bg-amber-500' },
+    'Pass':        { color: 'text-red-700',     bar: 'bg-red-500' },
+  };
+
+  if (!latestResult) {
+    return (
+      <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
+        <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center mx-auto mb-3">
+          <BarChart3 className="w-6 h-6 text-gray-400" />
+        </div>
+        <h3 className="text-sm font-bold text-gray-900 mb-1">No analytics yet</h3>
+        <p className="text-xs text-gray-500">Run an AI screening to generate candidate insights and analytics</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-3 max-w-5xl">
-      {/* KPI Cards */}
+    <div className="space-y-3">
+      {/* KPI Row */}
       <div className="grid grid-cols-4 gap-2">
-        <div className="bg-white rounded-md p-3 border border-blue-200">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] text-gray-500">Total Candidates</span>
-            <Users className="w-4 h-4 text-blue-400" />
+        {[
+          { label: 'Total Pool',    value: totalCandidates,        sub: `${screeningResults.length} screening run${screeningResults.length !== 1 ? 's' : ''}`, icon: Users,      border: 'border-blue-200',    text: 'text-gray-900',      iconBg: 'bg-blue-50',    iconColor: 'text-blue-500' },
+          { label: 'Shortlisted',   value: shortlistedCount,       sub: `${shortlistRate}% selection rate`,           icon: Award,      border: 'border-emerald-200', text: 'text-emerald-700',   iconBg: 'bg-emerald-50', iconColor: 'text-emerald-500' },
+          { label: 'Top Score',     value: `${topScore}%`,         sub: `Avg: ${Math.round(avgScore)}%`,              icon: TrendingUp, border: 'border-violet-200',  text: 'text-violet-700',    iconBg: 'bg-violet-50',  iconColor: 'text-violet-500' },
+          { label: 'Not Selected',  value: rejectedCount,          sub: `${totalCandidates > 0 ? Math.round((rejectedCount / totalCandidates) * 100) : 0}% of pool`, icon: Activity, border: 'border-amber-200', text: 'text-amber-700', iconBg: 'bg-amber-50', iconColor: 'text-amber-500' },
+        ].map(({ label, value, sub, icon: Icon, border, text, iconBg, iconColor }) => (
+          <div key={label} className={`bg-white rounded-xl p-3 border ${border}`}>
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">{label}</span>
+              <div className={`w-6 h-6 rounded-lg ${iconBg} flex items-center justify-center`}>
+                <Icon className={`w-3.5 h-3.5 ${iconColor}`} />
+              </div>
+            </div>
+            <p className={`text-xl font-bold ${text}`}>{value}</p>
+            <p className="text-[10px] text-gray-400 mt-0.5">{sub}</p>
           </div>
-          <p className="text-lg font-bold text-blue-600">{totalCandidates}</p>
-        </div>
-
-        <div className="bg-white rounded-md p-3 border border-green-200">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] text-gray-500">Shortlisted</span>
-            <Check className="w-4 h-4 text-green-400" />
-          </div>
-          <p className="text-lg font-bold text-green-600">{shortlistedCount}</p>
-        </div>
-
-        <div className="bg-white rounded-md p-3 border border-amber-200">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] text-gray-500">Shortlist Rate</span>
-            <TrendingUp className="w-4 h-4 text-amber-400" />
-          </div>
-          <p className="text-lg font-bold text-amber-600">{shortlistRate}%</p>
-        </div>
-
-        <div className="bg-white rounded-md p-3 border border-purple-200">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] text-gray-500">Screenings</span>
-            <BarChart3 className="w-4 h-4 text-purple-400" />
-          </div>
-          <p className="text-lg font-bold text-purple-600">{screeningResults.length}</p>
-        </div>
+        ))}
       </div>
 
-      {/* Summary */}
-      <div className="bg-white rounded-md border border-gray-200 p-4">
-        <h3 className="text-xs font-semibold text-gray-700 mb-2">Summary</h3>
-        <p className="text-xs text-gray-600 leading-relaxed">
-          Out of <span className="font-semibold text-gray-900">{totalCandidates}</span> candidates,{' '}
-          <span className="font-semibold text-green-600">{shortlistedCount}</span> have been shortlisted
-          across <span className="font-semibold text-gray-900">{screeningResults.length}</span> screening
-          round(s). The shortlist rate is <span className="font-semibold text-amber-600">{shortlistRate}%</span>.
-        </p>
+      <div className="grid grid-cols-2 gap-3">
+        {/* Score Distribution */}
+        {insights?.scoreDistribution?.some((d: any) => d.count > 0) && (
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <BarChart3 className="w-3.5 h-3.5 text-blue-500" />
+              <h3 className="text-xs font-bold text-gray-900">Score Distribution</h3>
+            </div>
+            <div className="space-y-1.5">
+              {insights.scoreDistribution.map((d: any) => {
+                const maxCount = Math.max(...insights.scoreDistribution.map((x: any) => x.count));
+                const pct = maxCount > 0 ? (d.count / maxCount) * 100 : 0;
+                return (
+                  <div key={d.range} className="flex items-center gap-2">
+                    <span className="text-[10px] text-gray-400 w-16 flex-shrink-0 text-right">{d.range}</span>
+                    <div className="flex-1 h-4 bg-gray-100 rounded-md overflow-hidden relative">
+                      <div className="h-full bg-gradient-to-r from-blue-400 to-blue-600 rounded-md transition-all" style={{ width: `${pct}%` }} />
+                      {d.count > 0 && (
+                        <span className="absolute inset-y-0 left-2 flex items-center text-[10px] font-semibold text-white">{d.count}</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Avg Score by Category */}
+        {insights?.avgScoreByCategory && (
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Target className="w-3.5 h-3.5 text-violet-500" />
+              <h3 className="text-xs font-bold text-gray-900">Avg Score by Category</h3>
+              <span className="text-[10px] text-gray-400">(shortlisted)</span>
+            </div>
+            <div className="space-y-2">
+              {Object.entries(insights.avgScoreByCategory).map(([key, val]) => (
+                <div key={key} className="flex items-center gap-2">
+                  <span className="text-[10px] text-gray-500 w-20 flex-shrink-0">{categoryLabels[key] || key}</span>
+                  <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full ${categoryColors[key] || 'bg-blue-500'} rounded-full transition-all`}
+                      style={{ width: `${Math.min(100, Math.round(val as number))}%` }}
+                    />
+                  </div>
+                  <span className="text-[10px] font-semibold text-gray-600 w-8 text-right">{Math.round(val as number)}%</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        {/* Recommendation Breakdown */}
+        {insights?.recommendationBreakdown && Object.keys(insights.recommendationBreakdown).length > 0 && (
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Award className="w-3.5 h-3.5 text-emerald-500" />
+              <h3 className="text-xs font-bold text-gray-900">Recommendation Breakdown</h3>
+            </div>
+            <div className="space-y-2">
+              {Object.entries(insights.recommendationBreakdown)
+                .sort(([, a], [, b]) => (b as number) - (a as number))
+                .map(([rec, count]) => {
+                  const cfg = recConfig[rec] || { color: 'text-gray-600', bar: 'bg-gray-400' };
+                  const total = Object.values(insights.recommendationBreakdown).reduce((s: number, v) => s + (v as number), 0);
+                  const pct = total > 0 ? Math.round(((count as number) / total) * 100) : 0;
+                  return (
+                    <div key={rec} className="flex items-center gap-2">
+                      <span className={`text-[10px] font-semibold w-24 flex-shrink-0 ${cfg.color}`}>{rec}</span>
+                      <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
+                        <div className={`h-full ${cfg.bar} rounded-full transition-all`} style={{ width: `${pct}%` }} />
+                      </div>
+                      <span className="text-[10px] text-gray-500 w-14 text-right flex-shrink-0">{count as number} ({pct}%)</span>
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+        )}
+
+        {/* Common Skill Gaps */}
+        {insights?.commonGaps?.length > 0 && (
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <AlertCircle className="w-3.5 h-3.5 text-red-500" />
+              <h3 className="text-xs font-bold text-gray-900">Common Skill Gaps</h3>
+              <span className="text-[10px] text-gray-400">(across all candidates)</span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {insights.commonGaps.slice(0, 12).map((g: any) => (
+                <div key={g.skill} className="flex items-center gap-1 px-2 py-1 bg-red-50 border border-red-100 rounded-lg">
+                  <span className="text-[10px] font-semibold text-red-700">{g.skill}</span>
+                  <span className="text-[9px] text-red-400">×{g.missingCount}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Top Skills in Demand */}
+      {insights?.skillDemand?.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Lightbulb className="w-3.5 h-3.5 text-amber-500" />
+            <h3 className="text-xs font-bold text-gray-900">Top Skills in Demand</h3>
+            <span className="text-[10px] text-gray-400">(among shortlisted candidates)</span>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {insights.skillDemand.slice(0, 8).map((s: any) => (
+              <div key={s.skill} className="flex items-center justify-between px-3 py-2 bg-amber-50 border border-amber-100 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0" />
+                  <span className="text-[11px] font-semibold text-gray-800">{s.skill}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-gray-400">{s.count}×</span>
+                  <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">{Math.round(s.avgScore)}%</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

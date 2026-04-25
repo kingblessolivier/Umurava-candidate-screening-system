@@ -2,11 +2,13 @@ import { Request, Response } from "express";
 import { Job as JobModel } from "../models/Job";
 import { Candidate } from "../models/Candidate";
 import { ScreeningResultModel } from "../models/ScreeningResult";
-import { runScreeningPipeline, ScreeningProgressFn } from "../services/geminiService";
+import { runScreeningPipeline, ScreeningCancelledError, ScreeningProgressFn } from "../services/geminiService";
 import { preprocessCandidates } from "../services/preprocessingService";
 import {
   createJob,
   updateJob,
+  cancelJob,
+  isCancelled,
   sendNotificationToUser,
 } from "../services/backgroundJobService";
 import { Job, TalentProfile } from "../types";
@@ -111,7 +113,10 @@ export const runScreening = async (req: Request, res: Response) => {
           });
         };
 
-        const screeningData = await runScreeningPipeline(job, preprocessed, shortlistSize, onProgress);
+        const screeningData = await runScreeningPipeline(
+          job, preprocessed, shortlistSize, onProgress,
+          () => !isCancelled(bgJob.id)
+        );
         const result = await ScreeningResultModel.create({ ...screeningData, jobId });
 
         updateJob(bgJob.id, "done", { screeningResultId: result._id.toString() });
@@ -128,6 +133,20 @@ export const runScreening = async (req: Request, res: Response) => {
           timestamp: new Date().toISOString(),
         });
       } catch (err) {
+        if (err instanceof ScreeningCancelledError) {
+          updateJob(bgJob.id, "cancelled", undefined, "Cancelled by user");
+          sendNotificationToUser(userId, {
+            type: "job_update",
+            jobId: bgJob.id,
+            jobType: "screening",
+            status: "cancelled",
+            title: "Screening Cancelled",
+            message: `Screening for "${jobDoc.title}" was cancelled.`,
+            metadata: bgJob.metadata,
+            timestamp: new Date().toISOString(),
+          });
+          return;
+        }
         const error = err instanceof Error ? err.message : "Screening pipeline failed";
         updateJob(bgJob.id, "failed", undefined, error);
         sendNotificationToUser(userId, {
@@ -197,6 +216,16 @@ export const deleteScreeningResult = async (req: Request, res: Response) => {
     res.json({ success: true, message: "Result deleted" });
   } catch (err) {
     res.status(500).json({ success: false, error: "Failed to delete result" });
+  }
+};
+
+export const cancelScreening = async (req: Request, res: Response) => {
+  try {
+    const { jobId } = req.params;
+    cancelJob(jobId);
+    res.json({ success: true, message: "Cancellation requested" });
+  } catch (err) {
+    res.status(500).json({ success: false, error: "Failed to cancel screening" });
   }
 };
 

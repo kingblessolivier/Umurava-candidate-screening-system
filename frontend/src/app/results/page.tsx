@@ -9,7 +9,7 @@ import { motion } from 'framer-motion';
 import {
   Trophy, Users, Clock, ChevronRight, Trash2, Mail,
   FileText, ChevronLeft, CalendarDays, Zap, TrendingUp,
-  ArrowUpRight,
+  ArrowUpRight, Medal, Award,
 } from 'lucide-react';
 import EmailModal from '@/components/email/EmailModal';
 import { ScreeningResult } from '@/types';
@@ -460,11 +460,18 @@ export default function ResultsPage() {
                     ? Math.round(r.shortlist.reduce((a, c) => a + c.finalScore, 0) / r.shortlist.length)
                     : 0;
                   const cfg = scoreConfig(avg);
-                  const medals = ['🥇', '🥈', '🥉'];
+                  const rankIcons = [
+                    { Icon: Trophy, iconClass: 'text-amber-500', bgClass: 'bg-amber-50 border-amber-200' },
+                    { Icon: Medal, iconClass: 'text-slate-500', bgClass: 'bg-slate-50 border-slate-200' },
+                    { Icon: Award, iconClass: 'text-orange-500', bgClass: 'bg-orange-50 border-orange-200' },
+                  ] as const;
+                  const rank = rankIcons[i] || rankIcons[2];
                   return (
                     <Link key={r._id} href={`/results/${r._id}`}
                       className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors group">
-                      <span className="text-sm w-5 text-center flex-shrink-0">{medals[i]}</span>
+                      <span className={`w-5 h-5 rounded-md border flex items-center justify-center flex-shrink-0 ${rank.bgClass}`}>
+                        <rank.Icon className={`w-3 h-3 ${rank.iconClass}`} strokeWidth={2} />
+                      </span>
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-semibold text-gray-800 group-hover:text-blue-600 transition-colors truncate">{r.jobTitle}</p>
                         <p className="text-[10px] text-gray-400">{r.shortlistSize} shortlisted · {formatDate(r.screeningDate)}</p>

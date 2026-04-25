@@ -205,7 +205,9 @@ export interface RejectedCandidate {
   candidateName: string;
   email: string;
   finalScore: number;
-  whyNotSelected: string;          // Human-readable explanation
+  rank: number;                    // Overall rank among all candidates
+  scoreGap: number;                // Points below the cutoff score
+  whyNotSelected: string;          // Honest, specific, candidate-readable explanation
   topMissingSkills: string[];
   closestShortlistScore: number;   // Score of the last shortlisted candidate
   improvementSuggestions: string[];

@@ -539,7 +539,7 @@ async function exportPDF(
       y += 34;
 
       // Gap callout
-      const gap = Math.round(r.closestShortlistScore - r.finalScore);
+      const gap = r.scoreGap ?? Math.round(r.closestShortlistScore - r.finalScore);
       doc.setFillColor(254, 242, 242); doc.rect(M, y, CW, 12, "F");
       doc.setDrawColor(254, 202, 202); doc.setLineWidth(0.3); doc.rect(M, y, CW, 12, "D");
       doc.setFont("helvetica", "bold"); doc.setFontSize(8.5); doc.setTextColor(...C.red);
@@ -1429,7 +1429,9 @@ function RejectedRow({ rejected, index }: { rejected: RejectedCandidate; index: 
       >
         <td className="pl-4 pr-3 py-2.5 w-9" />
         <td className="px-3 py-2.5 w-10">
-          <span className="text-xs font-bold font-mono tabular-nums text-red-600">{rejected.finalScore}</span>
+          <span className="text-xs font-bold font-mono tabular-nums text-red-400">
+            {rejected.rank != null ? `#${rejected.rank}` : `${rejected.finalScore}`}
+          </span>
         </td>
         <td className="px-3 py-2.5">
           <p className="text-xs font-mono text-gray-600">{rejected.candidateName || rejected.email.split("@")[0]}</p>
@@ -1440,7 +1442,7 @@ function RejectedRow({ rejected, index }: { rejected: RejectedCandidate; index: 
         </td>
         <td className="px-3 py-2.5 w-40">
           <span className="text-[10px] font-mono text-gray-500">
-            -{Math.round(rejected.closestShortlistScore - rejected.finalScore)} PTS FROM CUTOFF
+            -{rejected.scoreGap ?? Math.round(rejected.closestShortlistScore - rejected.finalScore)} PTS FROM CUTOFF
           </span>
         </td>
         <td className="px-3 py-2.5 w-32" />

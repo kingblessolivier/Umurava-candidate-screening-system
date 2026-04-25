@@ -93,6 +93,8 @@ router.post("/email/send", requireAuth, email.sendEmailHandler);
 router.get("/notifications/stream", notifications.streamNotifications);
 // Poll job status
 router.get("/background-jobs/:jobId", requireAuth, notifications.getJobStatus);
+// Cancel a running background screening job
+router.post("/background-jobs/:jobId/cancel", requireAuth, screening.cancelScreening);
 
 // ============================================
 // System Monitoring
