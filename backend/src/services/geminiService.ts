@@ -5,89 +5,14 @@ import {
 } from "../types";
 import { rateLimitService } from "./rateLimitService";
 
-// Normalize legacy/deprecated model aliases to currently supported names.
-function normalizeModelName(model: string): string {
-  const normalized = model.trim();
-  const aliases: Record<string, string> = {
-    "gemini-2.0-flash-exp": "gemini-3.1-flash-lite-preview",
-  };
-  return aliases[normalized] ?? normalized;
-}
-
-// ─── Model Registry ───────────────────────────────────────────────────────────
-// Tier → model ID mapping. These are the only models used by the screening pipeline.
-export const MODEL_REGISTRY = {
-  TOP:  { id: "gemini-3.1-pro-preview",       tier: "Top",  desc: "Advanced reasoning — final shortlisting" },
-  MID:  { id: "gemini-3-flash-preview",        tier: "Mid",  desc: "Fast standard screening" },
-  BASE: { id: "gemini-3.1-flash-lite-preview", tier: "Base", desc: "High-volume workhorse" },
-  ALT:  { id: "gemini-2.5-flash",              tier: "Alt",  desc: "Best price-performance for logic" },
-} as const;
-
-export interface ScreeningModelPlan {
-  batch: string;      // model used for each batch evaluation call
-  rerank: string;     // model used for cross-batch re-ranking
-  rejection: string;  // model used for rejection reasons
-  batchTier: string;
-  rerankTier: string;
-  rejectionTier: string;
-}
-
-/**
- * Auto-selects the best model for each pipeline phase based on candidate count.
- * If SCREENING_MODEL is pinned in env it overrides all phases (backwards compat).
- */
-function selectScreeningModels(candidateCount: number): ScreeningModelPlan {
-  const legacy = process.env.GEMINI_MODEL;
-  const pinned = process.env.SCREENING_MODEL
-    ? normalizeModelName(process.env.SCREENING_MODEL)
-    : legacy ? normalizeModelName(legacy) : null;
-
-  if (pinned) {
-    return { batch: pinned, rerank: pinned, rejection: pinned, batchTier: "Pinned", rerankTier: "Pinned", rejectionTier: "Pinned" };
-  }
-
-  const batchCount = Math.ceil(candidateCount / SCREENING_BATCH_SIZE);
-
-  // Batch evaluation: scale down to Base for 4+ batches to conserve RPD quota.
-  const batchEntry = batchCount >= 4 ? MODEL_REGISTRY.BASE : MODEL_REGISTRY.MID;
-  // Re-ranking: Alt is "best price-performance for tasks requiring logic" — exactly what ranking is.
-  const rerankEntry = MODEL_REGISTRY.ALT;
-  // Rejection reasons: pure text generation — Base is sufficient and cheapest.
-  const rejectionEntry = MODEL_REGISTRY.BASE;
-
-  return {
-    batch:          batchEntry.id,
-    rerank:         rerankEntry.id,
-    rejection:      rejectionEntry.id,
-    batchTier:      batchEntry.tier,
-    rerankTier:     rerankEntry.tier,
-    rejectionTier:  rejectionEntry.tier,
-  };
-}
-
-const LEGACY_GEMINI_MODEL = process.env.GEMINI_MODEL;
-
-// Default used by standalone helpers (job enhancement, etc.) — Mid tier.
-const DEFAULT_SCREENING_MODEL = normalizeModelName(
-  process.env.SCREENING_MODEL || LEGACY_GEMINI_MODEL || MODEL_REGISTRY.MID.id
-);
-
-// Resume parsing always uses Base — it's high-volume and doesn't need reasoning.
-const RESUME_PARSER_MODEL = normalizeModelName(
-  process.env.RESUME_PARSER_MODEL || LEGACY_GEMINI_MODEL || MODEL_REGISTRY.BASE.id
-);
+const SCREENING_MODEL = (process.env.SCREENING_MODEL || process.env.GEMINI_MODEL || "gemini-3.1-flash-lite-preview").trim();
+const RESUME_PARSER_MODEL = (process.env.RESUME_PARSER_MODEL || process.env.GEMINI_MODEL || "gemini-3.1-flash-lite-preview").trim();
 const SCREENING_THINKING_BUDGET = parseInt(process.env.SCREENING_THINKING_BUDGET || "0", 10);
 const SCREENING_BATCH_SIZE = parseInt(process.env.SCREENING_BATCH_SIZE || "20", 10);
-const SCREENING_FALLBACK_MODELS = (process.env.SCREENING_FALLBACK_MODELS || "gemini-1.5-flash,gemini-1.5-pro")
-  .split(",")
-  .map((m) => normalizeModelName(m))
-  .map((m) => m.trim())
-  .filter(Boolean);
-const RESUME_PARSER_FALLBACK_MODELS = (process.env.RESUME_PARSER_FALLBACK_MODELS || "gemini-1.5-flash")
-  .split(",")
-  .map((m) => normalizeModelName(m))
-  .map((m) => m.trim())
-  .filter(Boolean);
+const SCREENING_FALLBACK_MODELS = (process.env.SCREENING_FALLBACK_MODELS || "")
+  .split(",").map((m) => m.trim()).filter(Boolean);
+const RESUME_PARSER_FALLBACK_MODELS = (process.env.RESUME_PARSER_FALLBACK_MODELS || "")
+  .split(",").map((m) => m.trim()).filter(Boolean);
 // Default to AI-generated rejection reasons (Option B). Set USE_AI_REJECTION_REASONS=false
 // only if you explicitly want a single generic message for all rejected candidates.
 const USE_AI_REJECTION_REASONS = (process.env.USE_AI_REJECTION_REASONS || "true").toLowerCase() === "true";
@@ -188,7 +113,7 @@ function extractBalancedJson(text: string): string | null {
 
 async function generate(opts: GenerateOptions): Promise<string> {
   const ai = getClient();
-  const model = opts.model ?? DEFAULT_SCREENING_MODEL;
+  const model = opts.model ?? SCREENING_MODEL;
   const budget = opts.thinkingBudget ?? 0;
   const useThinking = budget > 0;
 
@@ -304,9 +229,9 @@ async function generateWithRateLimit<T>(
   fallback: T,
   { useCache = true }: { useCache?: boolean } = {}
 ): Promise<T> {
-  const primaryModel = normalizeModelName(opts.model ?? DEFAULT_SCREENING_MODEL);
+  const primaryModel = opts.model ?? SCREENING_MODEL;
   const fallbacks =
-    primaryModel === DEFAULT_SCREENING_MODEL
+    primaryModel === SCREENING_MODEL
       ? SCREENING_FALLBACK_MODELS
       : primaryModel === RESUME_PARSER_MODEL
         ? RESUME_PARSER_FALLBACK_MODELS
@@ -425,7 +350,7 @@ Return ONLY this JSON structure:
 
   return generateWithRateLimit(
     `job-enhance:${title.toLowerCase().replace(/\s+/g, "-")}`,
-    { prompt, model: DEFAULT_SCREENING_MODEL, temperature: 0.3, maxOutputTokens: 4096, thinkingBudget: 512 },
+    { prompt, model: SCREENING_MODEL, temperature: 0.3, maxOutputTokens: 4096, thinkingBudget: 0 },
     fallback
   );
 }
@@ -852,8 +777,6 @@ export interface ScreeningProgressEvent {
   evaluatedCount?: number;
   /** 0–100 accounting for all pipeline phases (batch eval + reranking + rejection reasons). More accurate than evaluatedCount/totalCandidates. */
   overallProgress?: number;
-  /** Which model was auto-selected for each phase — emitted once on the initial "analyzing" event. */
-  selectedModels?: ScreeningModelPlan;
   thinkingSnapshot?: ThinkingSnapshot; // real Gemini thinking tokens for this step
 }
 
@@ -887,9 +810,7 @@ export async function runScreeningPipeline(
   const BATCH_SIZE = Math.max(5, Math.min(20, SCREENING_BATCH_SIZE));
   const thinkingLog: ThinkingSnapshot[] = [];
 
-  // ── Model selection ────────────────────────────────────────────────────────
-  const models = selectScreeningModels(preprocessed.length);
-  console.log(`[Screening] Model plan — batch: ${models.batch} (${models.batchTier}) | rerank: ${models.rerank} (${models.rerankTier}) | rejection: ${models.rejection} (${models.rejectionTier})`);
+  console.log(`[Screening] Using model: ${SCREENING_MODEL}`);
 
   // ── Phase tracking for accurate overall progress ────────────────────────────
   // Pre-compute how many Gemini calls will run so we can report a real 0–100%.
@@ -905,7 +826,6 @@ export async function runScreeningPipeline(
     message: `Analyzing ${preprocessed.length} candidate${preprocessed.length !== 1 ? "s" : ""} for "${job.title}"…`,
     evaluatedCount: 0,
     overallProgress: 0,
-    selectedModels: models,
   });
 
   // ── Step 1: Evaluate candidates in sequential batches ─────────────────────
@@ -936,7 +856,7 @@ export async function runScreeningPipeline(
 
     const result = await generateWithRateLimit<{ evaluations: CandidateScore[] }>(
       cacheKey,
-      { prompt, model: models.batch, temperature: 0.2, maxOutputTokens: 8192, thinkingBudget: SCREENING_THINKING_BUDGET },
+      { prompt, model: SCREENING_MODEL, temperature: 0.2, maxOutputTokens: 8192, thinkingBudget: SCREENING_THINKING_BUDGET },
       { evaluations: [] }
     );
 
@@ -993,7 +913,7 @@ export async function runScreeningPipeline(
     const rerankPrompt = buildEvaluationPrompt(job, borderlinePreprocessed);
     const rerankResult = await generateWithRateLimit<{ evaluations: CandidateScore[] }>(
       `screening:${job._id}:rerank-borderline`,
-      { prompt: rerankPrompt, model: models.rerank, temperature: 0.1, maxOutputTokens: 4096, thinkingBudget: SCREENING_THINKING_BUDGET },
+      { prompt: rerankPrompt, model: SCREENING_MODEL, temperature: 0.1, maxOutputTokens: 4096, thinkingBudget: SCREENING_THINKING_BUDGET },
       { evaluations: allEvaluations.filter(e => borderlineIds.has(e.candidateId)) }
     );
 
@@ -1113,7 +1033,7 @@ export async function runScreeningPipeline(
     const rankingPrompt = buildRankingPrompt(job, shortlist, rejectedForAI, lowestShortlistScore);
     const rankResult = await generateWithRateLimit<{ rejectedCandidates: Partial<RejectedCandidate>[] }>(
       `screening:${job._id}:rejection-reasons`,
-      { prompt: rankingPrompt, model: models.rejection, temperature: 0.3, maxOutputTokens: 8192, thinkingBudget: SCREENING_THINKING_BUDGET },
+      { prompt: rankingPrompt, model: SCREENING_MODEL, temperature: 0.3, maxOutputTokens: 8192, thinkingBudget: SCREENING_THINKING_BUDGET },
       { rejectedCandidates: [] }
     );
     const aiRejectedByCandidateId = new Map(
@@ -1176,7 +1096,7 @@ export async function runScreeningPipeline(
     shortlist,
     rejectedCandidates,
     aggregateInsights,
-    aiModel: models.batch,
+    aiModel: SCREENING_MODEL,
     processingTimeMs,
     thinkingLog,
   };

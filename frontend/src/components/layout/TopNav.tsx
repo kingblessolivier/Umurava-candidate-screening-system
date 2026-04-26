@@ -169,9 +169,8 @@ export function TopNav({
                     <div className="divide-y divide-gray-100">
                       {/* ── Active (in-progress) jobs at top ─────────────── */}
                       {activeJobList.map((job) => {
-                        const pe = job.metadata?.progressEvent as { overallProgress?: number; evaluatedCount?: number; selectedModels?: { batchTier?: string } } | undefined;
+                        const pe = job.metadata?.progressEvent as { overallProgress?: number; evaluatedCount?: number } | undefined;
                         const pct = pe?.overallProgress ?? 0;
-                        const modelTier = pe?.selectedModels?.batchTier;
                         const isScreening = job.jobType === 'screening';
                         return (
                         <div
@@ -204,11 +203,6 @@ export function TopNav({
                                   <span className="w-1 h-1 rounded-full bg-blue-600 animate-pulse" />
                                   <span className="text-[10px] font-medium text-blue-700">Live</span>
                                 </span>
-                                {modelTier && modelTier !== 'Pinned' && (
-                                  <span className="rounded-full bg-indigo-100 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700">
-                                    {modelTier} tier
-                                  </span>
-                                )}
                               </div>
                               <p className="text-[11px] text-slate-600 line-clamp-2">{job.message}</p>
                               <div className="mt-2 flex items-center gap-2">
