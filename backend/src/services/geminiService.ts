@@ -297,6 +297,7 @@ export async function extractJobRequirements(rawDescription: string, title: stri
   inferredResponsibilities: string[];
   niceToHave: string[];
   suggestedWeights: { skills: number; experience: number; education: number; projects: number; availability: number };
+  suggestedSalaryRange: { min: number; max: number; currency: string } | null;
 }> {
   const fallback = {
     enhancedDescription: rawDescription,
@@ -304,6 +305,7 @@ export async function extractJobRequirements(rawDescription: string, title: stri
     inferredResponsibilities: [],
     niceToHave: [],
     suggestedWeights: { skills: 35, experience: 30, education: 15, projects: 15, availability: 5 },
+    suggestedSalaryRange: null,
   };
 
   const descriptionSection = rawDescription?.trim()
@@ -322,6 +324,7 @@ Your task:
 3. List 5–8 realistic key responsibilities for this role
 4. Suggest nice-to-have skills (not mandatory but valuable)
 5. Recommend scoring weights that make sense for THIS specific role (must sum to 100)
+6. Suggest a realistic salary range in USD based on market rates for this role and level
 
 RULES:
 - Be specific about skill levels: Beginner/Intermediate/Advanced/Expert
@@ -329,6 +332,7 @@ RULES:
 - For "Junior" roles: weight education and potential more (education 20+%)
 - Base skills on what's genuinely required for this role — do not pad with irrelevant skills
 - yearsRequired should reflect realistic expectations for the level
+- Salary range should reflect current market rates (use USD, annual gross)
 
 Return ONLY this JSON structure:
 {
@@ -348,7 +352,8 @@ Return ONLY this JSON structure:
     "education": 15,
     "projects": 15,
     "availability": 5
-  }
+  },
+  "suggestedSalaryRange": { "min": 80000, "max": 120000, "currency": "USD" }
 }`;
 
   return generateWithRateLimit(

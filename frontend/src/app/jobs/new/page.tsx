@@ -113,6 +113,7 @@ export default function NewJobPage() {
     inferredResponsibilities: string[];
     niceToHave: string[];
     suggestedWeights: ScoringWeights;
+    suggestedSalaryRange?: { min: number; max: number; currency: string } | null;
   };
 
   // Full form generation — works from title alone or title + description
@@ -131,6 +132,11 @@ export default function NewJobPage() {
         responsibilities: result.inferredResponsibilities?.length ? result.inferredResponsibilities : f.responsibilities,
         niceToHave: result.niceToHave?.length ? result.niceToHave : f.niceToHave,
         weights: result.suggestedWeights || f.weights,
+        ...(result.suggestedSalaryRange ? {
+          salaryMin: String(result.suggestedSalaryRange.min),
+          salaryMax: String(result.suggestedSalaryRange.max),
+          currency: result.suggestedSalaryRange.currency || f.currency,
+        } : {}),
       }));
       toast.success(form.description ? "Job enhanced by AI!" : "Job generated from title! Review and adjust.");
       clearDraft();

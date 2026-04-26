@@ -2058,6 +2058,14 @@ function JobModal({ job, onClose, onSave, onCreate, onUpdate }: any) {
     responsibilities: job?.responsibilities?.join('\n') || '',
     requirements: (job?.requirements || []) as Array<{ skill: string; level: string; yearsRequired: number; required: boolean }>,
     niceToHave: job?.niceToHave?.join(', ') || '',
+    salaryMin: job?.salaryRange?.min ?? '',
+    salaryMax: job?.salaryRange?.max ?? '',
+    salaryCurrency: job?.salaryRange?.currency || 'USD',
+    weightSkills: job?.weights?.skills ?? 35,
+    weightExperience: job?.weights?.experience ?? 30,
+    weightEducation: job?.weights?.education ?? 15,
+    weightProjects: job?.weights?.projects ?? 15,
+    weightAvailability: job?.weights?.availability ?? 5,
     isActive: job?.isActive ?? true,
   });
 
@@ -2084,6 +2092,18 @@ function JobModal({ job, onClose, onSave, onCreate, onUpdate }: any) {
           ? result.structuredRequirements.map((r: any) => ({ skill: r.skill || '', level: r.level || 'Intermediate', yearsRequired: r.yearsRequired ?? 1, required: r.required ?? true }))
           : p.requirements,
         niceToHave: Array.isArray(result.niceToHave) && result.niceToHave.length > 0 ? result.niceToHave.join(', ') : p.niceToHave,
+        ...(result.suggestedWeights ? {
+          weightSkills: result.suggestedWeights.skills ?? p.weightSkills,
+          weightExperience: result.suggestedWeights.experience ?? p.weightExperience,
+          weightEducation: result.suggestedWeights.education ?? p.weightEducation,
+          weightProjects: result.suggestedWeights.projects ?? p.weightProjects,
+          weightAvailability: result.suggestedWeights.availability ?? p.weightAvailability,
+        } : {}),
+        ...(result.suggestedSalaryRange ? {
+          salaryMin: result.suggestedSalaryRange.min ?? p.salaryMin,
+          salaryMax: result.suggestedSalaryRange.max ?? p.salaryMax,
+          salaryCurrency: result.suggestedSalaryRange.currency || p.salaryCurrency,
+        } : {}),
       }));
       toast.success('AI enhancement applied');
     } catch { toast.error('AI enhancement failed'); }
@@ -2115,10 +2135,26 @@ function JobModal({ job, onClose, onSave, onCreate, onUpdate }: any) {
     setSubmitting(true);
     try {
       const jobData = {
-        ...formData,
+        title: formData.title,
+        department: formData.department,
+        location: formData.location,
+        type: formData.type,
+        experienceLevel: formData.experienceLevel,
+        description: formData.description,
+        isActive: formData.isActive,
         responsibilities: formData.responsibilities.split('\n').map((r: string) => r.trim()).filter(Boolean),
         requirements: formData.requirements.filter(r => r.skill),
         niceToHave: formData.niceToHave.split(',').map((s: string) => s.trim()).filter(Boolean),
+        ...(formData.salaryMin !== '' && formData.salaryMax !== '' ? {
+          salaryRange: { min: Number(formData.salaryMin), max: Number(formData.salaryMax), currency: formData.salaryCurrency },
+        } : {}),
+        weights: {
+          skills: Number(formData.weightSkills),
+          experience: Number(formData.weightExperience),
+          education: Number(formData.weightEducation),
+          projects: Number(formData.weightProjects),
+          availability: Number(formData.weightAvailability),
+        },
       };
       if (job) {
         await onUpdate(job._id, jobData);
@@ -2294,10 +2330,65 @@ function JobModal({ job, onClose, onSave, onCreate, onUpdate }: any) {
               placeholder="e.g., Docker, Kubernetes, GraphQL" suppressHydrationWarning />
           </div>
 
+          {/* Salary Range */}
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Salary Range (optional)</label>
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <label className="text-[10px] text-gray-400 mb-0.5 block">Currency</label>
+                <select className={`${inputCls} bg-white`} value={formData.salaryCurrency}
+                  onChange={e => setFormData(p => ({ ...p, salaryCurrency: e.target.value }))}>
+                  <option>USD</option><option>EUR</option><option>GBP</option><option>RWF</option><option>KES</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] text-gray-400 mb-0.5 block">Minimum</label>
+                <input type="number" min={0} className={inputCls} placeholder="e.g. 50000" value={formData.salaryMin}
+                  onChange={e => setFormData(p => ({ ...p, salaryMin: e.target.value }))} suppressHydrationWarning />
+              </div>
+              <div>
+                <label className="text-[10px] text-gray-400 mb-0.5 block">Maximum</label>
+                <input type="number" min={0} className={inputCls} placeholder="e.g. 80000" value={formData.salaryMax}
+                  onChange={e => setFormData(p => ({ ...p, salaryMax: e.target.value }))} suppressHydrationWarning />
+              </div>
+            </div>
+          </div>
+
+          {/* Scoring Weights */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-medium text-gray-700">Scoring Weights</label>
+              <span className={`text-[10px] font-semibold ${
+                Number(formData.weightSkills) + Number(formData.weightExperience) + Number(formData.weightEducation) + Number(formData.weightProjects) + Number(formData.weightAvailability) === 100
+                  ? 'text-green-600' : 'text-red-500'
+              }`}>
+                Total: {Number(formData.weightSkills) + Number(formData.weightExperience) + Number(formData.weightEducation) + Number(formData.weightProjects) + Number(formData.weightAvailability)}% (must = 100)
+              </span>
+            </div>
+            <div className="grid grid-cols-5 gap-2">
+              {([
+                { key: 'weightSkills', label: 'Skills' },
+                { key: 'weightExperience', label: 'Experience' },
+                { key: 'weightEducation', label: 'Education' },
+                { key: 'weightProjects', label: 'Projects' },
+                { key: 'weightAvailability', label: 'Availability' },
+              ] as const).map(({ key, label }) => (
+                <div key={key} className="text-center">
+                  <label className="text-[10px] text-gray-500 block mb-1">{label}</label>
+                  <input type="number" min={0} max={100} suppressHydrationWarning
+                    className="w-full px-2 py-1.5 text-xs text-center border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    value={formData[key]}
+                    onChange={e => setFormData(p => ({ ...p, [key]: Number(e.target.value) }))} />
+                  <span className="text-[10px] text-gray-400">%</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
           <div className="flex items-center gap-2 pt-1">
             <input type="checkbox" id="isActive" checked={formData.isActive}
               onChange={e => setFormData(p => ({ ...p, isActive: e.target.checked }))}
-              className="w-3.5 h-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+              className="w-3.5 h-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500" suppressHydrationWarning />
             <label htmlFor="isActive" className="text-xs text-gray-700">Job is active</label>
           </div>
         </form>
