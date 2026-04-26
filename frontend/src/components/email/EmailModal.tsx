@@ -340,7 +340,11 @@ export default function EmailModal({ isOpen, onClose, recipients: initialRecipie
                             <p className="text-[10px] text-gray-400 truncate">{r.email}</p>
                           </div>
                           {res?.success === true && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />}
-                          {res?.success === false && <XCircle className="w-3.5 h-3.5 text-red-400 flex-shrink-0" title={res.error} />}
+                          {res?.success === false && (
+                            <span title={res.error}>
+                              <XCircle className="w-3.5 h-3.5 text-red-400 flex-shrink-0" />
+                            </span>
+                          )}
                           {!res && (
                             <button onClick={() => setRecipients(p => p.filter(x => x.email !== r.email))}
                               className="opacity-0 group-hover:opacity-100 p-0.5 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all">
