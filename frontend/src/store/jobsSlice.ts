@@ -43,7 +43,7 @@ export const deleteJob = createAsyncThunk("jobs/delete", async (id: string) => {
   await api.delete(`/jobs/${id}`);
   return id;
 });
-export const enhanceJob = createAsyncThunk("jobs/enhance", async (payload: { title: string; description: string }) => {
+export const enhanceJob = createAsyncThunk("jobs/enhance", async (payload: { title: string; description?: string }) => {
   const { data } = await api.post<{ data: unknown }>("/jobs/enhance", payload);
   return data.data;
 });

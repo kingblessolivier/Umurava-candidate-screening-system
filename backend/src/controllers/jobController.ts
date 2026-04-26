@@ -159,13 +159,13 @@ export const deleteJob = catchAsync(async (req: Request, res: Response, next: Ne
  * @access  Private
  */
 export const enhanceJob = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
-  const { description, title } = req.body as {
-    description: string;
+  const { description = "", title } = req.body as {
+    description?: string;
     title: string;
   };
 
-  if (!description || !title) {
-    return next(Errors.badRequest('Title and description are required'));
+  if (!title) {
+    return next(Errors.badRequest('Title is required'));
   }
 
   const enhanced = await extractJobRequirements(description, title);

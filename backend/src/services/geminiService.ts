@@ -306,26 +306,29 @@ export async function extractJobRequirements(rawDescription: string, title: stri
     suggestedWeights: { skills: 35, experience: 30, education: 15, projects: 15, availability: 5 },
   };
 
-  const prompt = `You are a senior technical recruiter at a top-tier tech company. Analyze this job posting and extract structured hiring requirements.
+  const descriptionSection = rawDescription?.trim()
+    ? `RAW JOB DESCRIPTION (enhance and structure this):\n${rawDescription}`
+    : `(No description provided — generate a complete, realistic job posting from scratch based solely on the job title and your knowledge of industry-standard expectations for this role.)`;
+
+  const prompt = `You are a senior technical recruiter at a top-tier tech company. Generate or enhance a structured job posting.
 
 JOB TITLE: ${title}
 
-RAW JOB DESCRIPTION:
-${rawDescription}
+${descriptionSection}
 
 Your task:
-1. Rewrite the description to be more compelling and clear (2–3 paragraphs, professional tone)
-2. Extract ALL technical and soft skill requirements with proficiency levels
-3. Identify 5–8 key responsibilities from the description
-4. Identify nice-to-have skills (not mandatory)
+1. Write a compelling, professional description (2–3 paragraphs) — if no description was provided, create one from industry knowledge for this role
+2. Extract or infer ALL technical and soft skill requirements with proficiency levels
+3. List 5–8 realistic key responsibilities for this role
+4. Suggest nice-to-have skills (not mandatory but valuable)
 5. Recommend scoring weights that make sense for THIS specific role (must sum to 100)
 
 RULES:
 - Be specific about skill levels: Beginner/Intermediate/Advanced/Expert
-- For "Senior" roles: weight experience more heavily
-- For "Junior" roles: weight education and potential more
-- Extract only skills explicitly mentioned or strongly implied
-- Do NOT invent skills that aren't relevant
+- For "Senior" / "Lead" roles: weight experience more heavily (experience 35+%)
+- For "Junior" roles: weight education and potential more (education 20+%)
+- Base skills on what's genuinely required for this role — do not pad with irrelevant skills
+- yearsRequired should reflect realistic expectations for the level
 
 Return ONLY this JSON structure:
 {

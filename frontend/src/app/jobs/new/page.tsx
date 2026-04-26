@@ -41,6 +41,7 @@ export default function NewJobPage() {
 
   const [saving, setSaving] = useState(false);
   const [enhancing, setEnhancing] = useState(false);
+  const [enhancingField, setEnhancingField] = useState<string | null>(null);
   const [showDraftRecovery, setShowDraftRecovery] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
 
@@ -106,21 +107,20 @@ export default function NewJobPage() {
     setForm(f => ({ ...f, weights: { ...f.weights, [key]: val } }));
   };
 
-  // AI Enhance Job
+  type EnhanceResult = {
+    enhancedDescription: string;
+    structuredRequirements: Array<{ skill: string; level: string; yearsRequired?: number; required?: boolean }>;
+    inferredResponsibilities: string[];
+    niceToHave: string[];
+    suggestedWeights: ScoringWeights;
+  };
+
+  // Full form generation — works from title alone or title + description
   const handleEnhance = async () => {
-    if (!form.title || !form.description) {
-      return toast.error("Fill in Title and Description before enhancing");
-    }
+    if (!form.title) return toast.error("Enter a job title first");
     setEnhancing(true);
     try {
-      const result = await dispatch(enhanceJob({ title: form.title, description: form.description })).unwrap() as {
-        enhancedDescription: string;
-        structuredRequirements: Array<{ skill: string; level: string; yearsRequired?: number; required?: boolean }>;
-        inferredResponsibilities: string[];
-        niceToHave: string[];
-        suggestedWeights: ScoringWeights;
-      };
-
+      const result = await dispatch(enhanceJob({ title: form.title, description: form.description })).unwrap() as EnhanceResult;
       setForm(f => ({
         ...f,
         description: result.enhancedDescription || f.description,
@@ -132,12 +132,33 @@ export default function NewJobPage() {
         niceToHave: result.niceToHave?.length ? result.niceToHave : f.niceToHave,
         weights: result.suggestedWeights || f.weights,
       }));
-      toast.success("Job enhanced by AI! Review and adjust as needed.");
+      toast.success(form.description ? "Job enhanced by AI!" : "Job generated from title! Review and adjust.");
       clearDraft();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Enhancement failed");
     } finally {
       setEnhancing(false);
+    }
+  };
+
+  // Per-field AI generation — generates only the specified section
+  const handleFieldAI = async (field: "description" | "responsibilities" | "skills" | "niceToHave") => {
+    if (!form.title) return toast.error("Enter a job title first");
+    setEnhancingField(field);
+    try {
+      const result = await dispatch(enhanceJob({ title: form.title, description: form.description })).unwrap() as EnhanceResult;
+      setForm(f => {
+        if (field === "description") return { ...f, description: result.enhancedDescription || f.description };
+        if (field === "responsibilities") return { ...f, responsibilities: result.inferredResponsibilities?.length ? result.inferredResponsibilities : f.responsibilities };
+        if (field === "skills") return { ...f, requirements: result.structuredRequirements?.map(r => ({ name: r.skill, level: (r.level as any) || "Intermediate" })) || f.requirements };
+        if (field === "niceToHave") return { ...f, niceToHave: result.niceToHave?.length ? result.niceToHave : f.niceToHave };
+        return f;
+      });
+      toast.success("Field updated by AI");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed");
+    } finally {
+      setEnhancingField(null);
     }
   };
 
@@ -228,12 +249,12 @@ export default function NewJobPage() {
           <button
             type="button"
             onClick={handleEnhance}
-            disabled={enhancing || !form.title || !form.description}
+            disabled={enhancing || !form.title}
             className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all disabled:opacity-50"
             style={{ background: "rgba(124,58,237,0.15)", border: "1px solid rgba(124,58,237,0.3)", color: "#a78bfa" }}
           >
             {enhancing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-            {enhancing ? "Enhancing…" : "AI Enhance"}
+            {enhancing ? (form.description ? "Enhancing…" : "Generating…") : (form.description ? "AI Enhance" : "Generate with AI")}
           </button>
         </div>
 
@@ -287,23 +308,46 @@ export default function NewJobPage() {
               </Field>
             </div>
             <Field label="Description *" error={getError("description")}>
-              <textarea
-                required
-                value={form.description}
-                onChange={e => {
-                  setForm(f => ({ ...f, description: e.target.value }));
-                  validate("description", e.target.value);
-                }}
-                rows={5}
-                placeholder="Describe the role, team, and what makes it exciting…"
-                className="w-full rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-gray-600 outline-none resize-none"
-                style={{ background: "rgba(255,255,255,0.04)", border: "1px solid var(--border)" }}
-              />
+              <div className="relative">
+                <textarea
+                  required
+                  value={form.description}
+                  onChange={e => {
+                    setForm(f => ({ ...f, description: e.target.value }));
+                    validate("description", e.target.value);
+                  }}
+                  rows={5}
+                  placeholder="Describe the role, team, and what makes it exciting… or click ✨ to generate from title"
+                  className="w-full rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-gray-600 outline-none resize-none pr-24"
+                  style={{ background: "rgba(255,255,255,0.04)", border: "1px solid var(--border)" }}
+                />
+                <button
+                  type="button"
+                  onClick={() => handleFieldAI("description")}
+                  disabled={enhancingField === "description" || !form.title}
+                  className="absolute top-2 right-2 flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium transition-all disabled:opacity-40"
+                  style={{ background: "rgba(124,58,237,0.2)", border: "1px solid rgba(124,58,237,0.35)", color: "#c4b5fd" }}
+                  title={form.title ? "Generate description from title" : "Enter a title first"}
+                >
+                  {enhancingField === "description" ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                  {enhancingField === "description" ? "Writing…" : "AI Write"}
+                </button>
+              </div>
             </Field>
           </Section>
 
           {/* Required Skills - Using Smart Input */}
-          <Section title="Required Skills">
+          <Section
+            title="Required Skills"
+            action={
+              <AIFieldButton
+                loading={enhancingField === "skills"}
+                disabled={!form.title}
+                onClick={() => handleFieldAI("skills")}
+                label="Generate Skills"
+              />
+            }
+          >
             <SmartSkillInput
               skills={form.requirements}
               onSkillsChange={v => setForm(f => ({ ...f, requirements: v }))}
@@ -311,7 +355,17 @@ export default function NewJobPage() {
           </Section>
 
           {/* Responsibilities */}
-          <Section title="Responsibilities">
+          <Section
+            title="Responsibilities"
+            action={
+              <AIFieldButton
+                loading={enhancingField === "responsibilities"}
+                disabled={!form.title}
+                onClick={() => handleFieldAI("responsibilities")}
+                label="Generate"
+              />
+            }
+          >
             <ListEditor
               items={form.responsibilities}
               onChange={v => setForm(f => ({ ...f, responsibilities: v }))}
@@ -320,7 +374,17 @@ export default function NewJobPage() {
           </Section>
 
           {/* Nice to Have */}
-          <Section title="Nice to Have">
+          <Section
+            title="Nice to Have"
+            action={
+              <AIFieldButton
+                loading={enhancingField === "niceToHave"}
+                disabled={!form.title}
+                onClick={() => handleFieldAI("niceToHave")}
+                label="Suggest"
+              />
+            }
+          >
             <ListEditor
               items={form.niceToHave}
               onChange={v => setForm(f => ({ ...f, niceToHave: v }))}
@@ -392,7 +456,7 @@ export default function NewJobPage() {
 
 // ─── Reusable form components ─────────────────────────────────────────────────
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, children, action }: { title: string; children: React.ReactNode; action?: React.ReactNode }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -400,9 +464,30 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       className="rounded-2xl p-6 space-y-4"
       style={{ background: "var(--bg-surface)", border: "1px solid var(--border)" }}
     >
-      <h2 className="text-sm font-semibold text-white">{title}</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-white">{title}</h2>
+        {action}
+      </div>
       {children}
     </motion.div>
+  );
+}
+
+function AIFieldButton({ loading, disabled, onClick, label }: {
+  loading: boolean; disabled: boolean; onClick: () => void; label: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={loading || disabled}
+      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all disabled:opacity-40"
+      style={{ background: "rgba(124,58,237,0.15)", border: "1px solid rgba(124,58,237,0.3)", color: "#c4b5fd" }}
+      title={disabled ? "Enter a job title first" : `Generate with AI`}
+    >
+      {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+      {loading ? "Generating…" : label}
+    </button>
   );
 }
 

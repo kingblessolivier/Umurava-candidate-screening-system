@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useParams, useRouter } from "next/navigation";
 import { AppDispatch, RootState } from "@/store";
-import { fetchJob, updateJob, clearSelected } from "@/store/jobsSlice";
+import { fetchJob, updateJob, clearSelected, enhanceJob } from "@/store/jobsSlice";
 import toast from "react-hot-toast";
 import { ArrowLeft, Sparkles, Loader2, Plus, X } from "lucide-react";
 import Link from "next/link";
@@ -30,6 +30,8 @@ export default function EditJobPage() {
 
   const [form, setForm] = useState<FormState | null>(null);
   const [saving, setSaving] = useState(false);
+  const [enhancing, setEnhancing] = useState(false);
+  const [enhancingField, setEnhancingField] = useState<string | null>(null);
 
   // Load job on mount
   useEffect(() => {
@@ -69,6 +71,59 @@ export default function EditJobPage() {
 
   const weightsTotal = Object.values(form.weights).reduce((a, b) => a + b, 0);
   const weightsValid = Math.abs(weightsTotal - 100) <= 1;
+
+  type EnhanceResult = {
+    enhancedDescription: string;
+    structuredRequirements: Array<{ skill: string; level: string; yearsRequired?: number; required?: boolean }>;
+    inferredResponsibilities: string[];
+    niceToHave: string[];
+    suggestedWeights: ScoringWeights;
+  };
+
+  const handleEnhance = async () => {
+    if (!form) return;
+    setEnhancing(true);
+    try {
+      const result = await dispatch(enhanceJob({ title: form.title, description: form.description })).unwrap() as EnhanceResult;
+      setForm(f => f ? ({
+        ...f,
+        description: result.enhancedDescription || f.description,
+        requirements: result.structuredRequirements?.map(r => ({
+          skill: r.skill, level: (r.level as JobRequirement["level"]) || "Intermediate",
+          yearsRequired: r.yearsRequired ?? 0, required: r.required ?? true,
+        })) || f.requirements,
+        responsibilities: result.inferredResponsibilities?.length ? result.inferredResponsibilities : f.responsibilities,
+        niceToHave: result.niceToHave?.length ? result.niceToHave : f.niceToHave,
+        weights: result.suggestedWeights || f.weights,
+      }) : null);
+      toast.success("Job enhanced by AI! Review and adjust.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Enhancement failed");
+    } finally {
+      setEnhancing(false);
+    }
+  };
+
+  const handleFieldAI = async (field: "description" | "responsibilities" | "skills" | "niceToHave") => {
+    if (!form) return;
+    setEnhancingField(field);
+    try {
+      const result = await dispatch(enhanceJob({ title: form.title, description: form.description })).unwrap() as EnhanceResult;
+      setForm(f => {
+        if (!f) return null;
+        if (field === "description") return { ...f, description: result.enhancedDescription || f.description };
+        if (field === "responsibilities") return { ...f, responsibilities: result.inferredResponsibilities?.length ? result.inferredResponsibilities : f.responsibilities };
+        if (field === "skills") return { ...f, requirements: result.structuredRequirements?.map(r => ({ skill: r.skill, level: (r.level as JobRequirement["level"]) || "Intermediate", yearsRequired: r.yearsRequired ?? 0, required: r.required ?? true })) || f.requirements };
+        if (field === "niceToHave") return { ...f, niceToHave: result.niceToHave?.length ? result.niceToHave : f.niceToHave };
+        return f;
+      });
+      toast.success("Field updated by AI");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed");
+    } finally {
+      setEnhancingField(null);
+    }
+  };
 
   const setWeight = (key: keyof ScoringWeights, val: number) => {
     setForm(f => f ? { ...f, weights: { ...f.weights, [key]: val } } : null);
@@ -115,10 +170,20 @@ export default function EditJobPage() {
         <Link href={`/jobs/${job._id}`} className="p-2 rounded-xl transition-all hover:bg-white/5 text-gray-400">
           <ArrowLeft className="w-4 h-4" />
         </Link>
-        <div>
+        <div className="flex-1">
           <h1 className="text-2xl font-bold text-white">Edit Job</h1>
           <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>{form.title}</p>
         </div>
+        <button
+          type="button"
+          onClick={handleEnhance}
+          disabled={enhancing}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all disabled:opacity-50"
+          style={{ background: "rgba(124,58,237,0.15)", border: "1px solid rgba(124,58,237,0.3)", color: "#a78bfa" }}
+        >
+          {enhancing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+          {enhancing ? "Enhancing…" : "AI Enhance"}
+        </button>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-5">
@@ -146,15 +211,27 @@ export default function EditJobPage() {
             </Field>
           </div>
           <Field label="Description *">
-            <textarea
-              required
-              value={form.description}
-              onChange={e => setForm(f => f ? { ...f, description: e.target.value } : null)}
-              rows={5}
-              placeholder="Describe the role, team, and what makes it exciting…"
-              className="w-full rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-gray-600 outline-none resize-none"
-              style={{ background: "rgba(255,255,255,0.04)", border: "1px solid var(--border)" }}
-            />
+            <div className="relative">
+              <textarea
+                required
+                value={form.description}
+                onChange={e => setForm(f => f ? { ...f, description: e.target.value } : null)}
+                rows={5}
+                placeholder="Describe the role, team, and what makes it exciting…"
+                className="w-full rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-gray-600 outline-none resize-none pr-24"
+                style={{ background: "rgba(255,255,255,0.04)", border: "1px solid var(--border)" }}
+              />
+              <button
+                type="button"
+                onClick={() => handleFieldAI("description")}
+                disabled={enhancingField === "description"}
+                className="absolute top-2 right-2 flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium transition-all disabled:opacity-40"
+                style={{ background: "rgba(124,58,237,0.2)", border: "1px solid rgba(124,58,237,0.35)", color: "#c4b5fd" }}
+              >
+                {enhancingField === "description" ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                {enhancingField === "description" ? "Writing…" : "AI Write"}
+              </button>
+            </div>
           </Field>
           <Field label="Status">
             <label className="flex items-center gap-2 cursor-pointer">
@@ -167,7 +244,7 @@ export default function EditJobPage() {
         </Section>
 
         {/* Required Skills */}
-        <Section title="Required Skills">
+        <Section title="Required Skills" action={<AIFieldButton loading={enhancingField === "skills"} onClick={() => handleFieldAI("skills")} />}>
           <div className="space-y-2">
             {form.requirements.map((req, i) => (
               <div key={i} className="grid grid-cols-12 gap-2 items-start">
@@ -208,7 +285,7 @@ export default function EditJobPage() {
         </Section>
 
         {/* Responsibilities & Nice-to-Have */}
-        <Section title="Responsibilities">
+        <Section title="Responsibilities" action={<AIFieldButton loading={enhancingField === "responsibilities"} onClick={() => handleFieldAI("responsibilities")} label="Generate" />}>
           <ListEditor
             items={form.responsibilities}
             onChange={v => setForm(f => f ? { ...f, responsibilities: v } : null)}
@@ -216,7 +293,7 @@ export default function EditJobPage() {
           />
         </Section>
 
-        <Section title="Nice to Have">
+        <Section title="Nice to Have" action={<AIFieldButton loading={enhancingField === "niceToHave"} onClick={() => handleFieldAI("niceToHave")} label="Suggest" />}>
           <ListEditor
             items={form.niceToHave}
             onChange={v => setForm(f => f ? { ...f, niceToHave: v } : null)}
@@ -282,7 +359,7 @@ export default function EditJobPage() {
 
 // ─── Reusable form components ─────────────────────────────────────────────────
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, children, action }: { title: string; children: React.ReactNode; action?: React.ReactNode }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -290,9 +367,29 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       className="rounded-2xl p-6 space-y-4"
       style={{ background: "var(--bg-surface)", border: "1px solid var(--border)" }}
     >
-      <h2 className="text-sm font-semibold text-white">{title}</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-white">{title}</h2>
+        {action}
+      </div>
       {children}
     </motion.div>
+  );
+}
+
+function AIFieldButton({ loading, onClick, label = "Generate Skills" }: {
+  loading: boolean; onClick: () => void; label?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={loading}
+      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all disabled:opacity-40"
+      style={{ background: "rgba(124,58,237,0.15)", border: "1px solid rgba(124,58,237,0.3)", color: "#c4b5fd" }}
+    >
+      {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+      {loading ? "Generating…" : label}
+    </button>
   );
 }
 
