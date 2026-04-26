@@ -638,7 +638,7 @@ export default function JobDetailPageTabbed() {
                                   </div>
                                 )}
                                 <p className="text-[10px] text-gray-600">
-                                  {c.scoreGap ?? Math.round(c.closestShortlistScore - c.finalScore)} pts below cutoff · Cutoff: {Math.round(c.closestShortlistScore)}
+                                  {(() => { const gap = c.scoreGap ?? Math.round(c.closestShortlistScore - c.finalScore); return gap > 0 ? `${gap} pts below cutoff` : 'At cutoff'; })()} · Cutoff: {Math.round(c.closestShortlistScore)}
                                 </p>
                               </div>
                             )}

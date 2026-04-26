@@ -54,6 +54,7 @@ interface NotificationsContextValue {
   unreadCount: number;
   markAsRead: (id: string) => void;
   clearAll: () => void;
+  removeActiveJob: (jobId: string) => void;
   liveEvents: SSELiveEvent[];
 }
 
@@ -63,6 +64,7 @@ const NotificationsContext = createContext<NotificationsContextValue>({
   unreadCount: 0,
   markAsRead: () => {},
   clearAll: () => {},
+  removeActiveJob: () => {},
   liveEvents: [],
 });
 
@@ -193,6 +195,15 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
 
   const clearAll = useCallback(() => setNotifications([]), []);
 
+  const removeActiveJob = useCallback((jobId: string) => {
+    setActiveJobs((prev) => {
+      if (!prev[jobId]) return prev;
+      const next = { ...prev };
+      delete next[jobId];
+      return next;
+    });
+  }, []);
+
   // Active jobs always count as "unread" while running
   const unreadCount =
     notifications.filter((n) => !n.read).length +
@@ -200,7 +211,7 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
 
   return (
     <NotificationsContext.Provider
-      value={{ notifications, activeJobs, unreadCount, markAsRead, clearAll, liveEvents }}
+      value={{ notifications, activeJobs, unreadCount, markAsRead, clearAll, removeActiveJob, liveEvents }}
     >
       {children}
     </NotificationsContext.Provider>

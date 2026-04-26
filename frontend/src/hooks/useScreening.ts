@@ -17,6 +17,7 @@ import {
   updatePartialShortlist,
   incrementEvaluatedCount,
   setEvaluatedCount,
+  setOverallProgress,
   resetLiveState,
 } from '@/store/screeningSlice';
 import { Thought } from '@/components/screening/ThinkingStream';
@@ -41,6 +42,7 @@ export function useScreening() {
     partialShortlist,
     evaluatedCount,
     totalCandidates,
+    overallProgress,
   } = useSelector((state: RootState) => state.screening);
 
   const handleRunScreening = useCallback(
@@ -129,6 +131,13 @@ export function useScreening() {
     [dispatch]
   );
 
+  const setOverallProgressTo = useCallback(
+    (pct: number) => {
+      dispatch(setOverallProgress(pct));
+    },
+    [dispatch]
+  );
+
   const resetLiveScreeningState = useCallback(() => {
     dispatch(resetLiveState());
   }, [dispatch]);
@@ -145,6 +154,7 @@ export function useScreening() {
     partialShortlist,
     evaluatedCount,
     totalCandidates,
+    overallProgress,
     handleRunScreening,
     fetchAllResults,
     fetchResult,
@@ -158,6 +168,7 @@ export function useScreening() {
     setPartialShortlist,
     bumpEvaluatedCount,
     setEvaluatedCountTo,
+    setOverallProgressTo,
     resetLiveScreeningState,
   };
 }

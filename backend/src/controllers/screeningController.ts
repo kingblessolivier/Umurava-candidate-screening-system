@@ -7,6 +7,7 @@ import { preprocessCandidates } from "../services/preprocessingService";
 import {
   createJob,
   updateJob,
+  getJob,
   cancelJob,
   isCancelled,
   sendNotificationToUser,
@@ -131,17 +132,21 @@ export const runScreening = async (req: Request, res: Response) => {
         });
       } catch (err) {
         if (err instanceof ScreeningCancelledError) {
+          const wasAlreadyCancelled = bgJob.status === "cancelled";
           updateJob(bgJob.id, "cancelled", undefined, "Cancelled by user");
-          sendNotificationToUser(userId, {
-            type: "job_update",
-            jobId: bgJob.id,
-            jobType: "screening",
-            status: "cancelled",
-            title: "Screening Cancelled",
-            message: `Screening for "${jobDoc.title}" was cancelled.`,
-            metadata: bgJob.metadata,
-            timestamp: new Date().toISOString(),
-          });
+          // cancelScreening already broadcast the SSE immediately — skip duplicate
+          if (!wasAlreadyCancelled) {
+            sendNotificationToUser(userId, {
+              type: "job_update",
+              jobId: bgJob.id,
+              jobType: "screening",
+              status: "cancelled",
+              title: "Screening Cancelled",
+              message: `Screening for "${jobDoc.title}" was cancelled.`,
+              metadata: bgJob.metadata,
+              timestamp: new Date().toISOString(),
+            });
+          }
           return;
         }
         const error = err instanceof Error ? err.message : "Screening pipeline failed";
@@ -219,7 +224,25 @@ export const deleteScreeningResult = async (req: Request, res: Response) => {
 export const cancelScreening = async (req: Request, res: Response) => {
   try {
     const { jobId } = req.params;
+    const job = getJob(jobId);
     cancelJob(jobId);
+
+    // Broadcast immediately — the pipeline may still be mid-Gemini call (up to 60s)
+    // and won't throw ScreeningCancelledError until the current await resolves.
+    if (job) {
+      const title = (job.metadata.jobTitle as string) ?? "Screening";
+      sendNotificationToUser(job.userId, {
+        type: "job_update",
+        jobId: job.id,
+        jobType: job.type,
+        status: "cancelled",
+        title: "Screening Cancelled",
+        message: `Screening for "${title}" was cancelled.`,
+        metadata: job.metadata,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
     res.json({ success: true, message: "Cancellation requested" });
   } catch (err) {
     res.status(500).json({ success: false, error: "Failed to cancel screening" });

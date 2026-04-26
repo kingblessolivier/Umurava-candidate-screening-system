@@ -25,6 +25,7 @@ interface ScreeningState {
   partialShortlist: CandidateScore[];
   evaluatedCount: number;
   totalCandidates: number;
+  overallProgress: number; // 0–100 real pipeline progress (all phases, not just batch eval)
   // Pagination
   total: number;
   page: number;
@@ -45,6 +46,7 @@ const initialState: ScreeningState = {
   partialShortlist: [],
   evaluatedCount: 0,
   totalCandidates: 0,
+  overallProgress: 0,
   total: 0,
   page: 1,
   limit: 50,
@@ -141,6 +143,9 @@ const screeningSlice = createSlice({
     setEvaluatedCount: (s, action: { payload: number }) => {
       s.evaluatedCount = action.payload;
     },
+    setOverallProgress: (s, action: { payload: number }) => {
+      s.overallProgress = action.payload;
+    },
     addThinkingSnapshot: (s, action: { payload: ThinkingSnapshot }) => {
       s.thinkingLog.push(action.payload);
     },
@@ -154,6 +159,7 @@ const screeningSlice = createSlice({
       s.partialShortlist = [];
       s.evaluatedCount = 0;
       s.totalCandidates = 0;
+      s.overallProgress = 0;
     },
     // Called when the SSE notification arrives confirming the background job is done/failed
     stopRunning: (s) => {
@@ -188,6 +194,7 @@ const screeningSlice = createSlice({
         s.thinkingLog = [];
         s.partialShortlist = [];
         s.evaluatedCount = 0;
+        s.overallProgress = 0;
       })
       .addCase(runScreening.fulfilled, (s, { payload }) => {
         // Background job accepted — running stays true until SSE notification arrives
@@ -227,6 +234,7 @@ export const {
   updatePartialShortlist,
   incrementEvaluatedCount,
   setEvaluatedCount,
+  setOverallProgress,
   resetLiveState,
   stopRunning,
   resumeRunning,

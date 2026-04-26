@@ -168,12 +168,29 @@ export function TopNav({
                   ) : (
                     <div className="divide-y divide-gray-100">
                       {/* ── Active (in-progress) jobs at top ─────────────── */}
-                      {activeJobList.map((job) => (
-                        <div key={job.bgJobId} className="p-4 bg-blue-50/40">
+                      {activeJobList.map((job) => {
+                        const pe = job.metadata?.progressEvent as { overallProgress?: number; evaluatedCount?: number; selectedModels?: { batchTier?: string } } | undefined;
+                        const pct = pe?.overallProgress ?? 0;
+                        const modelTier = pe?.selectedModels?.batchTier;
+                        const isScreening = job.jobType === 'screening';
+                        return (
+                        <div
+                          key={job.bgJobId}
+                          onClick={() => {
+                            if (isScreening) {
+                              setShowNotifications(false);
+                              router.push('/screening');
+                            }
+                          }}
+                          className={cn(
+                            'p-4 bg-blue-50/40 transition-colors',
+                            isScreening && 'cursor-pointer hover:bg-blue-100/60'
+                          )}
+                        >
                           <div className="flex gap-3">
                             <div className="flex-shrink-0 mt-0.5">
                               <div className="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center">
-                                {job.jobType === 'screening' ? (
+                                {isScreening ? (
                                   <Brain className="w-3.5 h-3.5 text-blue-600" />
                                 ) : (
                                   <FileText className="w-3.5 h-3.5 text-blue-600" />
@@ -181,23 +198,42 @@ export function TopNav({
                               </div>
                             </div>
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-0.5">
+                              <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                                 <p className="text-xs font-semibold text-slate-900">{job.title}</p>
                                 <span className="flex items-center gap-1 rounded-full bg-blue-100 px-1.5 py-0.5">
                                   <span className="w-1 h-1 rounded-full bg-blue-600 animate-pulse" />
                                   <span className="text-[10px] font-medium text-blue-700">Live</span>
                                 </span>
+                                {modelTier && modelTier !== 'Pinned' && (
+                                  <span className="rounded-full bg-indigo-100 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700">
+                                    {modelTier} tier
+                                  </span>
+                                )}
                               </div>
                               <p className="text-[11px] text-slate-600 line-clamp-2">{job.message}</p>
-                              <div className="mt-2 h-1 overflow-hidden rounded-full bg-blue-100">
-                                <div className="h-full w-2/3 animate-pulse rounded-full bg-blue-500" />
+                              <div className="mt-2 flex items-center gap-2">
+                                <div className="flex-1 h-1.5 overflow-hidden rounded-full bg-blue-100">
+                                  <div
+                                    className="h-full rounded-full bg-blue-500 transition-all duration-500"
+                                    style={{ width: pct > 0 ? `${pct}%` : '8%' }}
+                                  />
+                                </div>
+                                <span className="text-[10px] font-mono font-bold text-blue-600 w-8 text-right flex-shrink-0">
+                                  {pct > 0 ? `${pct}%` : '…'}
+                                </span>
                               </div>
-                              <p className="text-[10px] text-slate-400 mt-1">{mounted ? formatTimestamp(job.timestamp) : ''}</p>
+                              <div className="flex items-center justify-between mt-1">
+                                <p className="text-[10px] text-slate-400">{mounted ? formatTimestamp(job.timestamp) : ''}</p>
+                                {isScreening && (
+                                  <span className="text-[10px] text-blue-600 font-medium">View progress →</span>
+                                )}
+                              </div>
                             </div>
                             <Loader2 className="w-4 h-4 text-blue-500 animate-spin flex-shrink-0 mt-0.5" />
                           </div>
                         </div>
-                      ))}
+                        );
+                      })}
 
                       {/* ── Completed notifications ───────────────────────── */}
                       {notifications.map((n) => (

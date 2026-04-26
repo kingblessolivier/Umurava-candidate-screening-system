@@ -21,9 +21,9 @@ interface QueuedRequest {
 }
 
 const CACHE_TTL = 3600;           // 1 hour
-const REQUEST_TIMEOUT = 180000;   // 3 minutes — thinking mode can be slow
-const MAX_RETRIES = 5;
-const RETRY_DELAY_MS = 4000;      // 4 seconds base (exponential backoff + jitter)
+const REQUEST_TIMEOUT = 60000;    // 60 seconds (thinking mode is off)
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 3000;      // 3 seconds base (exponential backoff + jitter)
 const MAX_CONCURRENT_REQUESTS = 1; // safer for strict per-project AI quotas
 const REQUEST_QUEUE_LIMIT = 50;
 
@@ -217,8 +217,8 @@ export class RateLimitedGeminiService {
         console.log("[Quota Reset] Attempting requests again");
       }, retrySeconds * 1000 + 1000);
     } else {
-      // Default: 90 seconds — safer for provider-side dynamic throttling windows.
-      const fallbackMs = 90 * 1000;
+      // Default: 60 seconds
+      const fallbackMs = 60 * 1000;
       this.quotaResetTime = Date.now() + fallbackMs;
       setTimeout(() => {
         this.isQuotaExceeded = false;
