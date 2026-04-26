@@ -217,6 +217,3 @@ The codebase is prepared for technical review with emphasis on:
 - reusable form utilities (autosave, recovery, validation),
 - consistent loading states (skeleton-first UX).
 
-## License
-
-MIT
