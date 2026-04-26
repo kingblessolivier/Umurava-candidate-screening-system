@@ -67,7 +67,7 @@ function analyzeSkillMatch(profile: TalentProfile, job: Job) {
     const isRequired = allJobSkills.some(js => skillsMatch(ps, js));
     const isBonus = job.niceToHave?.some(nth => skillsMatch(ps, nth)) ?? false;
     if (!isRequired && isBonus) bonus.push(ps);
-    else if (!isRequired && !isBonus) bonus.push(ps);
+    // Skills that are neither required nor nice-to-have are neutral — not shown as bonus to AI
   }
 
   const ratio = requiredSkills.length > 0 ? matched.length / requiredSkills.length : 0;
@@ -141,9 +141,6 @@ function computeRawExperienceScore(profile: TalentProfile, job: Job, totalMonths
 function computeRawEducationScore(profile: TalentProfile): number {
   if (!profile.education?.length) return 30;
 
-  let score = 0;
-  const topEdu = profile.education[0];
-
   // Degree level scoring
   const degreeMap: Record<string, number> = {
     phd: 100, doctorate: 100, "master": 85, msc: 85, mba: 85,
@@ -151,9 +148,16 @@ function computeRawEducationScore(profile: TalentProfile): number {
     diploma: 45, certificate: 40,
   };
 
-  const degreeNorm = topEdu.degree.toLowerCase();
-  const degreeScore = Object.entries(degreeMap).find(([k]) => degreeNorm.includes(k))?.[1] || 55;
-  score = degreeScore;
+  // Pick the highest-scoring degree — candidates may list Bachelor's before Master's
+  const bestDegreeScore = Math.max(
+    ...profile.education.map(edu => {
+      const norm = edu.degree.toLowerCase();
+      return Object.entries(degreeMap).find(([k]) => norm.includes(k))?.[1] ?? 55;
+    })
+  );
+
+  let score = bestDegreeScore;
+  const topEdu = profile.education[0];
 
   // Field relevance (rough heuristic)
   const techFields = ["computer", "software", "information", "data", "engineering", "math", "physics"];

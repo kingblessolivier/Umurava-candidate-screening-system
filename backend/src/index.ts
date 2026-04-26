@@ -43,6 +43,10 @@ app.use(cors({
   credentials: true,
 }));
 
+// Trust Render / Heroku / any single-hop reverse proxy.
+// Required for express-rate-limit v7 to correctly read X-Forwarded-For.
+app.set("trust proxy", 1);
+
 // ============================================
 // Rate Limiting
 // ============================================

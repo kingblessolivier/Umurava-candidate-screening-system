@@ -8,7 +8,7 @@ import { rateLimitService } from "./rateLimitService";
 const SCREENING_MODEL = (process.env.SCREENING_MODEL || process.env.GEMINI_MODEL || "gemini-3.1-flash-lite-preview").trim();
 const RESUME_PARSER_MODEL = (process.env.RESUME_PARSER_MODEL || process.env.GEMINI_MODEL || "gemini-3.1-flash-lite-preview").trim();
 const SCREENING_THINKING_BUDGET = parseInt(process.env.SCREENING_THINKING_BUDGET || "0", 10);
-const SCREENING_BATCH_SIZE = parseInt(process.env.SCREENING_BATCH_SIZE || "20", 10);
+const SCREENING_BATCH_SIZE = parseInt(process.env.SCREENING_BATCH_SIZE || "10", 10);
 const SCREENING_FALLBACK_MODELS = (process.env.SCREENING_FALLBACK_MODELS || "")
   .split(",").map((m) => m.trim()).filter(Boolean);
 const RESUME_PARSER_FALLBACK_MODELS = (process.env.RESUME_PARSER_FALLBACK_MODELS || "")
@@ -518,10 +518,13 @@ Return ONLY this JSON (no markdown, no explanation outside JSON):
         "missing": ["GraphQL"],
         "bonus": ["Rust", "WebAssembly"]
       },
-      "biasFlags": []
+      "biasFlags": [
+        { "type": "GENDER_LANGUAGE", "signal": "exact phrase used", "recommendation": "neutral alternative phrasing" }
+      ]
     }
   ]
-}`;
+}
+Note: biasFlags should be an empty array [] if no bias is detected. Each flag must use one of these types: GENDER_LANGUAGE, AGE_INDICATOR, LOCATION_BIAS, INSTITUTION_PRESTIGE_BIAS, NAME_BIAS.`;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -538,10 +541,11 @@ function buildRankingPrompt(
   if (validRejected.length === 0) return "No rejected candidates to explain.";
 
   // Full ranked list so the AI can see exactly where the cutoff fell
+  const shortlistIds = new Set(shortlist.map(s => s.candidateId));
   const fullRankedList = [...shortlist, ...validRejected]
     .sort((a, b) => b.finalScore - a.finalScore)
     .map((e, i) => {
-      const status = i < shortlist.length ? "✅ SHORTLISTED" : "❌ NOT SELECTED";
+      const status = shortlistIds.has(e.candidateId) ? "✅ SHORTLISTED" : "❌ NOT SELECTED";
       return `${i + 1}. [${status}] ${e.candidateName} — Score: ${e.finalScore} | Skills: ${e.breakdown?.skillsScore ?? "N/A"} | Exp: ${e.breakdown?.experienceScore ?? "N/A"} | Edu: ${e.breakdown?.educationScore ?? "N/A"} | Projects: ${e.breakdown?.projectsScore ?? "N/A"}`;
     })
     .join("\n");
@@ -856,7 +860,7 @@ export async function runScreeningPipeline(
 
     const result = await generateWithRateLimit<{ evaluations: CandidateScore[] }>(
       cacheKey,
-      { prompt, model: SCREENING_MODEL, temperature: 0.2, maxOutputTokens: 8192, thinkingBudget: SCREENING_THINKING_BUDGET },
+      { prompt, model: SCREENING_MODEL, temperature: 0.2, maxOutputTokens: 32768, thinkingBudget: SCREENING_THINKING_BUDGET },
       { evaluations: [] }
     );
 
@@ -892,10 +896,10 @@ export async function runScreeningPipeline(
   if (willRerank) {
     allEvaluations.sort((a, b) => b.finalScore - a.finalScore);
 
-    // Keep the top (shortlistSize - 5) as safe selections; re-evaluate the rest of the
-    // contested zone: last 5 of the shortlist + first 15 just below the cutoff.
-    const safeCount = Math.max(0, shortlistSize - 5);
-    const borderlineCount = Math.min(allEvaluations.length - safeCount, shortlistSize + 15);
+    // Keep the top (shortlistSize - 3) as safe selections; re-evaluate only the
+    // contested zone capped at BATCH_SIZE so output stays within the 8 192-token limit.
+    const safeCount = Math.max(0, shortlistSize - 3);
+    const borderlineCount = Math.min(allEvaluations.length - safeCount, BATCH_SIZE);
     const borderlineIds = new Set(
       allEvaluations.slice(safeCount, safeCount + borderlineCount).map(e => e.candidateId)
     );
@@ -913,7 +917,7 @@ export async function runScreeningPipeline(
     const rerankPrompt = buildEvaluationPrompt(job, borderlinePreprocessed);
     const rerankResult = await generateWithRateLimit<{ evaluations: CandidateScore[] }>(
       `screening:${job._id}:rerank-borderline`,
-      { prompt: rerankPrompt, model: SCREENING_MODEL, temperature: 0.1, maxOutputTokens: 4096, thinkingBudget: SCREENING_THINKING_BUDGET },
+      { prompt: rerankPrompt, model: SCREENING_MODEL, temperature: 0.1, maxOutputTokens: 8192, thinkingBudget: SCREENING_THINKING_BUDGET },
       { evaluations: allEvaluations.filter(e => borderlineIds.has(e.candidateId)) }
     );
 
@@ -1019,7 +1023,7 @@ export async function runScreeningPipeline(
     }));
   } else if (allRejected.length > 0 && shortlist.length > 0) {
     // Only send the top candidates closest to the cutoff for AI feedback.
-    // Candidates far below the cutoff get a deterministic fallback — saves tokens and a big API call.
+    // Candidates far below the cutoff get a deterministic fallback.
     const AI_REJECTION_CAP = Math.min(allRejected.length, Math.max(shortlistSize, 20));
     const rejectedForAI = allRejected.slice(0, AI_REJECTION_CAP);
 
@@ -1030,19 +1034,34 @@ export async function runScreeningPipeline(
       overallProgress: overallPct(),
     });
 
-    const rankingPrompt = buildRankingPrompt(job, shortlist, rejectedForAI, lowestShortlistScore);
-    const rankResult = await generateWithRateLimit<{ rejectedCandidates: Partial<RejectedCandidate>[] }>(
-      `screening:${job._id}:rejection-reasons`,
-      { prompt: rankingPrompt, model: SCREENING_MODEL, temperature: 0.3, maxOutputTokens: 8192, thinkingBudget: SCREENING_THINKING_BUDGET },
-      { rejectedCandidates: [] }
-    );
+    // Process rejection reasons in batches of 10 so the response stays within
+    // the model's 8 192-token output limit (10 candidates × ~700 chars ≈ 7 000 chars ≈ 3 500 tokens).
+    const REJECTION_BATCH_SIZE = 10;
+    const rejectionBatches: CandidateScore[][] = [];
+    for (let i = 0; i < rejectedForAI.length; i += REJECTION_BATCH_SIZE) {
+      rejectionBatches.push(rejectedForAI.slice(i, i + REJECTION_BATCH_SIZE) as CandidateScore[]);
+    }
+
+    const allAiRejected: Partial<RejectedCandidate>[] = [];
+    for (let rbi = 0; rbi < rejectionBatches.length; rbi++) {
+      if (shouldContinue && !shouldContinue()) throw new ScreeningCancelledError();
+      const batch = rejectionBatches[rbi];
+      const rankingPrompt = buildRankingPrompt(job, shortlist, batch as CandidateScore[], lowestShortlistScore);
+      const rankResult = await generateWithRateLimit<{ rejectedCandidates: Partial<RejectedCandidate>[] }>(
+        `screening:${job._id}:rejection-reasons-b${rbi}`,
+        { prompt: rankingPrompt, model: SCREENING_MODEL, temperature: 0.3, maxOutputTokens: 8192, thinkingBudget: SCREENING_THINKING_BUDGET },
+        { rejectedCandidates: [] }
+      );
+      allAiRejected.push(...(rankResult.rejectedCandidates || []));
+    }
+
     const aiRejectedByCandidateId = new Map(
-      (rankResult.rejectedCandidates || [])
+      allAiRejected
         .filter(r => !!r.candidateId)
         .map(r => [r.candidateId as string, r])
     );
     const aiRejectedByEmail = new Map(
-      (rankResult.rejectedCandidates || [])
+      allAiRejected
         .filter(r => !!r.email)
         .map(r => [r.email as string, r])
     );
