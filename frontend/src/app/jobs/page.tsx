@@ -10,11 +10,11 @@ import {
   Eye, TrendingUp, BarChart3, ChevronLeft, ChevronDown,
   ChevronRight, Filter, MessageSquare, Mail,
   Upload, Loader2, UserPlus, FileSpreadsheet, FileCode2,
-  Lightbulb, AlertCircle, Award, Target, Activity,
+  Lightbulb, AlertCircle, Award, Target, Activity, Sparkles,
 } from 'lucide-react';
 import EmailModal from '@/components/email/EmailModal';
 import { AppDispatch, RootState } from '@/store';
-import { deleteJob } from '@/store/jobsSlice';
+import { deleteJob, enhanceJob } from '@/store/jobsSlice';
 import { fetchCandidates, createCandidate, uploadCSV, updateCandidate, deleteCandidate, bulkImportJSON, UploadOutcome } from '@/store/candidatesSlice';
 import { fetchResults } from '@/store/screeningSlice';
 import { useJobs } from '@/hooks/useJobs';
@@ -191,6 +191,7 @@ export default function JobsPage() {
           <h1 className="text-sm font-bold text-gray-900">Jobs</h1>
           <button
             onClick={openCreateJobModal}
+            suppressHydrationWarning
             className="flex items-center gap-1 px-2 py-1 text-[10px] font-semibold text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
           >
             <Plus className="w-3 h-3" /> New
@@ -206,6 +207,7 @@ export default function JobsPage() {
               placeholder="Search jobs..."
               value={searchQuery}
               onChange={e => handleSearch(e.target.value)}
+              suppressHydrationWarning
               className="w-full pl-7 pr-2 py-1.5 text-xs border border-gray-200 rounded-md focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400"
             />
           </div>
@@ -214,6 +216,7 @@ export default function JobsPage() {
               <button
                 key={f}
                 onClick={() => setFilterStatus(f)}
+                suppressHydrationWarning
                 className={`flex-1 text-[10px] py-1 rounded font-medium capitalize transition-colors ${
                   filterStatus === f ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
@@ -317,6 +320,7 @@ export default function JobsPage() {
               <div className="flex items-center gap-1.5">
                 <button
                   onClick={() => setShowCandidateModal(true)}
+                  suppressHydrationWarning
                   className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
                 >
                   <Plus className="w-3 h-3" /> Candidate
@@ -329,12 +333,14 @@ export default function JobsPage() {
                 </Link>
                 <button
                   onClick={() => openEditJobModal(selectedJob)}
+                  suppressHydrationWarning
                   className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-500 hover:text-blue-600 transition-colors"
                 >
                   <Edit2 className="w-3.5 h-3.5" />
                 </button>
                 <button
                   onClick={() => setDeleteConfirm(selectedJob._id)}
+                  suppressHydrationWarning
                   className="p-1.5 rounded-lg border border-gray-200 hover:bg-red-50 text-gray-500 hover:text-red-600 transition-colors"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
@@ -348,6 +354,7 @@ export default function JobsPage() {
                 <button
                   key={tab}
                   onClick={() => setDetailTab(tab)}
+                  suppressHydrationWarning
                   className={`px-3 py-2 text-xs font-medium capitalize border-b-2 transition-all ${
                     detailTab === tab
                       ? 'border-blue-600 text-blue-700'
@@ -400,6 +407,7 @@ export default function JobsPage() {
               <p className="text-xs text-gray-500 mb-4">Choose a job from the sidebar to view details</p>
               <button
                 onClick={openCreateJobModal}
+                suppressHydrationWarning
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 transition-colors"
               >
                 <Plus className="w-3.5 h-3.5" /> Create New Job
@@ -2036,7 +2044,10 @@ function AnalyticsTab({ candidates, screeningResults, job }: any) {
 
 // Job Modal Component
 function JobModal({ job, onClose, onSave, onCreate, onUpdate }: any) {
+  const dispatch = useDispatch<AppDispatch>();
   const [submitting, setSubmitting] = useState(false);
+  const [enhancing, setEnhancing] = useState(false);
+  const [enhancingField, setEnhancingField] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     title: job?.title || '',
     department: job?.department || '',
@@ -2058,6 +2069,40 @@ function JobModal({ job, onClose, onSave, onCreate, onUpdate }: any) {
 
   const updateRequirement = (i: number, field: string, value: any) =>
     setFormData(p => ({ ...p, requirements: p.requirements.map((r, idx) => idx === i ? { ...r, [field]: value } : r) }));
+
+  const handleEnhance = async () => {
+    if (!formData.title.trim()) { toast.error('Enter a job title first'); return; }
+    setEnhancing(true);
+    try {
+      const result = await dispatch(enhanceJob({ title: formData.title, description: formData.description || undefined })).unwrap() as any;
+      setFormData(p => ({
+        ...p,
+        description: result.description || p.description,
+        responsibilities: Array.isArray(result.responsibilities) ? result.responsibilities.join('\n') : p.responsibilities,
+        requirements: Array.isArray(result.requirements) && result.requirements.length > 0
+          ? result.requirements.map((r: any) => ({ skill: r.skill || '', level: r.level || 'Intermediate', yearsRequired: r.yearsRequired ?? 1, required: r.required ?? true }))
+          : p.requirements,
+        niceToHave: Array.isArray(result.niceToHave) ? result.niceToHave.join(', ') : p.niceToHave,
+      }));
+      toast.success('AI enhancement applied');
+    } catch { toast.error('AI enhancement failed'); }
+    finally { setEnhancing(false); }
+  };
+
+  const handleFieldAI = async (field: 'description' | 'responsibilities' | 'skills' | 'niceToHave') => {
+    if (!formData.title.trim()) { toast.error('Enter a job title first'); return; }
+    setEnhancingField(field);
+    try {
+      const result = await dispatch(enhanceJob({ title: formData.title, description: formData.description || undefined })).unwrap() as any;
+      if (field === 'description' && result.description) setFormData(p => ({ ...p, description: result.description }));
+      else if (field === 'responsibilities' && Array.isArray(result.responsibilities)) setFormData(p => ({ ...p, responsibilities: result.responsibilities.join('\n') }));
+      else if (field === 'skills' && Array.isArray(result.requirements) && result.requirements.length > 0)
+        setFormData(p => ({ ...p, requirements: result.requirements.map((r: any) => ({ skill: r.skill || '', level: r.level || 'Intermediate', yearsRequired: r.yearsRequired ?? 1, required: r.required ?? true })) }));
+      else if (field === 'niceToHave' && Array.isArray(result.niceToHave)) setFormData(p => ({ ...p, niceToHave: result.niceToHave.join(', ') }));
+      toast.success('Field updated by AI');
+    } catch { toast.error('AI generation failed'); }
+    finally { setEnhancingField(null); }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -2099,9 +2144,16 @@ function JobModal({ job, onClose, onSave, onCreate, onUpdate }: any) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">Job Title <span className="text-red-500">*</span></label>
-              <input type="text" className={inputCls} value={formData.title}
-                onChange={e => setFormData(p => ({ ...p, title: e.target.value }))}
-                placeholder="e.g., Senior Software Engineer" required />
+              <div className="flex gap-2">
+                <input type="text" className={inputCls} value={formData.title}
+                  onChange={e => setFormData(p => ({ ...p, title: e.target.value }))}
+                  placeholder="e.g., Senior Software Engineer" required suppressHydrationWarning />
+                <button type="button" onClick={handleEnhance} disabled={enhancing || !formData.title.trim()} suppressHydrationWarning
+                  className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-white bg-violet-600 rounded-md hover:bg-violet-700 transition-colors disabled:opacity-50 whitespace-nowrap">
+                  {enhancing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                  {formData.description ? 'AI Enhance' : 'Generate'}
+                </button>
+              </div>
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">Department</label>
@@ -2142,14 +2194,26 @@ function JobModal({ job, onClose, onSave, onCreate, onUpdate }: any) {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Description</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-medium text-gray-700">Description</label>
+              <button type="button" onClick={() => handleFieldAI('description')} disabled={!!enhancingField || !formData.title.trim()} suppressHydrationWarning
+                className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium text-violet-600 border border-violet-200 rounded hover:bg-violet-50 transition-colors disabled:opacity-40">
+                {enhancingField === 'description' ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <Sparkles className="w-2.5 h-2.5" />} AI Write
+              </button>
+            </div>
             <textarea className={`${inputCls} resize-none`} rows={3} value={formData.description}
               onChange={e => setFormData(p => ({ ...p, description: e.target.value }))}
               placeholder="Describe the role and its impact..." />
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Responsibilities (one per line)</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-medium text-gray-700">Responsibilities (one per line)</label>
+              <button type="button" onClick={() => handleFieldAI('responsibilities')} disabled={!!enhancingField || !formData.title.trim()} suppressHydrationWarning
+                className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium text-violet-600 border border-violet-200 rounded hover:bg-violet-50 transition-colors disabled:opacity-40">
+                {enhancingField === 'responsibilities' ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <Sparkles className="w-2.5 h-2.5" />} AI Write
+              </button>
+            </div>
             <textarea className={`${inputCls} resize-none`} rows={3} value={formData.responsibilities}
               onChange={e => setFormData(p => ({ ...p, responsibilities: e.target.value }))}
               placeholder="Enter each responsibility on a new line..." />
@@ -2162,10 +2226,16 @@ function JobModal({ job, onClose, onSave, onCreate, onUpdate }: any) {
                 <label className="block text-xs font-medium text-gray-700">Skill Requirements</label>
                 <p className="text-[10px] text-gray-400 mt-0.5">Levels: Beginner · Intermediate · Advanced · Expert</p>
               </div>
-              <button type="button" onClick={addRequirement}
-                className="flex items-center gap-1 rounded-md border border-blue-100 bg-blue-50 px-2 py-1 text-xs text-blue-700 transition-colors hover:bg-blue-100 font-medium">
-                <Plus className="w-3.5 h-3.5" /> Add Skill
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button type="button" onClick={() => handleFieldAI('skills')} disabled={!!enhancingField || !formData.title.trim()} suppressHydrationWarning
+                  className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-violet-600 border border-violet-200 rounded hover:bg-violet-50 transition-colors disabled:opacity-40">
+                  {enhancingField === 'skills' ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <Sparkles className="w-2.5 h-2.5" />} AI Fill
+                </button>
+                <button type="button" onClick={addRequirement} suppressHydrationWarning
+                  className="flex items-center gap-1 rounded-md border border-blue-100 bg-blue-50 px-2 py-1 text-xs text-blue-700 transition-colors hover:bg-blue-100 font-medium">
+                  <Plus className="w-3.5 h-3.5" /> Add Skill
+                </button>
+              </div>
             </div>
             {formData.requirements.length === 0 && (
               <p className="text-xs text-gray-400 py-1 italic">No skill requirements added yet.</p>
@@ -2206,10 +2276,16 @@ function JobModal({ job, onClose, onSave, onCreate, onUpdate }: any) {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Nice to Have (comma-separated)</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-medium text-gray-700">Nice to Have (comma-separated)</label>
+              <button type="button" onClick={() => handleFieldAI('niceToHave')} disabled={!!enhancingField || !formData.title.trim()} suppressHydrationWarning
+                className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium text-violet-600 border border-violet-200 rounded hover:bg-violet-50 transition-colors disabled:opacity-40">
+                {enhancingField === 'niceToHave' ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <Sparkles className="w-2.5 h-2.5" />} AI Fill
+              </button>
+            </div>
             <input type="text" className={inputCls} value={formData.niceToHave}
               onChange={e => setFormData(p => ({ ...p, niceToHave: e.target.value }))}
-              placeholder="e.g., Docker, Kubernetes, GraphQL" />
+              placeholder="e.g., Docker, Kubernetes, GraphQL" suppressHydrationWarning />
           </div>
 
           <div className="flex items-center gap-2 pt-1">
