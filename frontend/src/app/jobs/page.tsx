@@ -2077,12 +2077,13 @@ function JobModal({ job, onClose, onSave, onCreate, onUpdate }: any) {
       const result = await dispatch(enhanceJob({ title: formData.title, description: formData.description || undefined })).unwrap() as any;
       setFormData(p => ({
         ...p,
-        description: result.description || p.description,
-        responsibilities: Array.isArray(result.responsibilities) ? result.responsibilities.join('\n') : p.responsibilities,
-        requirements: Array.isArray(result.requirements) && result.requirements.length > 0
-          ? result.requirements.map((r: any) => ({ skill: r.skill || '', level: r.level || 'Intermediate', yearsRequired: r.yearsRequired ?? 1, required: r.required ?? true }))
+        description: result.enhancedDescription || p.description,
+        responsibilities: Array.isArray(result.inferredResponsibilities) && result.inferredResponsibilities.length > 0
+          ? result.inferredResponsibilities.join('\n') : p.responsibilities,
+        requirements: Array.isArray(result.structuredRequirements) && result.structuredRequirements.length > 0
+          ? result.structuredRequirements.map((r: any) => ({ skill: r.skill || '', level: r.level || 'Intermediate', yearsRequired: r.yearsRequired ?? 1, required: r.required ?? true }))
           : p.requirements,
-        niceToHave: Array.isArray(result.niceToHave) ? result.niceToHave.join(', ') : p.niceToHave,
+        niceToHave: Array.isArray(result.niceToHave) && result.niceToHave.length > 0 ? result.niceToHave.join(', ') : p.niceToHave,
       }));
       toast.success('AI enhancement applied');
     } catch { toast.error('AI enhancement failed'); }
@@ -2094,11 +2095,16 @@ function JobModal({ job, onClose, onSave, onCreate, onUpdate }: any) {
     setEnhancingField(field);
     try {
       const result = await dispatch(enhanceJob({ title: formData.title, description: formData.description || undefined })).unwrap() as any;
-      if (field === 'description' && result.description) setFormData(p => ({ ...p, description: result.description }));
-      else if (field === 'responsibilities' && Array.isArray(result.responsibilities)) setFormData(p => ({ ...p, responsibilities: result.responsibilities.join('\n') }));
-      else if (field === 'skills' && Array.isArray(result.requirements) && result.requirements.length > 0)
-        setFormData(p => ({ ...p, requirements: result.requirements.map((r: any) => ({ skill: r.skill || '', level: r.level || 'Intermediate', yearsRequired: r.yearsRequired ?? 1, required: r.required ?? true })) }));
-      else if (field === 'niceToHave' && Array.isArray(result.niceToHave)) setFormData(p => ({ ...p, niceToHave: result.niceToHave.join(', ') }));
+      if (field === 'description' && result.enhancedDescription)
+        setFormData(p => ({ ...p, description: result.enhancedDescription }));
+      else if (field === 'responsibilities' && Array.isArray(result.inferredResponsibilities) && result.inferredResponsibilities.length > 0)
+        setFormData(p => ({ ...p, responsibilities: result.inferredResponsibilities.join('\n') }));
+      else if (field === 'skills' && Array.isArray(result.structuredRequirements) && result.structuredRequirements.length > 0)
+        setFormData(p => ({ ...p, requirements: result.structuredRequirements.map((r: any) => ({ skill: r.skill || '', level: r.level || 'Intermediate', yearsRequired: r.yearsRequired ?? 1, required: r.required ?? true })) }));
+      else if (field === 'niceToHave' && Array.isArray(result.niceToHave) && result.niceToHave.length > 0)
+        setFormData(p => ({ ...p, niceToHave: result.niceToHave.join(', ') }));
+      else
+        toast('No data returned for this field', { icon: '⚠️' });
       toast.success('Field updated by AI');
     } catch { toast.error('AI generation failed'); }
     finally { setEnhancingField(null); }
