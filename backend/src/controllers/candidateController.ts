@@ -166,7 +166,7 @@ export const bulkImportJSON = async (req: Request, res: Response) => {
 
         for (const profile of candidateSnapshots) {
           try {
-            await Candidate.create({ ...profile, source: "json" });
+            await Candidate.create({ ...normalizeJSONProfile(profile), source: "json" });
             results.created++;
           } catch (err: unknown) {
             if (isDuplicateKeyError(err)) results.skipped++;
@@ -207,7 +207,7 @@ export const bulkImportJSON = async (req: Request, res: Response) => {
   }
 };
 
-// ─── CSV field parsers ────────────────────────────────────────────────────────
+// ─── Shared enums & helpers (used by both JSON normalizer and CSV parser) ─────
 
 const SKILL_LEVELS   = ["Beginner", "Intermediate", "Advanced", "Expert"] as const;
 const LANG_LEVELS    = ["Basic", "Conversational", "Fluent", "Native"] as const;
@@ -225,6 +225,58 @@ function tryParseJSON<T>(raw: string, fallback: T): T {
   if (!t || (!t.startsWith("[") && !t.startsWith("{"))) return fallback;
   try { return JSON.parse(t) as T; } catch { return fallback; }
 }
+
+// ─── JSON profile normalizer ──────────────────────────────────────────────────
+// Handles mixed formats: flat availability fields, skills/languages as strings,
+// certifications as the string "[]", and non-enum availabilityType values.
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function normalizeJSONProfile(profile: any): any {
+  const p = { ...profile };
+
+  // Parse skills/languages if they arrived as strings
+  if (typeof p.skills === "string") p.skills = parseSkills(p.skills);
+  if (typeof p.languages === "string") p.languages = parseLanguages(p.languages);
+
+  // certifications may come as the literal string "[]"
+  if (typeof p.certifications === "string") p.certifications = parseCertifications(p.certifications);
+  if (typeof p.experience === "string")     p.experience     = parseExperience(p.experience);
+  if (typeof p.education === "string")      p.education      = parseEducation(p.education);
+  if (typeof p.projects === "string")       p.projects       = parseProjects(p.projects);
+
+  // Flatten availability object from top-level fields if needed
+  if (!p.availability) {
+    p.availability = {
+      status: matchEnum(p.availabilityStatus, AVAIL_STATUSES, "Available"),
+      type:   matchEnum(p.availabilityType,   AVAIL_TYPES,    "Full-time"),
+      ...(p.availabilityStartDate ? { preferredStartDate: p.availabilityStartDate } : {}),
+    };
+  } else {
+    // Normalize enum values inside an existing availability object
+    p.availability = {
+      ...p.availability,
+      status: matchEnum(p.availability.status, AVAIL_STATUSES, "Available"),
+      type:   matchEnum(p.availability.type,   AVAIL_TYPES,    "Full-time"),
+    };
+  }
+  delete p.availabilityStatus;
+  delete p.availabilityType;
+  delete p.availabilityStartDate;
+
+  // Flatten socialLinks from top-level fields if needed
+  if (!p.socialLinks && (p.linkedin || p.github || p.portfolio)) {
+    p.socialLinks = {
+      ...(p.linkedin  ? { linkedin:  p.linkedin  } : {}),
+      ...(p.github    ? { github:    p.github    } : {}),
+      ...(p.portfolio ? { portfolio: p.portfolio } : {}),
+    };
+    delete p.linkedin; delete p.github; delete p.portfolio;
+  }
+
+  return p;
+}
+
+// ─── CSV field parsers ────────────────────────────────────────────────────────
 
 // Skills: "Python:Expert:5; JS:Advanced:3"  OR  JSON array
 function parseSkills(raw: string) {
@@ -404,10 +456,10 @@ export const uploadCSV = async (req: Request, res: Response) => {
                   AVAIL_STATUSES, "Available"
                 ),
                 type: matchEnum(
-                  r.availabilityType || r["Availability Type"] || r.availability_type || r.type,
+                  r.availabilityType || r["Availability Type"] || r.availability_type,
                   AVAIL_TYPES, "Full-time"
                 ),
-                startDate: r.availabilityStartDate || r["Availability Start Date"] || undefined,
+                preferredStartDate: r.availabilityStartDate || r["Availability Start Date"] || r.availability_start_date || undefined,
               },
               socialLinks: {
                 linkedin:  r.linkedin  || r.LinkedIn  || undefined,
