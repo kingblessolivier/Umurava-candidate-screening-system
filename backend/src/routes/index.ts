@@ -40,6 +40,8 @@ const upload = multer({
 router.post("/auth/register", validate(RegisterSchema), auth.register);
 router.post("/auth/login", validate(LoginSchema), auth.login);
 router.get("/auth/me", requireAuth, auth.getMe);
+router.put("/auth/me", requireAuth, auth.updateProfile);
+router.put("/auth/change-password", requireAuth, auth.changePassword);
 
 // ============================================
 // Job Routes

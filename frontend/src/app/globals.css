@@ -148,6 +148,51 @@
 }
 
 /* ============================================
+   Dark Mode — CSS variable overrides
+   Applied when <html class="dark"> is present
+   ============================================ */
+
+html.dark {
+  --main-bg: #0f172a;
+  --card-bg: #1e293b;
+  --card-border: #334155;
+  --card-hover-border: #60a5fa;
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-tertiary: #64748b;
+  --border-subtle: #1e293b;
+  --border-default: #334155;
+  --border-strong: #475569;
+  --sidebar-bg: #0f172a;
+  --sidebar-hover: #1e293b;
+  --sidebar-border: rgba(255,255,255,0.06);
+}
+
+/* Remap Tailwind utility classes used throughout the app */
+html.dark .bg-white          { background-color: #1e293b !important; }
+html.dark .bg-gray-50        { background-color: #0f172a !important; }
+html.dark .bg-gray-100       { background-color: #1e293b !important; }
+html.dark .bg-slate-50       { background-color: #0f172a !important; }
+html.dark .bg-\[#eef1f5\]   { background-color: #0f172a !important; }
+
+html.dark .text-gray-900     { color: #f1f5f9 !important; }
+html.dark .text-gray-800     { color: #e2e8f0 !important; }
+html.dark .text-gray-700     { color: #cbd5e1 !important; }
+html.dark .text-gray-600     { color: #94a3b8 !important; }
+html.dark .text-gray-500     { color: #64748b !important; }
+html.dark .text-gray-400     { color: #475569 !important; }
+
+html.dark .border-gray-100   { border-color: #1e293b !important; }
+html.dark .border-gray-200   { border-color: #334155 !important; }
+html.dark .border-gray-300   { border-color: #475569 !important; }
+
+html.dark .shadow-sm         { box-shadow: 0 1px 3px rgba(0,0,0,0.5) !important; }
+html.dark .shadow-md         { box-shadow: 0 4px 8px rgba(0,0,0,0.5) !important; }
+
+html.dark .divide-gray-50    > * + * { border-color: #1e293b !important; }
+html.dark .divide-y          > * + * { border-color: #334155 !important; }
+
+/* ============================================
    Base Styles
    ============================================ */
 

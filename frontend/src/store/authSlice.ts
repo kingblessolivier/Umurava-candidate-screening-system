@@ -29,6 +29,14 @@ export const register = createAsyncThunk("auth/register", async (payload: { name
   return data.data;
 });
 
+export const updateProfile = createAsyncThunk(
+  "auth/updateProfile",
+  async (payload: { name?: string; email?: string }) => {
+    const { data } = await api.put<{ success: boolean; data: AuthUser }>("/auth/me", payload);
+    return data.data;
+  }
+);
+
 const authSlice = createSlice({
   name: "auth",
   initialState,
@@ -42,6 +50,12 @@ const authSlice = createSlice({
     setAuth(state, action: PayloadAction<{ token: string; user: AuthUser }>) {
       state.token = action.payload.token;
       state.user  = action.payload.user;
+    },
+    updateUser(state, action: PayloadAction<Partial<AuthUser>>) {
+      if (state.user) {
+        state.user = { ...state.user, ...action.payload };
+        localStorage.setItem("talentai_user", JSON.stringify(state.user));
+      }
     },
   },
   extraReducers: (builder) => {
@@ -63,9 +77,16 @@ const authSlice = createSlice({
         localStorage.setItem("talentai_token", payload.token);
         localStorage.setItem("talentai_user",  JSON.stringify(payload.user));
       })
-      .addCase(register.rejected, (s, { error }) => { s.loading = false; s.error = error.message || "Registration failed"; });
+      .addCase(register.rejected, (s, { error }) => { s.loading = false; s.error = error.message || "Registration failed"; })
+      .addCase(updateProfile.pending,   (s) => { s.loading = true; s.error = null; })
+      .addCase(updateProfile.fulfilled, (s, { payload }) => {
+        s.loading = false;
+        s.user    = payload;
+        localStorage.setItem("talentai_user", JSON.stringify(payload));
+      })
+      .addCase(updateProfile.rejected, (s, { error }) => { s.loading = false; s.error = error.message || "Update failed"; });
   },
 });
 
-export const { logout, setAuth } = authSlice.actions;
+export const { logout, setAuth, updateUser } = authSlice.actions;
 export default authSlice.reducer;

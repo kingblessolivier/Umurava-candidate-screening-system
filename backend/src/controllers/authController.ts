@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { User } from '../models/User';
 import { AppError, Errors } from '../utils/AppError';
+// AppError imported above — used directly in updateProfile / changePassword
 import { catchAsync } from '../utils/catchAsync';
 
 const JWT_SECRET = process.env.JWT_SECRET!;
@@ -122,4 +123,66 @@ export const getMe = catchAsync(async (req: Request, res: Response, next: NextFu
       role: user.role,
     },
   });
+});
+
+/**
+ * @desc    Update current user profile (name / email)
+ * @route   PUT /api/auth/me
+ * @access  Private
+ */
+export const updateProfile = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const { name, email } = req.body as { name?: string; email?: string };
+
+  if (!name && !email) {
+    return next(new AppError('Provide at least name or email to update', 400));
+  }
+
+  const updates: Record<string, string> = {};
+  if (name?.trim()) updates.name = name.trim();
+  if (email?.trim()) {
+    const normalised = email.toLowerCase().trim();
+    const conflict = await User.findOne({ email: normalised, _id: { $ne: req.user?._id } });
+    if (conflict) return next(Errors.conflict('Email is already in use'));
+    updates.email = normalised;
+  }
+
+  const user = await User.findByIdAndUpdate(
+    req.user?._id,
+    { $set: updates },
+    { new: true, runValidators: true }
+  );
+
+  if (!user) return next(Errors.notFound('User'));
+
+  res.json({
+    success: true,
+    data: { _id: user._id, name: user.name, email: user.email, role: user.role },
+  });
+});
+
+/**
+ * @desc    Change password
+ * @route   PUT /api/auth/change-password
+ * @access  Private
+ */
+export const changePassword = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const { currentPassword, newPassword } = req.body as { currentPassword?: string; newPassword?: string };
+
+  if (!currentPassword || !newPassword) {
+    return next(new AppError('currentPassword and newPassword are required', 400));
+  }
+  if (newPassword.length < 8) {
+    return next(new AppError('New password must be at least 8 characters', 400));
+  }
+
+  const user = await User.findById(req.user?._id).select('+password');
+  if (!user) return next(Errors.notFound('User'));
+
+  const isMatch = await user.comparePassword(currentPassword);
+  if (!isMatch) return next(Errors.unauthorized('Current password is incorrect'));
+
+  user.password = newPassword;
+  await user.save();
+
+  res.json({ success: true, message: 'Password updated successfully' });
 });

@@ -2,12 +2,14 @@
 import { Provider } from "react-redux";
 import { store }    from "@/store";
 import { Toaster }  from "react-hot-toast";
+import { ThemeProvider } from "@/contexts/ThemeContext";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <Provider store={store}>
-      {children}
-      <Toaster
+      <ThemeProvider>
+        {children}
+        <Toaster
         position="top-right"
         toastOptions={{
           style: {
@@ -21,6 +23,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
           error:   { iconTheme: { primary: "#ef4444", secondary: "#0d1220" } },
         }}
       />
+      </ThemeProvider>
     </Provider>
   );
 }

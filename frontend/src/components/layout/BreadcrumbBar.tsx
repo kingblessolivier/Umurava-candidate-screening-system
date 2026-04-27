@@ -55,10 +55,10 @@ export function BreadcrumbBar() {
   });
 
   return (
-    <div className="bg-white border-b border-gray-100 px-6 py-2 flex items-center gap-1 text-[11px] select-none">
+    <div className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700 px-6 py-2 flex items-center gap-1 text-[11px] select-none">
       <Link
         href="/"
-        className="flex items-center gap-1 text-gray-400 hover:text-blue-600 transition-colors"
+        className="flex items-center gap-1 text-gray-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
       >
         <Home className="w-3 h-3" />
         <span>Home</span>
@@ -66,13 +66,13 @@ export function BreadcrumbBar() {
 
       {crumbs.map((crumb) => (
         <React.Fragment key={crumb.href}>
-          <ChevronRight className="w-3 h-3 text-gray-300 flex-shrink-0" />
+          <ChevronRight className="w-3 h-3 text-gray-300 dark:text-slate-600 flex-shrink-0" />
           {crumb.isLast ? (
-            <span className="font-semibold text-gray-700">{crumb.label}</span>
+            <span className="font-semibold text-gray-700 dark:text-slate-200">{crumb.label}</span>
           ) : (
             <Link
               href={crumb.href}
-              className="text-gray-400 hover:text-blue-600 transition-colors"
+              className="text-gray-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
             >
               {crumb.label}
             </Link>
