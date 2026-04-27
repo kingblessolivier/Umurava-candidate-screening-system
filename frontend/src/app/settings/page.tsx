@@ -17,11 +17,13 @@ import {
 
 const NOTIF_KEY = 'talentai_notifications';
 
-function loadNotifPrefs() {
+interface NotifPrefs { email: boolean; screeningComplete: boolean; newCandidates: boolean }
+
+function loadNotifPrefs(): NotifPrefs {
   if (typeof window === 'undefined') return { email: true, screeningComplete: true, newCandidates: false };
   try {
     const raw = localStorage.getItem(NOTIF_KEY);
-    return raw ? JSON.parse(raw) : { email: true, screeningComplete: true, newCandidates: false };
+    return raw ? (JSON.parse(raw) as NotifPrefs) : { email: true, screeningComplete: true, newCandidates: false };
   } catch {
     return { email: true, screeningComplete: true, newCandidates: false };
   }
