@@ -927,4 +927,4 @@ Navigate to `http://localhost:3000`, register an account, and start hiring.
 
 ---
 
-*Built with for the Umurava AI Hackathon.*
+*Built for the Umurava AI Hackathon.*
