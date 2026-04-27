@@ -1466,7 +1466,7 @@ function RejectedRow({
         </td>
         <td className="px-3 py-2.5 w-40">
           <span className="text-[10px] font-mono text-gray-500">
-            {(() => { const gap = rejected.scoreGap ?? Math.round(rejected.closestShortlistScore - rejected.finalScore); return gap > 0 ? `-${gap} PTS FROM CUTOFF` : 'AT CUTOFF'; })()}
+            {(() => { const gap = rejected.scoreGap ?? (rejected.closestShortlistScore - rejected.finalScore); return gap > 0 ? `-${gap.toFixed(2)} PTS FROM CUTOFF` : 'AT CUTOFF'; })()}
           </span>
         </td>
         <td className="px-3 py-2.5 w-32" />
