@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, Suspense } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import Link from 'next/link';
 import { toast } from 'react-hot-toast';
@@ -28,7 +28,7 @@ import { Candidate } from '@/types';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useNotifications } from '@/contexts/NotificationsContext';
 
-export default function JobsPage() {
+function JobsPageContent() {
   const dispatch = useDispatch<AppDispatch>();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -3048,5 +3048,14 @@ function CandidateModal({ jobId, onClose, onSave, onResumeQueued }: any) {
         </div>
       </div>
     </Modal>
+  );
+}
+
+
+export default function JobsPage() {
+  return (
+    <Suspense>
+      <JobsPageContent />
+    </Suspense>
   );
 }
