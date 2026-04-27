@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
-import { usePathname } from 'next/navigation';
+import React, { useState, useEffect, useCallback } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import { Sidebar } from './Sidebar';
 import { TopNav } from './TopNav';
 import { BreadcrumbBar } from './BreadcrumbBar';
@@ -12,8 +12,34 @@ const NO_LAYOUT = ['/login', '/signup'];
 
 export function LayoutWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    const tag = (e.target as HTMLElement).tagName;
+    const isTyping = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target as HTMLElement).isContentEditable;
+    if (isTyping) return;
+
+    if (e.key === 'n' && !e.ctrlKey && !e.metaKey) {
+      e.preventDefault();
+      router.push('/jobs/new');
+    }
+    if (e.key === '/' && !e.ctrlKey && !e.metaKey) {
+      e.preventDefault();
+      const searchInput = document.querySelector<HTMLInputElement>('input[type="search"], input[placeholder*="Search"], input[placeholder*="search"]');
+      searchInput?.focus();
+    }
+    if (e.key === 'g' && !e.ctrlKey && !e.metaKey) {
+      e.preventDefault();
+      router.push('/screening');
+    }
+  }, [router]);
+
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleKeyDown]);
 
   if (NO_LAYOUT.some((p) => pathname === p)) {
     return <>{children}</>;

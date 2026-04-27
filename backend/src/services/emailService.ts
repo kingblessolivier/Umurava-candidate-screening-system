@@ -5,12 +5,20 @@ export interface EmailRecipient {
   email: string;
 }
 
+export interface PersonalizedEmail {
+  name: string;
+  email: string;
+  subject: string;
+  body: string;
+}
+
 export interface SendEmailOptions {
   recipients: EmailRecipient[];
   subject: string;
   body: string;
   cc?: string[];
   replyTo?: string;
+  personalizedEmails?: PersonalizedEmail[];
 }
 
 export interface EmailResult {
@@ -217,14 +225,16 @@ export async function sendEmails(options: SendEmailOptions): Promise<EmailResult
 
   for (const recipient of options.recipients) {
     try {
-      const personalizedBody = personalizeBody(options.body, recipient.name);
+      const override = options.personalizedEmails?.find(p => p.email === recipient.email);
+      const finalBody    = override?.body    ?? personalizeBody(options.body, recipient.name);
+      const finalSubject = override?.subject ?? options.subject;
 
       await transporter.sendMail({
         from,
         to: `"${recipient.name}" <${recipient.email}>`,
-        subject: options.subject,
-        html: buildHtml(personalizedBody),
-        text: personalizedBody,
+        subject: finalSubject,
+        html: buildHtml(finalBody),
+        text: finalBody,
         cc: options.cc,
         replyTo: options.replyTo || fromAddress,
       });

@@ -5,6 +5,7 @@ import { AppDispatch } from "@/store";
 import { createJob, enhanceJob } from "@/store/jobsSlice";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
+import { useNotifications } from "@/contexts/NotificationsContext";
 import { ArrowLeft, Sparkles, Loader2, Plus, X, Save } from "lucide-react";
 import Link from "next/link";
 import { motion } from "framer-motion";
@@ -28,6 +29,7 @@ interface FormState {
 export default function NewJobPage() {
   const dispatch = useDispatch<AppDispatch>();
   const router = useRouter();
+  const { addLocalNotification } = useNotifications();
   const formRef = useRef<HTMLFormElement | null>(null);
 
   const [form, setForm] = useState<FormState>({
@@ -207,6 +209,13 @@ export default function NewJobPage() {
       const job = await dispatch(createJob(payload)).unwrap();
       clearDraft();
       toast.success("Job created!");
+      addLocalNotification({
+        title: 'Job created',
+        message: `"${job.title}" is now live and accepting candidates.`,
+        type: 'success',
+        category: 'job',
+        link: `/jobs/${job._id}`,
+      });
       router.push(`/jobs/${job._id}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to create job");

@@ -56,11 +56,14 @@ router.delete("/jobs/:id", requireAuth, jobs.deleteJob);
 // ============================================
 router.get("/candidates", requireAuth, candidates.listCandidates);
 router.get("/candidates/stats", requireAuth, candidates.getCandidateStats);
+router.get("/candidates/check-duplicate", requireAuth, candidates.checkDuplicateEmail);
 router.post("/candidates", requireAuth, candidates.createCandidate);
 router.post("/candidates/bulk", requireAuth, candidates.bulkImportJSON);
 router.post("/candidates/upload/csv", requireAuth, upload.single("file"), candidates.uploadCSV);
 router.post("/candidates/upload/pdf", requireAuth, upload.array("files", 20), candidates.uploadPDFResumes);
 router.get("/candidates/:id", requireAuth, candidates.getCandidate);
+router.get("/candidates/:id/score-history", requireAuth, candidates.getCandidateScoreHistory);
+router.post("/candidates/:id/match-job", requireAuth, candidates.matchCandidateToJob);
 router.put("/candidates/:id", requireAuth, candidates.updateCandidate);
 router.patch("/candidates/:id", requireAuth, candidates.updateCandidate);
 router.delete("/candidates/:id", requireAuth, candidates.deleteCandidate);

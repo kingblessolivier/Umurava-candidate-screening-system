@@ -11,8 +11,10 @@ import toast from 'react-hot-toast';
 import { useAutoSave } from '@/hooks/useAutoSave';
 import { DraftRecoveryModal } from '@/components/ui/DraftRecoveryModal';
 import {
-  UserPlus, User, Zap, Briefcase, GraduationCap, FolderOpen, Settings2, Plus, X as XIcon,
+  UserPlus, User, Zap, Briefcase, GraduationCap, FolderOpen, Settings2, Plus, X as XIcon, AlertTriangle,
 } from 'lucide-react';
+import { api } from '@/lib/api';
+import { useNotifications } from '@/contexts/NotificationsContext';
 
 interface Props {
   isOpen: boolean;
@@ -45,12 +47,15 @@ export function CreateCandidateModal({ isOpen, onClose }: Props) {
   const dispatch = useDispatch<AppDispatch>();
   const { items: jobs } = useSelector((s: RootState) => s.jobs);
   const formRef = useRef<HTMLFormElement | null>(null);
+  const { addLocalNotification } = useNotifications();
 
   const [saving, setSaving] = useState(false);
   const [showDraftRecovery, setShowDraftRecovery] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [section, setSection] = useState<'basic' | 'skills' | 'experience' | 'education' | 'projects' | 'extras'>('basic');
   const [form, setForm] = useState(createInitialCandidateForm);
+  const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
+  const duplicateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { getDraft, clearDraft, save } = useAutoSave({
     key: 'candidate-draft',
@@ -72,8 +77,24 @@ export function CreateCandidateModal({ isOpen, onClose }: Props) {
     }
   }, [isOpen, getDraft]);
 
-  const set = (field: keyof typeof form, value: string) =>
+  const set = (field: keyof typeof form, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+    if (field === 'email') {
+      setDuplicateWarning(null);
+      if (duplicateTimerRef.current) clearTimeout(duplicateTimerRef.current);
+      if (value.includes('@')) {
+        duplicateTimerRef.current = setTimeout(async () => {
+          try {
+            const r = await api.get(`/candidates/check-duplicate?email=${encodeURIComponent(value)}`);
+            if (r.data.exists) {
+              const c = r.data.candidate;
+              setDuplicateWarning(`A candidate with this email already exists: ${c.firstName} ${c.lastName}`);
+            }
+          } catch { /* silent */ }
+        }, 600);
+      }
+    }
+  };
 
   const splitCsv = (value: string) => value.split(',').map((v) => v.trim()).filter(Boolean);
 
@@ -104,6 +125,8 @@ export function CreateCandidateModal({ isOpen, onClose }: Props) {
   const handleClose = () => {
     setForm(createInitialCandidateForm());
     setSection('basic');
+    setDuplicateWarning(null);
+    if (duplicateTimerRef.current) clearTimeout(duplicateTimerRef.current);
     onClose();
   };
 
@@ -225,6 +248,12 @@ export function CreateCandidateModal({ isOpen, onClose }: Props) {
       if (result.meta.requestStatus === 'fulfilled') {
         clearDraft();
         toast.success('Candidate created');
+        addLocalNotification({
+          title: 'Candidate added',
+          message: `${form.firstName} ${form.lastName} was added to the platform.`,
+          type: 'success',
+          category: 'candidate',
+        });
         handleClose();
       } else {
         toast.error((result.payload as string) || 'Failed to create candidate');
@@ -315,6 +344,12 @@ export function CreateCandidateModal({ isOpen, onClose }: Props) {
             <div className="space-y-1">
               <label className="text-xs font-medium text-gray-700">Email <span className="text-red-500">*</span></label>
               <Input type="email" value={form.email} onChange={(e) => set('email', e.target.value)} placeholder="alice@example.com" className="text-xs" required />
+              {duplicateWarning && (
+                <div className="flex items-center gap-1.5 mt-1 px-2 py-1.5 bg-amber-50 border border-amber-200 rounded-lg">
+                  <AlertTriangle className="w-3 h-3 text-amber-500 flex-shrink-0" />
+                  <p className="text-[11px] text-amber-700">{duplicateWarning}</p>
+                </div>
+              )}
             </div>
             <div className="space-y-1">
               <label className="text-xs font-medium text-gray-700">Job Position <span className="text-red-500">*</span></label>

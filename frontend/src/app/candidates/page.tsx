@@ -9,6 +9,7 @@ import {
   Filter, ChevronDown, Database,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useNotifications } from '@/contexts/NotificationsContext';
 import { AppDispatch, RootState } from '@/store';
 import { fetchJobs } from '@/store/jobsSlice';
 import { api } from '@/lib/api';
@@ -54,6 +55,7 @@ function Avatar({ name }: { name: string }) {
 export default function CandidatesPage() {
   const router = useRouter();
   const dispatch = useDispatch<AppDispatch>();
+  const { addLocalNotification } = useNotifications();
   const [filterJobId, setFilterJobId] = useState('');
   const {
     candidates, total, loading, searchQuery, page, limit, totalPages,
@@ -105,6 +107,12 @@ export default function CandidatesPage() {
       await refreshCandidates();
       setSelectedIds(prev => { const n = new Set(prev); ids.forEach(id => n.delete(id)); return n; });
       toast.success(`Deleted ${ids.length} candidate${ids.length > 1 ? 's' : ''}`);
+      addLocalNotification({
+        title: 'Candidates deleted',
+        message: `${ids.length} candidate${ids.length > 1 ? 's were' : ' was'} removed from the platform.`,
+        type: 'info',
+        category: 'candidate',
+      });
     } catch { toast.error('Failed to delete candidates'); }
     finally { toast.dismiss(t); }
   };
@@ -117,6 +125,12 @@ export default function CandidatesPage() {
       const r = await handleDeleteCandidate(confirmDelete.id);
       if (r.meta.requestStatus === 'fulfilled') {
         toast.success(`${confirmDelete.name} removed`);
+        addLocalNotification({
+          title: 'Candidate removed',
+          message: `${confirmDelete.name} was removed from the platform.`,
+          type: 'info',
+          category: 'candidate',
+        });
         if (selectedCandidate?._id === confirmDelete.id) setModalOpen(false);
       } else toast.error('Failed to remove candidate');
     } catch { toast.error('Failed to remove candidate'); }

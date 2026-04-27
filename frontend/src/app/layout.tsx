@@ -3,6 +3,7 @@ import './globals.css';
 import { Providers } from './providers';
 import { AuthGuard } from '@/components/layout/AuthGuard';
 import { LayoutWrapper } from '@/components/layout/LayoutWrapper';
+import { NetworkStatusBanner } from '@/components/ui/NetworkStatusBanner';
 
 export const metadata: Metadata = {
   title: 'TalentAI — Intelligent Hiring Platform',
@@ -20,6 +21,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className="antialiased" suppressHydrationWarning>
         <Providers>
+          <NetworkStatusBanner />
           <AuthGuard>
             <div className="flex min-h-screen bg-white">
               <LayoutWrapper>{children}</LayoutWrapper>

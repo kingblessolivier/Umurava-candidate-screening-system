@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useContext } from "react";
+import { useNotifications } from "@/contexts/NotificationsContext";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   X, Mail, Send, Users, Trash2,
@@ -11,9 +12,22 @@ import { cn } from "@/lib/utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+export interface CandidateEmailData {
+  score: number;
+  recommendation: string;
+  strengths: string[];
+  gaps: string[];
+  interviewQuestions: string[];
+  improvementSuggestions?: string[];
+  whyNotSelected?: string;
+  topMissingSkills?: string[];
+  rank?: number;
+}
+
 export interface EmailRecipient {
   name: string;
   email: string;
+  candidateData?: CandidateEmailData;
 }
 
 interface EmailModalProps {
@@ -129,6 +143,73 @@ Kind regards,
 The HR Team`,
   },
   {
+    id: "ai-shortlisted",
+    label: "Evaluation+",
+    badge: "Shortlisted+",
+    color: "teal",
+    subject: "Your Evaluation Results – {jobTitle}",
+    body: `Dear {name},
+
+We are pleased to share your personalised evaluation results for the {jobTitle} position.
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+YOUR EVALUATION RESULTS
+━━━━━━━━━━━━━━━━━━━━━━━━
+Overall Score:    {score}/100
+Status:           {recommendation}
+
+✦ YOUR KEY STRENGTHS
+{strengths}
+
+◈ AREAS LIKELY TO COME UP IN INTERVIEW
+{gaps}
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+INTERVIEW PREPARATION QUESTIONS
+━━━━━━━━━━━━━━━━━━━━━━━━
+{interviewQuestions}
+
+Please reply with your availability for the next 5–7 business days so we can schedule your interview.
+
+Warm regards,
+The Talent Acquisition Team`,
+  },
+  {
+    id: "ai-rejected",
+    label: "Feedback",
+    badge: "Feedback",
+    color: "slate",
+    subject: "Personalised Feedback on Your Application – {jobTitle}",
+    body: `Dear {name},
+
+Thank you sincerely for your interest in the {jobTitle} position and for the time you invested in your application.
+
+After a thorough review of all submissions, we regret to inform you that we will not be progressing your application at this time.
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+YOUR PERSONALISED FEEDBACK
+━━━━━━━━━━━━━━━━━━━━━━━━
+Score: {score}/100
+
+Why you were not selected at this stage:
+{whyNotSelected}
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+SKILLS TO DEVELOP FOR FUTURE APPLICATIONS
+━━━━━━━━━━━━━━━━━━━━━━━━
+Key missing skills: {missingSkills}
+
+Recommended improvement steps:
+{improvements}
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+
+We strongly encourage you to invest in these areas. Your profile will remain on file and we welcome you to apply again in future.
+
+Best regards,
+The HR Team`,
+  },
+  {
     id: "custom",
     label: "Custom",
     badge: "Custom",
@@ -144,6 +225,8 @@ const TEMPLATE_COLORS: Record<string, { pill: string; active: string }> = {
   violet: { pill: "border-violet-200 text-violet-700 bg-violet-50", active: "bg-violet-600 text-white border-violet-600" },
   rose:   { pill: "border-rose-200 text-rose-700 bg-rose-50",   active: "bg-rose-600 text-white border-rose-600" },
   amber:  { pill: "border-amber-200 text-amber-700 bg-amber-50", active: "bg-amber-600 text-white border-amber-600" },
+  teal:   { pill: "border-teal-200 text-teal-700 bg-teal-50",   active: "bg-teal-600 text-white border-teal-600" },
+  slate:  { pill: "border-slate-200 text-slate-600 bg-slate-50", active: "bg-slate-600 text-white border-slate-600" },
   gray:   { pill: "border-gray-200 text-gray-600 bg-gray-50",   active: "bg-gray-700 text-white border-gray-700" },
 };
 
@@ -152,19 +235,48 @@ interface SendResult { email: string; success: boolean; error?: string; }
 // ─── Main Modal ───────────────────────────────────────────────────────────────
 
 export default function EmailModal({ isOpen, onClose, recipients: initialRecipients, jobTitle = "the position", context }: EmailModalProps) {
-  const defaultTemplate =
-    context === "interview" ? TEMPLATES[0] :
-    context === "shortlist" ? TEMPLATES[1] :
-    context === "offer"     ? TEMPLATES[2] :
-    context === "rejection" ? TEMPLATES[3] :
-    TEMPLATES[0];
+  function pickTemplate(ctx: typeof context, rcpts: EmailRecipient[]): EmailTemplate {
+    const hasAI = rcpts.some(r => r.candidateData);
+    if (hasAI) {
+      const isRejection = ctx === "rejection" || rcpts.some(r => r.candidateData?.whyNotSelected);
+      return TEMPLATES.find(t => t.id === (isRejection ? "ai-rejected" : "ai-shortlisted"))!;
+    }
+    return ctx === "interview" ? TEMPLATES[0] :
+           ctx === "shortlist" ? TEMPLATES[1] :
+           ctx === "offer"     ? TEMPLATES[2] :
+           ctx === "rejection" ? TEMPLATES[3] :
+           TEMPLATES[0];
+  }
 
-  function resolveVars(str: string, name = "") {
-    return str
+  const defaultTemplate = pickTemplate(context, initialRecipients);
+
+  function resolveVars(str: string, recipientOrName: EmailRecipient | string = ""): string {
+    const name = typeof recipientOrName === "string" ? recipientOrName : recipientOrName.name;
+    const d    = typeof recipientOrName === "object"  ? recipientOrName.candidateData : undefined;
+
+    const listStr = (arr: string[] | undefined) =>
+      (arr ?? []).map((s, i) => `${i + 1}. ${s}`).join("\n");
+
+    let out = str
       .replace(/\{jobTitle\}/gi, jobTitle)
       .replace(/\{job[\s_]?title\}/gi, jobTitle)
       .replace(/\{name\}/gi, name)
       .replace(/\{candidateName\}/gi, name);
+
+    if (d) {
+      out = out
+        .replace(/\{score\}/gi, String(d.score))
+        .replace(/\{recommendation\}/gi, d.recommendation)
+        .replace(/\{strengths\}/gi, listStr(d.strengths))
+        .replace(/\{gaps\}/gi, listStr(d.gaps))
+        .replace(/\{interviewQuestions\}/gi, listStr(d.interviewQuestions))
+        .replace(/\{improvements\}/gi, listStr(d.improvementSuggestions))
+        .replace(/\{whyNotSelected\}/gi, d.whyNotSelected ?? "")
+        .replace(/\{missingSkills\}/gi, (d.topMissingSkills ?? []).join(", "))
+        .replace(/\{rank\}/gi, String(d.rank ?? ""));
+    }
+
+    return out;
   }
 
   const [tab, setTab] = useState<"compose" | "preview">("compose");
@@ -175,18 +287,14 @@ export default function EmailModal({ isOpen, onClose, recipients: initialRecipie
   const [recipients, setRecipients] = useState<EmailRecipient[]>(initialRecipients);
   const [sending, setSending] = useState(false);
   const [results, setResults] = useState<SendResult[] | null>(null);
+  const { addLocalNotification } = useNotifications();
 
   useEffect(() => {
     if (isOpen) {
       setRecipients(initialRecipients);
       setResults(null);
       setTab("compose");
-      const tpl =
-        context === "interview" ? TEMPLATES[0] :
-        context === "shortlist" ? TEMPLATES[1] :
-        context === "offer"     ? TEMPLATES[2] :
-        context === "rejection" ? TEMPLATES[3] :
-        TEMPLATES[0];
+      const tpl = pickTemplate(context, initialRecipients);
       setSelectedTemplate(tpl);
       setSubject(resolveVars(tpl.subject));
       setBody(resolveVars(tpl.body));
@@ -207,8 +315,29 @@ export default function EmailModal({ isOpen, onClose, recipients: initialRecipie
     setResults(null);
     try {
       const ccList = cc.trim() ? cc.split(",").map(e => e.trim()).filter(Boolean) : undefined;
-      const res = await api.post("/email/send", { recipients, subject, body, cc: ccList });
+      const personalizedEmails = recipients.map(r => ({
+        name:    r.name,
+        email:   r.email,
+        subject: resolveVars(subject, r),
+        body:    resolveVars(body, r),
+      }));
+      const res = await api.post("/email/send", {
+        recipients,
+        subject,
+        body,
+        cc: ccList,
+        personalizedEmails,
+      });
       setResults(res.data.results as SendResult[]);
+      const sent = (res.data.results as { success: boolean }[]).filter(r => r.success).length;
+      if (sent > 0) {
+        addLocalNotification({
+          title: 'Emails sent',
+          message: `${sent} email${sent > 1 ? 's' : ''} sent successfully — "${subject}"`,
+          type: 'success',
+          category: 'email',
+        });
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to send";
       setResults(recipients.map(r => ({ email: r.email, success: false, error: message })));
@@ -411,7 +540,11 @@ export default function EmailModal({ isOpen, onClose, recipients: initialRecipie
                     <div className="relative p-4">
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-[10px] text-gray-400">
-                          Use <code className="bg-gray-100 px-1 py-0.5 rounded text-gray-600">{"{name}"}</code> to personalise per recipient
+                          Variables: <code className="bg-gray-100 px-1 py-0.5 rounded text-gray-600">{"{name}"}</code>{" "}
+                          <code className="bg-gray-100 px-1 py-0.5 rounded text-gray-600">{"{score}"}</code>{" "}
+                          <code className="bg-gray-100 px-1 py-0.5 rounded text-gray-600">{"{strengths}"}</code>{" "}
+                          <code className="bg-gray-100 px-1 py-0.5 rounded text-gray-600">{"{interviewQuestions}"}</code>{" "}
+                          <code className="bg-gray-100 px-1 py-0.5 rounded text-gray-600">{"{improvements}"}</code>
                         </span>
                         <span className="text-[10px] text-gray-300">{body.length} chars</span>
                       </div>
@@ -468,7 +601,7 @@ export default function EmailModal({ isOpen, onClose, recipients: initialRecipie
                             {/* Email body */}
                             <div className="px-6 py-5">
                               <pre className="text-[13px] text-gray-700 whitespace-pre-wrap font-sans leading-[1.75]">
-                                {resolveVars(body, r.name)}
+                                {resolveVars(body, r)}
                               </pre>
                             </div>
                           </div>

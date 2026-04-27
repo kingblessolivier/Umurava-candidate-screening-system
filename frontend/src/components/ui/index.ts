@@ -9,3 +9,4 @@ export { EmptyState } from './EmptyState';
 export { Avatar } from './Avatar';
 export { ProgressBar } from './ProgressBar';
 export { Tooltip } from './Tooltip';
+export { NetworkStatusBanner } from './NetworkStatusBanner';

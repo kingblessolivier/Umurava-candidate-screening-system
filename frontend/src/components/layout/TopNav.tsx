@@ -18,7 +18,14 @@ import {
   FileText,
   Brain,
   Menu,
+  Briefcase,
+  Users,
+  Mail,
+  Info,
+  BellOff,
+  BellRing,
 } from 'lucide-react';
+import { AppNotification } from '@/contexts/NotificationsContext';
 import { Avatar } from '@/components/ui/Avatar';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
@@ -53,8 +60,26 @@ export function TopNav({
 
   const displayName = mounted ? formatDisplayName(user?.name) : 'User';
   const displayEmail = mounted ? (user?.email || '') : '';
-  const { notifications, activeJobs, unreadCount, markAsRead, clearAll } = useNotifications();
+  const { notifications, activeJobs, unreadCount, markAsRead, markAllRead, clearAll, pushPermission, requestPushPermission } = useNotifications();
   const activeJobList = Object.values(activeJobs);
+
+  function categoryIcon(n: AppNotification) {
+    if (n.category === 'screening') return <Brain className="w-3.5 h-3.5 text-blue-600" />;
+    if (n.category === 'upload') return <FileText className="w-3.5 h-3.5 text-indigo-600" />;
+    if (n.category === 'job') return <Briefcase className="w-3.5 h-3.5 text-emerald-600" />;
+    if (n.category === 'candidate') return <Users className="w-3.5 h-3.5 text-violet-600" />;
+    if (n.category === 'email') return <Mail className="w-3.5 h-3.5 text-amber-600" />;
+    return <Info className="w-3.5 h-3.5 text-gray-500" />;
+  }
+
+  function categoryBg(n: AppNotification) {
+    if (n.category === 'screening') return 'bg-blue-100';
+    if (n.category === 'upload') return 'bg-indigo-100';
+    if (n.category === 'job') return 'bg-emerald-100';
+    if (n.category === 'candidate') return 'bg-violet-100';
+    if (n.category === 'email') return 'bg-amber-100';
+    return 'bg-gray-100';
+  }
 
   const handleNotificationClick = (id: string, link?: string) => {
     markAsRead(id);
@@ -136,23 +161,44 @@ export function TopNav({
 
             {showNotifications && (
               <div className="absolute right-0 mt-3 w-96 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-200/60 z-50">
-                <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3.5 bg-slate-50/80">
-                  <h3 className="text-sm font-semibold text-slate-900">
-                    Notifications
-                    {unreadCount > 0 && (
-                      <span className="ml-2 rounded-full bg-blue-100 px-1.5 py-0.5 text-xs text-blue-700">
-                        {unreadCount} new
-                      </span>
-                    )}
-                  </h3>
-                  {notifications.length > 0 && (
-                    <button
-                      onClick={() => { clearAll(); setShowNotifications(false); }}
-                      suppressHydrationWarning
-                      className="text-xs font-medium text-slate-500 hover:text-slate-800"
-                    >
-                      Clear all
+                <div className="border-b border-slate-100 px-4 py-3 bg-slate-50/80">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+                      Notifications
+                      {unreadCount > 0 && (
+                        <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-xs text-blue-700">
+                          {unreadCount} new
+                        </span>
+                      )}
+                    </h3>
+                    <div className="flex items-center gap-2">
+                      {unreadCount > 0 && (
+                        <button onClick={markAllRead} suppressHydrationWarning
+                          className="text-[11px] font-medium text-blue-600 hover:text-blue-800">
+                          Mark all read
+                        </button>
+                      )}
+                      {notifications.length > 0 && (
+                        <button onClick={() => { clearAll(); setShowNotifications(false); }}
+                          suppressHydrationWarning
+                          className="text-[11px] font-medium text-slate-400 hover:text-slate-700">
+                          Clear all
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {/* Push notification permission */}
+                  {pushPermission === 'default' && (
+                    <button onClick={requestPushPermission} suppressHydrationWarning
+                      className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-[11px] text-blue-700 font-medium transition-colors">
+                      <BellRing className="w-3 h-3" />
+                      Enable browser notifications to get alerts even when the tab is hidden
                     </button>
+                  )}
+                  {pushPermission === 'denied' && (
+                    <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-red-50 text-[11px] text-red-600">
+                      <BellOff className="w-3 h-3" /> Browser notifications are blocked — enable them in your browser settings
+                    </div>
                   )}
                 </div>
 
@@ -237,24 +283,30 @@ export function TopNav({
                           className={cn(
                             'p-4 transition-colors',
                             n.link ? 'cursor-pointer hover:bg-slate-50' : 'cursor-default',
-                            !n.read && 'bg-blue-50/60'
+                            !n.read ? 'bg-blue-50/40' : 'bg-white'
                           )}
                         >
                           <div className="flex gap-3">
-                            <div className="flex-shrink-0 mt-0.5">
-                              {n.type === 'success' ? (
-                                <CheckCircle2 className="w-4 h-4 text-green-500" />
-                              ) : (
-                                <XCircle className="w-4 h-4 text-red-500" />
-                              )}
+                            <div className="flex-shrink-0 mt-0.5 relative">
+                              <div className={cn('w-7 h-7 rounded-lg flex items-center justify-center', categoryBg(n))}>
+                                {categoryIcon(n)}
+                              </div>
+                              <span className="absolute -bottom-0.5 -right-0.5">
+                                {n.type === 'success' || n.type === 'info'
+                                  ? <CheckCircle2 className="w-3 h-3 text-green-500 bg-white rounded-full" />
+                                  : <XCircle className="w-3 h-3 text-red-500 bg-white rounded-full" />}
+                              </span>
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-slate-900">{n.title}</p>
-                              <p className="text-xs text-slate-600 mt-0.5 line-clamp-2">{n.message}</p>
+                              <div className="flex items-center gap-1.5">
+                                <p className="text-xs font-semibold text-slate-900 flex-1 truncate">{n.title}</p>
+                                {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0" />}
+                              </div>
+                              <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-2">{n.message}</p>
                               <div className="flex items-center justify-between mt-1">
-                                <p className="text-xs text-slate-400">{mounted ? formatTimestamp(n.timestamp) : ''}</p>
+                                <p className="text-[10px] text-slate-400">{mounted ? formatTimestamp(n.timestamp) : ''}</p>
                                 {n.link && (
-                                  <span className="text-xs text-blue-600 font-medium">View results →</span>
+                                  <span className="text-[11px] text-blue-600 font-medium">View →</span>
                                 )}
                               </div>
                             </div>

@@ -113,6 +113,113 @@ export const deleteCandidate = async (req: Request, res: Response) => {
   }
 };
 
+// ─── Check Duplicate Email ────────────────────────────────────────────────────
+
+export const checkDuplicateEmail = async (req: Request, res: Response) => {
+  try {
+    const email = (req.query.email as string)?.trim().toLowerCase();
+    if (!email) return res.status(400).json({ success: false, error: "email query param required" });
+    const existing = await Candidate.findOne({ email: { $regex: new RegExp(`^${email}$`, "i") } })
+      .select("_id firstName lastName email jobId")
+      .lean();
+    res.json({ success: true, exists: !!existing, candidate: existing || null });
+  } catch {
+    res.status(500).json({ success: false, error: "Failed to check email" });
+  }
+};
+
+// ─── Score History (candidate across all screenings) ─────────────────────────
+
+export const getCandidateScoreHistory = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const candidate = await Candidate.findById(id).select("email").lean();
+    if (!candidate) return res.status(404).json({ success: false, error: "Candidate not found" });
+
+    const { ScreeningResultModel } = await import("../models/ScreeningResult");
+    const results = await ScreeningResultModel.find({
+      $or: [
+        { "shortlist.candidateId": id },
+        { "rejectedCandidates.candidateId": id },
+        { "shortlist.email": candidate.email },
+        { "rejectedCandidates.email": candidate.email },
+      ],
+    })
+      .select("jobId jobTitle shortlist rejectedCandidates createdAt screeningDate")
+      .sort({ createdAt: 1 })
+      .lean();
+
+    const history = results.map((r) => {
+      const inShortlist = r.shortlist?.find(
+        (c) => c.candidateId === id || c.email === candidate.email
+      );
+      const inRejected = r.rejectedCandidates?.find(
+        (c) => c.candidateId === id || c.email === candidate.email
+      );
+      const entry = inShortlist || inRejected;
+      if (!entry) return null;
+      return {
+        jobId: r.jobId,
+        jobTitle: r.jobTitle,
+        date: r.createdAt,
+        score: entry.finalScore,
+        rank: entry.rank,
+        recommendation: entry.recommendation,
+        shortlisted: !!inShortlist,
+        breakdown: entry.breakdown,
+      };
+    }).filter(Boolean);
+
+    res.json({ success: true, data: history });
+  } catch {
+    res.status(500).json({ success: false, error: "Failed to fetch score history" });
+  }
+};
+
+// ─── Match Candidate to Job ───────────────────────────────────────────────────
+
+export const matchCandidateToJob = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { jobId } = req.body as { jobId: string };
+    if (!jobId) return res.status(400).json({ success: false, error: "jobId is required" });
+
+    const { Job } = await import("../models/Job");
+    const [candidate, job] = await Promise.all([
+      Candidate.findById(id).lean(),
+      Job.findById(jobId).lean(),
+    ]);
+    if (!candidate) return res.status(404).json({ success: false, error: "Candidate not found" });
+    if (!job) return res.status(404).json({ success: false, error: "Job not found" });
+
+    const { preprocessCandidates } = await import("../services/preprocessingService");
+    const { runScreeningPipeline } = await import("../services/geminiService");
+
+    const preprocessed = preprocessCandidates([candidate as any], job as any);
+    const result = await runScreeningPipeline(job as any, preprocessed, 1, () => {}, () => true);
+
+    const scored = result.shortlist[0] || result.rejectedCandidates[0];
+    if (!scored) return res.status(500).json({ success: false, error: "Scoring failed" });
+
+    res.json({
+      success: true,
+      data: {
+        finalScore: scored.finalScore,
+        breakdown: scored.breakdown,
+        recommendation: scored.recommendation,
+        confidenceScore: scored.confidenceScore,
+        strengths: scored.strengths,
+        gaps: scored.gaps,
+        skillGapAnalysis: scored.skillGapAnalysis,
+        summary: scored.summary,
+        shortlisted: result.shortlist.length > 0,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err instanceof Error ? err.message : "Match failed" });
+  }
+};
+
 // ─── Bulk Import (JSON array) ──────────────────────────────────────────────────
 
 export const bulkImportJSON = async (req: Request, res: Response) => {

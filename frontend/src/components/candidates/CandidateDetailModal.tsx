@@ -7,12 +7,16 @@ import { Candidate } from '@/types';
 import {
   Mail, Phone, MapPin, Briefcase, Calendar, GraduationCap, Trophy,
   ExternalLink, Edit2, Save, X, CheckCircle2, Plus, Trash2,
-  User, Zap, FolderOpen, Settings2, Link2, Globe,
+  User, Zap, FolderOpen, Settings2, Link2, Globe, TrendingUp, Target, Loader2,
 } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
 import toast from 'react-hot-toast';
+import { api } from '@/lib/api';
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
+} from 'recharts';
 
 const SKILL_LEVEL_COLOR: Record<string, string> = {
   Expert: 'bg-emerald-100 text-emerald-700 border-emerald-200',
@@ -27,7 +31,21 @@ const AVAIL_STATUS_COLOR: Record<string, string> = {
   'Not Available': 'bg-red-100 text-red-600',
 };
 
-type Tab = 'basic' | 'skills' | 'experience' | 'education' | 'projects' | 'extras';
+type Tab = 'basic' | 'skills' | 'experience' | 'education' | 'projects' | 'extras' | 'history' | 'match';
+
+interface HistoryEntry {
+  jobId: string; jobTitle: string; date: string; score: number;
+  rank: number; recommendation: string; shortlisted: boolean;
+  breakdown: { skillsScore: number; experienceScore: number; educationScore: number; projectsScore: number; availabilityScore: number };
+}
+
+interface MatchResult {
+  finalScore: number; recommendation: string; confidenceScore: number;
+  strengths: string[]; gaps: string[]; shortlisted: boolean;
+  breakdown: { skillsScore: number; experienceScore: number; educationScore: number; projectsScore: number; availabilityScore: number };
+  skillGapAnalysis: { matched: string[]; missing: string[]; bonus: string[] };
+  summary: string;
+}
 
 interface Props {
   candidate: Candidate | null;
@@ -43,9 +61,46 @@ export function CandidateDetailModal({ candidate, isOpen, onClose, onUpdate }: P
   const [form, setForm] = useState<Partial<Candidate>>({});
   const { items: jobs } = useSelector((s: RootState) => s.jobs);
 
+  const [historyData, setHistoryData] = useState<HistoryEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [matchJobId, setMatchJobId] = useState('');
+  const [matchResult, setMatchResult] = useState<MatchResult | null>(null);
+  const [matchLoading, setMatchLoading] = useState(false);
+
   useEffect(() => {
-    if (candidate) { setForm(candidate); setIsEditing(false); setTab('basic'); }
+    if (candidate) {
+      setForm(candidate);
+      setIsEditing(false);
+      setTab('basic');
+      setHistoryData([]);
+      setMatchResult(null);
+      setMatchJobId('');
+    }
   }, [candidate]);
+
+  useEffect(() => {
+    if (tab === 'history' && candidate && historyData.length === 0 && !historyLoading) {
+      setHistoryLoading(true);
+      api.get(`/candidates/${candidate._id}/score-history`)
+        .then(r => setHistoryData(r.data.data || []))
+        .catch(() => toast.error('Failed to load score history'))
+        .finally(() => setHistoryLoading(false));
+    }
+  }, [tab, candidate]);
+
+  const runMatch = async () => {
+    if (!matchJobId || !candidate) return;
+    setMatchLoading(true);
+    setMatchResult(null);
+    try {
+      const r = await api.post(`/candidates/${candidate._id}/match-job`, { jobId: matchJobId });
+      setMatchResult(r.data.data);
+    } catch (e: any) {
+      toast.error(e.message || 'Match failed');
+    } finally {
+      setMatchLoading(false);
+    }
+  };
 
   if (!isOpen || !candidate) return null;
 
@@ -91,6 +146,8 @@ export function CandidateDetailModal({ candidate, isOpen, onClose, onUpdate }: P
     { id: 'education',  label: 'Education',  icon: <GraduationCap className="w-3 h-3" /> },
     { id: 'projects',   label: 'Projects',   icon: <FolderOpen className="w-3 h-3" /> },
     { id: 'extras',     label: 'Extras',     icon: <Settings2 className="w-3 h-3" /> },
+    { id: 'history',    label: 'Score History', icon: <TrendingUp className="w-3 h-3" /> },
+    { id: 'match',      label: 'Job Match',  icon: <Target className="w-3 h-3" /> },
   ];
 
   const assignedJob = jobs.find(j => j._id === form.jobId);
@@ -634,6 +691,153 @@ export function CandidateDetailModal({ candidate, isOpen, onClose, onUpdate }: P
             </div>
           </div>
         )}
+        {/* SCORE HISTORY */}
+        {tab === 'history' && (
+          <div className="p-4">
+            {historyLoading ? (
+              <div className="flex items-center justify-center py-12 gap-2 text-gray-400">
+                <Loader2 className="w-4 h-4 animate-spin" /> Loading history…
+              </div>
+            ) : historyData.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-gray-400 gap-2">
+                <TrendingUp className="w-8 h-8 opacity-30" />
+                <p className="text-sm">No screening history yet.</p>
+                <p className="text-xs">This candidate hasn't been screened for any job.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="h-48">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={historyData} margin={{ top: 4, right: 8, left: -20, bottom: 4 }}>
+                      <XAxis dataKey="jobTitle" tick={{ fontSize: 10 }} tickLine={false} axisLine={false}
+                        tickFormatter={(v: string) => v.length > 14 ? v.slice(0, 14) + '…' : v} />
+                      <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
+                      <Tooltip
+                        contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e5e7eb' }}
+                        formatter={(val: number) => [`${val}%`, 'Score']}
+                      />
+                      <Bar dataKey="score" radius={[4, 4, 0, 0]}>
+                        {historyData.map((e, i) => (
+                          <Cell key={i} fill={e.score >= 70 ? '#22c55e' : e.score >= 50 ? '#3b82f6' : '#f59e0b'} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="space-y-2">
+                  {historyData.map((e, i) => (
+                    <div key={i} className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-100">
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-sm font-bold text-white flex-shrink-0 ${
+                        e.score >= 70 ? 'bg-green-500' : e.score >= 50 ? 'bg-blue-500' : 'bg-amber-500'}`}>
+                        {e.score}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-gray-800 truncate">{e.jobTitle}</p>
+                        <p className="text-[11px] text-gray-400">{new Date(e.date).toLocaleDateString()} · Rank #{e.rank}</p>
+                      </div>
+                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${
+                        e.shortlisted ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+                        {e.shortlisted ? 'Shortlisted' : 'Rejected'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* JOB MATCH */}
+        {tab === 'match' && (
+          <div className="p-4 space-y-4">
+            <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+              <h4 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-3">Score Against a Job</h4>
+              <div className="flex gap-2">
+                <select
+                  className="flex-1 px-3 py-2 text-xs rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white"
+                  value={matchJobId}
+                  onChange={e => { setMatchJobId(e.target.value); setMatchResult(null); }}
+                >
+                  <option value="">Select a job…</option>
+                  {jobs.map(j => <option key={j._id} value={j._id}>{j.title}</option>)}
+                </select>
+                <button
+                  onClick={runMatch}
+                  disabled={!matchJobId || matchLoading}
+                  className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                >
+                  {matchLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Target className="w-3 h-3" />}
+                  {matchLoading ? 'Scoring…' : 'Run Match'}
+                </button>
+              </div>
+            </div>
+
+            {matchResult && (
+              <div className="space-y-3">
+                <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm flex items-center gap-4">
+                  <div className={`w-16 h-16 rounded-xl flex items-center justify-center text-xl font-bold text-white flex-shrink-0 ${
+                    matchResult.finalScore >= 70 ? 'bg-green-500' : matchResult.finalScore >= 50 ? 'bg-blue-500' : 'bg-amber-500'}`}>
+                    {matchResult.finalScore}
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-gray-800">{matchResult.recommendation}</p>
+                    <p className="text-[11px] text-gray-400 mt-0.5">Confidence: {matchResult.confidenceScore}%</p>
+                    <span className={`mt-1 inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                      matchResult.shortlisted ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+                      {matchResult.shortlisted ? 'Would be Shortlisted' : 'Would be Rejected'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+                  <h4 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-3">Score Breakdown</h4>
+                  <div className="space-y-2">
+                    {Object.entries(matchResult.breakdown).map(([key, val]) => (
+                      <div key={key} className="flex items-center gap-2">
+                        <span className="text-[11px] text-gray-500 w-28 flex-shrink-0 capitalize">{key.replace('Score', '')}</span>
+                        <div className="flex-1 bg-gray-100 rounded-full h-1.5">
+                          <div className="h-1.5 rounded-full bg-blue-500" style={{ width: `${val}%` }} />
+                        </div>
+                        <span className="text-[11px] font-semibold text-gray-700 w-8 text-right">{val}%</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {matchResult.summary && (
+                  <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+                    <h4 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">AI Summary</h4>
+                    <p className="text-xs text-gray-600 leading-relaxed">{matchResult.summary}</p>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-3">
+                  {matchResult.strengths.length > 0 && (
+                    <div className="bg-green-50 rounded-xl border border-green-100 p-3">
+                      <p className="text-[10px] font-bold text-green-700 uppercase tracking-wide mb-1.5">Strengths</p>
+                      <ul className="space-y-1">
+                        {matchResult.strengths.slice(0, 3).map((s, i) => (
+                          <li key={i} className="text-[11px] text-green-800 flex gap-1.5"><CheckCircle2 className="w-3 h-3 flex-shrink-0 mt-0.5" />{s}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {matchResult.gaps.length > 0 && (
+                    <div className="bg-red-50 rounded-xl border border-red-100 p-3">
+                      <p className="text-[10px] font-bold text-red-700 uppercase tracking-wide mb-1.5">Gaps</p>
+                      <ul className="space-y-1">
+                        {matchResult.gaps.slice(0, 3).map((g, i) => (
+                          <li key={i} className="text-[11px] text-red-800 flex gap-1.5"><X className="w-3 h-3 flex-shrink-0 mt-0.5" />{g}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
       </div>
     </Modal>
   );

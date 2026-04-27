@@ -11,6 +11,12 @@ const SendEmailSchema = z.object({
   body: z.string().min(1, "Email body is required"),
   cc: z.array(z.string().email()).optional(),
   replyTo: z.string().email().optional(),
+  personalizedEmails: z.array(z.object({
+    name:    z.string(),
+    email:   z.string().email(),
+    subject: z.string(),
+    body:    z.string(),
+  })).optional(),
 });
 
 export async function sendEmailHandler(req: Request, res: Response) {
@@ -19,10 +25,10 @@ export async function sendEmailHandler(req: Request, res: Response) {
     return res.status(400).json({ error: parsed.error.errors[0]?.message || "Invalid request" });
   }
 
-  const { recipients, subject, body, cc, replyTo } = parsed.data;
+  const { recipients, subject, body, cc, replyTo, personalizedEmails } = parsed.data;
 
   try {
-    const results = await sendEmails({ recipients, subject, body, cc, replyTo });
+    const results = await sendEmails({ recipients, subject, body, cc, replyTo, personalizedEmails });
 
     const sent    = results.filter(r => r.success).length;
     const failed  = results.filter(r => !r.success).length;

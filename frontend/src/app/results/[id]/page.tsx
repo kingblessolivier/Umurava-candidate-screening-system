@@ -15,7 +15,7 @@ import {
   Database, Trophy, FileText, Server, Mail, Scale,
 } from "lucide-react";
 import { AIThinkingReviewModal } from "@/components/screening/AIThinkingReviewModal";
-import EmailModal from "@/components/email/EmailModal";
+import EmailModal, { CandidateEmailData } from "@/components/email/EmailModal";
 import {
   RadarChart, PolarGrid, PolarAngleAxis, Radar, ResponsiveContainer,
   Tooltip, BarChart, Bar, XAxis, YAxis, Cell,
@@ -1337,11 +1337,13 @@ function CompareModal({ entries, onClose }: { entries: CompareEntry[]; onClose: 
 // ─── Candidate table row ───────────────────────────────────────────────────────
 function CandidateRow({
   candidate, isSelected, onSelect, stage, onStageChange, isExpanded, onToggle, index, onEmail,
+  isInCompare, onCompare,
 }: {
   candidate: CandidateScore; isSelected: boolean; onSelect: (id: string) => void;
   stage: PipelineStage; onStageChange: (id: string, s: PipelineStage) => void;
   isExpanded: boolean; onToggle: (id: string) => void; index: number;
   onEmail: (c: CandidateScore) => void;
+  isInCompare: boolean; onCompare: (id: string) => void;
 }) {
   const isTop3  = candidate.rank <= 3;
   const rowBg   = isExpanded ? "#eff6ff" : isSelected ? "#f0f9ff" : index % 2 === 0 ? "#ffffff" : "#f9fafb";
@@ -1399,7 +1401,7 @@ function CandidateRow({
         </td>
 
         {/* Actions */}
-        <td className="pl-2 pr-4 py-3 w-16" onClick={e => e.stopPropagation()}>
+        <td className="pl-2 pr-4 py-3 w-20" onClick={e => e.stopPropagation()}>
           <div className="flex items-center gap-1">
             <button
               onClick={() => onEmail(candidate)}
@@ -1407,6 +1409,17 @@ function CandidateRow({
               title="Send email"
             >
               <Mail className="w-3 h-3" />
+            </button>
+            <button
+              onClick={() => onCompare(candidate.candidateId)}
+              title={isInCompare ? "Remove from compare" : "Add to compare"}
+              className="p-1 rounded transition-colors"
+              style={{
+                color: isInCompare ? "#7c3aed" : "#9ca3af",
+                background: isInCompare ? "#ede9fe" : "transparent",
+              }}
+            >
+              <Scale className="w-3 h-3" />
             </button>
             <ChevronRight
               className="w-3.5 h-3.5 transition-transform cursor-pointer"
@@ -1423,7 +1436,13 @@ function CandidateRow({
 }
 
 // ─── Rejected row ─────────────────────────────────────────────────────────────
-function RejectedRow({ rejected, index }: { rejected: RejectedCandidate; index: number }) {
+function RejectedRow({
+  rejected, index, isInCompare, onCompare, onEmail,
+}: {
+  rejected: RejectedCandidate; index: number;
+  isInCompare: boolean; onCompare: (id: string) => void;
+  onEmail: (c: RejectedCandidate) => void;
+}) {
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -1451,8 +1470,28 @@ function RejectedRow({ rejected, index }: { rejected: RejectedCandidate; index: 
           </span>
         </td>
         <td className="px-3 py-2.5 w-32" />
-        <td className="pl-2 pr-4 py-2.5 w-8">
-          <ChevronRight className="w-3.5 h-3.5 transition-transform" style={{ color: "#9ca3af", transform: open ? "rotate(90deg)" : "none" }} />
+        <td className="pl-2 pr-4 py-2.5 w-20" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => onEmail(rejected)}
+              className="p-1 rounded hover:bg-rose-50 text-gray-400 hover:text-rose-600 transition-colors"
+              title="Send feedback email"
+            >
+              <Mail className="w-3 h-3" />
+            </button>
+            <button
+              onClick={() => onCompare(rejected.candidateId)}
+              title={isInCompare ? "Remove from compare" : "Add to compare"}
+              className="p-1 rounded transition-colors"
+              style={{
+                color: isInCompare ? "#7c3aed" : "#9ca3af",
+                background: isInCompare ? "#ede9fe" : "transparent",
+              }}
+            >
+              <Scale className="w-3 h-3" />
+            </button>
+            <ChevronRight className="w-3.5 h-3.5 transition-transform" style={{ color: "#9ca3af", transform: open ? "rotate(90deg)" : "none" }} />
+          </div>
         </td>
       </tr>
       {open && (
@@ -1632,11 +1671,18 @@ export default function ResultDetailPage() {
   const [showThinkingModal, setShowThinkingModal] = useState(false);
   const [emailModal, setEmailModal] = useState<{
     open: boolean;
-    recipients: { name: string; email: string }[];
+    recipients: { name: string; email: string; candidateData?: CandidateEmailData }[];
+    context?: "interview" | "shortlist" | "offer" | "rejection" | "general";
   }>({ open: false, recipients: [] });
   const [candidatePage, setCandidatePage] = useState(1);
   const [rejectedPage, setRejectedPage] = useState(1);
   const CAND_PAGE_SIZE = 10;
+
+  const [compareIds, setCompareIds]       = useState<Set<string>>(new Set());
+  const [showCompareModal, setShowCompareModal] = useState(false);
+
+  const toggleCompare = (id: string) =>
+    setCompareIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   useEffect(() => {
     if (!id) return;
@@ -1672,13 +1718,40 @@ export default function ResultDetailPage() {
   const handleEmailSelected = () => {
     if (!result) return;
     const selected = result.shortlist.filter(c => selectedIds.has(c.candidateId));
-    const recipients = selected.map(c => ({ name: displayName(c), email: c.email }));
-    setEmailModal({ open: true, recipients });
+    const recipients = selected.map(c => ({
+      name: displayName(c),
+      email: c.email,
+      candidateData: {
+        score: c.finalScore,
+        recommendation: c.recommendation,
+        strengths: c.strengths ?? [],
+        gaps: c.gaps ?? [],
+        interviewQuestions: c.interviewQuestions ?? [],
+        rank: c.rank,
+      } satisfies CandidateEmailData,
+    }));
+    setEmailModal({ open: true, recipients, context: "shortlist" });
   };
 
-  const handleEmailSingle = (c: { candidateName?: string; email: string }) => {
+  const handleEmailSingle = (c: CandidateScore | RejectedCandidate) => {
     const name = c.candidateName?.trim() || c.email.split("@")[0];
-    setEmailModal({ open: true, recipients: [{ name, email: c.email }] });
+    const isRejected = "whyNotSelected" in c;
+    const candidateData: CandidateEmailData = {
+      score: c.finalScore,
+      recommendation: c.recommendation,
+      strengths: c.strengths ?? [],
+      gaps: c.gaps ?? [],
+      interviewQuestions: c.interviewQuestions ?? [],
+      improvementSuggestions: isRejected ? (c as RejectedCandidate).improvementSuggestions : undefined,
+      whyNotSelected: isRejected ? (c as RejectedCandidate).whyNotSelected : undefined,
+      topMissingSkills: isRejected ? (c as RejectedCandidate).topMissingSkills : undefined,
+      rank: c.rank,
+    };
+    setEmailModal({
+      open: true,
+      recipients: [{ name, email: c.email, candidateData }],
+      context: isRejected ? "rejection" : "shortlist",
+    });
   };
 
   const handleExport = async () => {
@@ -1824,6 +1897,8 @@ export default function ResultDetailPage() {
                       isExpanded={expandedId === c.candidateId}
                       onToggle={toggleExpand}
                       onEmail={handleEmailSingle}
+                      isInCompare={compareIds.has(c.candidateId)}
+                      onCompare={toggleCompare}
                     />
                   ))}
                 </tbody>
@@ -1887,7 +1962,14 @@ export default function ResultDetailPage() {
                       <table className="w-full" style={{ borderCollapse: "collapse" }}>
                         <tbody>
                           {pagedRejected.map((r, i) => (
-                            <RejectedRow key={r.candidateId} rejected={r} index={i} />
+                            <RejectedRow
+                              key={r.candidateId}
+                              rejected={r}
+                              index={i}
+                              isInCompare={compareIds.has(r.candidateId)}
+                              onCompare={toggleCompare}
+                              onEmail={handleEmailSingle}
+                            />
                           ))}
                         </tbody>
                       </table>
@@ -1960,13 +2042,41 @@ export default function ResultDetailPage() {
         totalApplicants={result.totalApplicants}
       />
 
+      {/* Floating Compare Button */}
+      {compareIds.size >= 2 && (
+        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-50">
+          <button
+            onClick={() => setShowCompareModal(true)}
+            className="flex items-center gap-2 px-5 py-2.5 bg-[#0f172a] text-white text-xs font-bold font-mono tracking-widest uppercase shadow-2xl border border-[#334155] hover:bg-[#1e293b] transition-colors"
+          >
+            <Scale className="w-3.5 h-3.5 text-blue-400" />
+            COMPARE {compareIds.size} CANDIDATES
+            <span className="ml-1 px-1.5 py-0.5 bg-blue-600 text-[9px] font-mono">{compareIds.size}</span>
+          </button>
+        </div>
+      )}
+
+      {/* Compare Modal */}
+      {showCompareModal && result && (() => {
+        const entries: CompareEntry[] = [];
+        for (const id of compareIds) {
+          const shortlisted = result.shortlist.find(c => c.candidateId === id);
+          if (shortlisted) { entries.push({ kind: "shortlisted", candidate: shortlisted }); continue; }
+          const rejected = result.rejectedCandidates?.find(c => c.candidateId === id);
+          if (rejected) entries.push({ kind: "rejected", candidate: rejected });
+        }
+        return entries.length >= 2
+          ? <CompareModal entries={entries} onClose={() => setShowCompareModal(false)} />
+          : null;
+      })()}
+
       {/* Email Modal */}
       <EmailModal
         isOpen={emailModal.open}
         onClose={() => setEmailModal({ open: false, recipients: [] })}
         recipients={emailModal.recipients}
         jobTitle={result.jobTitle}
-        context="shortlist"
+        context={emailModal.context}
       />
     </div>
   );
