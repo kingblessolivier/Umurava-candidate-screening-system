@@ -589,7 +589,7 @@ Available anywhere in the app when focus is not inside a form field:
 
 | Key | Action |
 |---|---|
-| `N` | Navigate to New Job form |
+| `N` | Open New Job modal (from /jobs) or navigate to /jobs and open it |
 | `/` | Focus the search bar |
 | `G` | Navigate to Screening page |
 

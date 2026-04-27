@@ -25,12 +25,13 @@ import { CandidateDetailModal } from '@/components/candidates/CandidateDetailMod
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
 import { Candidate } from '@/types';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useNotifications } from '@/contexts/NotificationsContext';
 
 export default function JobsPage() {
   const dispatch = useDispatch<AppDispatch>();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { jobs, loading, searchQuery, page, totalPages, handleSearch, handlePageChange, handleDeleteJob, handleCreateJob, handleUpdateJob } = useJobs();
   const { items: candidates } = useSelector((s: RootState) => s.candidates);
   const screeningResults = useSelector((s: RootState) => s.screening.results);
@@ -45,6 +46,22 @@ export default function JobsPage() {
   const [showJobModal, setShowJobModal] = useState(false);
   const [showCandidateModal, setShowCandidateModal] = useState(false);
   const [editingJob, setEditingJob] = useState<any>(null);
+
+  // Open modal via ?new=1 query param (keyboard shortcut N from other pages)
+  useEffect(() => {
+    if (searchParams.get('new') === '1') {
+      setEditingJob(null);
+      setShowJobModal(true);
+      router.replace('/jobs');
+    }
+  }, [searchParams, router]);
+
+  // Open modal via custom event (keyboard shortcut N when already on /jobs)
+  useEffect(() => {
+    const handler = () => { setEditingJob(null); setShowJobModal(true); };
+    window.addEventListener('open-new-job', handler);
+    return () => window.removeEventListener('open-new-job', handler);
+  }, []);
 
   // HR quick actions state
   const [selectedCandidates, setSelectedCandidates] = useState<Set<string>>(new Set());

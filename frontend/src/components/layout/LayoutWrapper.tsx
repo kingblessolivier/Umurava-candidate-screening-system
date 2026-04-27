@@ -23,7 +23,11 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
 
     if (e.key === 'n' && !e.ctrlKey && !e.metaKey) {
       e.preventDefault();
-      router.push('/jobs/new');
+      if (pathname === '/jobs') {
+        window.dispatchEvent(new CustomEvent('open-new-job'));
+      } else {
+        router.push('/jobs?new=1');
+      }
     }
     if (e.key === '/' && !e.ctrlKey && !e.metaKey) {
       e.preventDefault();
