@@ -407,68 +407,123 @@ function parseLanguages(raw: string) {
   });
 }
 
-// Experience / Education / Certifications / Projects — expect JSON array in cell
+// Experience / Education / Certifications / Projects
+// Accepts a JSON array (backwards compat) OR a simpler pipe-delimited format.
+// Multiple entries are separated by ";;", fields within each entry by "|".
+//
+// experience:     Company|Role|StartDate|EndDate|IsCurrent|Description|Technologies
+// education:      Institution|Degree|FieldOfStudy|StartYear|EndYear|GPA
+// certifications: Name|Issuer|IssueDate
+// projects:       Name|Description|Technologies|Role|Link|StartDate|EndDate
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function parseExperience(raw: string): any[] {
+  if (!raw?.trim()) return [];
   const arr = tryParseJSON<unknown[]>(raw, []);
-  if (!Array.isArray(arr)) return [];
-  return arr.map((e: any) => ({
-    company:      e.company || "",
-    role:         e.role || "",
-    startDate:    e.startDate || e["Start Date"] || "",
-    endDate:      e.endDate   || e["End Date"]   || "",
-    isCurrent:    !!(e.isCurrent ?? e["Is Current"] ?? false),
-    description:  e.description || "",
-    technologies: Array.isArray(e.technologies)
-      ? e.technologies
-      : typeof e.technologies === "string"
-        ? e.technologies.split(",").map((t: string) => t.trim()).filter(Boolean)
-        : [],
-  }));
+  if (arr.length) {
+    return arr.map((e: any) => ({
+      company:      e.company || "",
+      role:         e.role || "",
+      startDate:    e.startDate || e["Start Date"] || "",
+      endDate:      e.endDate   || e["End Date"]   || "",
+      isCurrent:    !!(e.isCurrent ?? e["Is Current"] ?? false),
+      description:  e.description || "",
+      technologies: Array.isArray(e.technologies)
+        ? e.technologies
+        : typeof e.technologies === "string"
+          ? e.technologies.split(",").map((t: string) => t.trim()).filter(Boolean)
+          : [],
+    }));
+  }
+  return raw.split(";;").map(s => s.trim()).filter(Boolean).map(s => {
+    const p = s.split("|").map(x => x.trim());
+    return {
+      company:      p[0] || "",
+      role:         p[1] || "",
+      startDate:    p[2] || "",
+      endDate:      p[3] || "",
+      isCurrent:    p[4]?.toLowerCase() === "true" || p[4] === "1",
+      description:  p[5] || "",
+      technologies: p[6] ? p[6].split(",").map((t: string) => t.trim()).filter(Boolean) : [],
+    };
+  });
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function parseEducation(raw: string): any[] {
+  if (!raw?.trim()) return [];
   const arr = tryParseJSON<unknown[]>(raw, []);
-  if (!Array.isArray(arr)) return [];
-  return arr.map((e: any) => ({
-    institution:  e.institution || "",
-    degree:       e.degree || "",
-    fieldOfStudy: e.fieldOfStudy || e["Field of Study"] || "",
-    startYear:    parseInt(e.startYear || e["Start Year"]) || undefined,
-    endYear:      parseInt(e.endYear   || e["End Year"])   || undefined,
-    gpa:          parseFloat(e.gpa) || undefined,
-  }));
+  if (arr.length) {
+    return arr.map((e: any) => ({
+      institution:  e.institution || "",
+      degree:       e.degree || "",
+      fieldOfStudy: e.fieldOfStudy || e["Field of Study"] || "",
+      startYear:    parseInt(e.startYear || e["Start Year"]) || undefined,
+      endYear:      parseInt(e.endYear   || e["End Year"])   || undefined,
+      gpa:          parseFloat(e.gpa) || undefined,
+    }));
+  }
+  return raw.split(";;").map(s => s.trim()).filter(Boolean).map(s => {
+    const p = s.split("|").map(x => x.trim());
+    return {
+      institution:  p[0] || "",
+      degree:       p[1] || "",
+      fieldOfStudy: p[2] || "",
+      startYear:    parseInt(p[3]) || undefined,
+      endYear:      parseInt(p[4]) || undefined,
+      gpa:          parseFloat(p[5]) || undefined,
+    };
+  });
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function parseCertifications(raw: string): any[] {
+  if (!raw?.trim()) return [];
   const arr = tryParseJSON<unknown[]>(raw, []);
-  if (!Array.isArray(arr)) return [];
-  return arr.map((c: any) => ({
-    name:      c.name || "",
-    issuer:    c.issuer || "",
-    issueDate: c.issueDate || c["Issue Date"] || "",
-  }));
+  if (arr.length) {
+    return arr.map((c: any) => ({
+      name:      c.name || "",
+      issuer:    c.issuer || "",
+      issueDate: c.issueDate || c["Issue Date"] || "",
+    }));
+  }
+  return raw.split(";;").map(s => s.trim()).filter(Boolean).map(s => {
+    const p = s.split("|").map(x => x.trim());
+    return { name: p[0] || "", issuer: p[1] || "", issueDate: p[2] || "" };
+  });
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function parseProjects(raw: string): any[] {
+  if (!raw?.trim()) return [];
   const arr = tryParseJSON<unknown[]>(raw, []);
-  if (!Array.isArray(arr)) return [];
-  return arr.map((p: any) => ({
-    name:         p.name || "",
-    description:  p.description || "",
-    technologies: Array.isArray(p.technologies)
-      ? p.technologies
-      : typeof p.technologies === "string"
-        ? p.technologies.split(",").map((t: string) => t.trim()).filter(Boolean)
-        : [],
-    role:      p.role || "",
-    link:      p.link || "",
-    startDate: p.startDate || p["Start Date"] || "",
-    endDate:   p.endDate   || p["End Date"]   || "",
-  }));
+  if (arr.length) {
+    return arr.map((proj: any) => ({
+      name:         proj.name || "",
+      description:  proj.description || "",
+      technologies: Array.isArray(proj.technologies)
+        ? proj.technologies
+        : typeof proj.technologies === "string"
+          ? proj.technologies.split(",").map((t: string) => t.trim()).filter(Boolean)
+          : [],
+      role:      proj.role || "",
+      link:      proj.link || "",
+      startDate: proj.startDate || proj["Start Date"] || "",
+      endDate:   proj.endDate   || proj["End Date"]   || "",
+    }));
+  }
+  return raw.split(";;").map(s => s.trim()).filter(Boolean).map(s => {
+    const p = s.split("|").map(x => x.trim());
+    return {
+      name:         p[0] || "",
+      description:  p[1] || "",
+      technologies: p[2] ? p[2].split(",").map((t: string) => t.trim()).filter(Boolean) : [],
+      role:         p[3] || "",
+      link:         p[4] || "",
+      startDate:    p[5] || "",
+      endDate:      p[6] || "",
+    };
+  });
 }
 
 // ─── CSV Upload ───────────────────────────────────────────────────────────────

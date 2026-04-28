@@ -36,9 +36,12 @@ interface CandidateUploadModalProps {
 }
 
 // ── CSV template ──────────────────────────────────────────────────────────────
-// Headers match every column the backend parser accepts.
-// skills/languages  → "Name:Level:Years" pairs separated by semicolons
-// experience / education / certifications / projects → JSON array in one cell
+// skills / languages  → Name:Level:Years pairs separated by semicolons
+// experience          → Company|Role|StartDate|EndDate|IsCurrent|Description|Technologies
+// education           → Institution|Degree|FieldOfStudy|StartYear|EndYear|GPA
+// certifications      → Name|Issuer|IssueDate
+// projects            → Name|Description|Technologies|Role|Link|StartDate|EndDate
+// Multiple entries for any complex field → separate with ;;
 const CSV_HEADERS = [
   'firstName','lastName','email','phone','headline','bio','location',
   'skills','languages',
@@ -52,10 +55,10 @@ const CSV_EXAMPLE_ROW = [
   'Senior React Developer','Passionate frontend engineer.','Kigali, Rwanda',
   'React:Expert:5;TypeScript:Advanced:4;Node.js:Intermediate:2',
   'English:Native;French:Conversational',
-  '[{"company":"TechCorp","role":"Frontend Engineer","startDate":"2021-03","endDate":"2023-06","isCurrent":false,"description":"Led UI development","technologies":"React,TypeScript"}]',
-  '[{"institution":"University of Rwanda","degree":"Bachelor\'s","fieldOfStudy":"Computer Science","startYear":2017,"endYear":2021}]',
-  '[{"name":"AWS Certified Developer","issuer":"Amazon","issueDate":"2022-05"}]',
-  '[{"name":"E-Commerce Platform","description":"Built full-stack app","technologies":"Next.js,Node.js","role":"Lead Developer","link":"https://github.com/alice/shop","startDate":"2022-01","endDate":"2022-06"}]',
+  'TechCorp|Frontend Engineer|2021-03|2023-06|false|Led UI development|React,TypeScript;;StartupXYZ|Junior Dev|2019-01|2021-02|false|Built MVP features|Python,Django',
+  "University of Rwanda|Bachelor's|Computer Science|2017|2021|3.8",
+  'AWS Certified Developer|Amazon|2022-05;;Google Cloud Associate|Google|2023-01',
+  'E-Commerce Platform|Built full-stack app|Next.js,Node.js|Lead Developer|https://github.com/alice/shop|2022-01|2022-06',
   'Available','Full-time','2024-07-01',
   'https://linkedin.com/in/alice','https://github.com/alice','https://alice.dev',
 ].map(v => `"${v}"`).join(',');
@@ -293,17 +296,22 @@ export function CandidateUploadModal({
                 <Download className="w-3 h-3" /> Download Template
               </button>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-[11px] text-blue-800">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-[11px] text-blue-800">
               <div><span className="font-semibold">firstName, lastName, email</span> — required</div>
-              <div><span className="font-semibold">headline, location</span> — required</div>
-              <div><span className="font-semibold">skills</span> — <code className="bg-blue-100 px-1 rounded">React:Expert:5; TS:Advanced:3</code></div>
-              <div><span className="font-semibold">languages</span> — <code className="bg-blue-100 px-1 rounded">English:Native; French:Fluent</code></div>
-              <div><span className="font-semibold">experience, education</span> — JSON array in cell</div>
-              <div><span className="font-semibold">certifications, projects</span> — JSON array in cell</div>
+              <div><span className="font-semibold">headline, location, phone, bio</span> — optional</div>
+              <div><span className="font-semibold">skills</span> — <code className="bg-blue-100 px-1 rounded">React:Expert:5;TS:Advanced:3</code></div>
+              <div><span className="font-semibold">languages</span> — <code className="bg-blue-100 px-1 rounded">English:Native;French:Fluent</code></div>
+              <div><span className="font-semibold">experience</span> — <code className="bg-blue-100 px-1 rounded">Company|Role|Start|End|IsCurrent|Desc|Tech</code></div>
+              <div><span className="font-semibold">education</span> — <code className="bg-blue-100 px-1 rounded">Institution|Degree|Field|StartYr|EndYr|GPA</code></div>
+              <div><span className="font-semibold">certifications</span> — <code className="bg-blue-100 px-1 rounded">Name|Issuer|IssueDate</code></div>
+              <div><span className="font-semibold">projects</span> — <code className="bg-blue-100 px-1 rounded">Name|Desc|Tech|Role|Link|Start|End</code></div>
+              <div className="col-span-2 border-t border-blue-200 pt-1.5">
+                Multiple entries for any field: separate with <code className="bg-blue-100 px-1 rounded">;;  </code>
+                e.g. <code className="bg-blue-100 px-1 rounded">TechCorp|Dev|2021|2023|false|Built app|React;;OtherCo|Lead|2019|2021|false|MVP|Node</code>
+              </div>
               <div><span className="font-semibold">availabilityStatus</span> — Available / Open to Opportunities / Not Available</div>
               <div><span className="font-semibold">availabilityType</span> — Full-time / Part-time / Contract / Freelance</div>
               <div><span className="font-semibold">linkedin, github, portfolio</span> — optional URLs</div>
-              <div><span className="font-semibold">phone, bio</span> — optional</div>
             </div>
           </div>
         )}

@@ -2455,7 +2455,8 @@ function CandidateModal({ jobId, onClose, onSave, onResumeQueued }: any) {
   const [resumeQueued, setResumeQueued] = useState(false);
 
   const [selectedCsv, setSelectedCsv] = useState<File | null>(null);
-  const [csvPreview, setCsvPreview] = useState<any[]>([]);
+  const [csvPreview, setCsvPreview] = useState<Record<string, string>[]>([]);
+  const [csvTotalRows, setCsvTotalRows] = useState(0);
 
   const [jsonText, setJsonText] = useState('[\n  {\n    "firstName": "Alice",\n    "lastName": "Uwimana",\n    "email": "alice@example.com",\n    "headline": "Backend Engineer",\n    "location": "Kigali, Rwanda",\n    "skills": [{ "name": "Node.js", "level": "Advanced", "yearsOfExperience": 3 }],\n    "experience": [{ "company": "Acme", "role": "Engineer", "startDate": "2022-01", "isCurrent": true, "description": "Built APIs", "technologies": ["Node.js"] }],\n    "education": [{ "institution": "University", "degree": "Bachelor\'s", "fieldOfStudy": "Computer Science", "startYear": 2019, "endYear": 2023 }],\n    "projects": [{ "name": "Screening Platform", "technologies": ["Next.js", "Node.js"] }],\n    "availability": { "status": "Available", "type": "Full-time" }\n  }\n]');
 
@@ -2637,7 +2638,7 @@ function CandidateModal({ jobId, onClose, onSave, onResumeQueued }: any) {
     if (!file) return;
     setSelectedCsv(file);
     if (file.name.toLowerCase().endsWith('.csv')) parseCsvPreview(file);
-    else setCsvPreview([]);
+    else { setCsvPreview([]); setCsvTotalRows(0); }
   };
 
   const handleCsvSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2645,21 +2646,40 @@ function CandidateModal({ jobId, onClose, onSave, onResumeQueued }: any) {
     if (!file) return;
     setSelectedCsv(file);
     if (file.name.toLowerCase().endsWith('.csv')) parseCsvPreview(file);
-    else setCsvPreview([]);
+    else { setCsvPreview([]); setCsvTotalRows(0); }
+  };
+
+  const parseCsvLine = (line: string): string[] => {
+    const values: string[] = [];
+    let cur = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        if (inQuotes && line[i + 1] === '"') { cur += '"'; i++; }
+        else { inQuotes = !inQuotes; }
+      } else if (ch === ',' && !inQuotes) {
+        values.push(cur.trim());
+        cur = '';
+      } else {
+        cur += ch;
+      }
+    }
+    values.push(cur.trim());
+    return values;
   };
 
   const parseCsvPreview = async (file: File) => {
     const text = await file.text();
-    const lines = text.split('\n').slice(0, 6).filter(Boolean);
-    if (!lines.length) {
-      setCsvPreview([]);
-      return;
-    }
-    const headers = lines[0].split(',').map((h) => h.trim());
-    const preview = lines.slice(1, 5).map((line) => {
-      const values = line.split(',');
-      const row: any = {};
-      headers.forEach((h, i) => { row[h] = values[i]?.trim() || ''; });
+    const allLines = text.split('\n').filter(Boolean);
+    if (!allLines.length) { setCsvPreview([]); setCsvTotalRows(0); return; }
+    const headers = parseCsvLine(allLines[0]);
+    const dataLines = allLines.slice(1);
+    setCsvTotalRows(dataLines.length);
+    const preview = dataLines.slice(0, 5).map((line) => {
+      const values = parseCsvLine(line);
+      const row: Record<string, string> = {};
+      headers.forEach((h, i) => { row[h] = values[i] ?? ''; });
       return row;
     });
     setCsvPreview(preview);
@@ -2987,25 +3007,33 @@ function CandidateModal({ jobId, onClose, onSave, onResumeQueued }: any) {
               </div>
             )}
             {csvPreview.length > 0 && (
-              <div className="overflow-x-auto rounded-xl border border-gray-200">
-                <table className="w-full">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      {Object.keys(csvPreview[0]).map((key) => (
-                        <th key={key} className="px-2 py-2 text-left text-[10px] uppercase text-gray-600">{key}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {csvPreview.map((row, idx) => (
-                      <tr key={idx} className="border-t border-gray-100">
-                        {Object.values(row).map((value: any, cellIdx) => (
-                          <td key={cellIdx} className="px-2 py-2 text-xs text-gray-700">{String(value)}</td>
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-medium text-gray-500">Preview (first {csvPreview.length} of {csvTotalRows} rows)</span>
+                  {Object.keys(csvPreview[0]).length > 6 && (
+                    <span className="text-[11px] text-gray-400">Showing 6 of {Object.keys(csvPreview[0]).length} columns</span>
+                  )}
+                </div>
+                <div className="overflow-x-auto rounded-xl border border-gray-200">
+                  <table className="w-full min-w-max">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        {Object.keys(csvPreview[0]).slice(0, 6).map((key) => (
+                          <th key={key} className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-gray-500 whitespace-nowrap">{key}</th>
                         ))}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {csvPreview.map((row, idx) => (
+                        <tr key={idx} className="border-t border-gray-100 hover:bg-gray-50">
+                          {Object.values(row).slice(0, 6).map((value, cellIdx) => (
+                            <td key={cellIdx} className="px-3 py-2 text-xs text-gray-700 max-w-[160px] truncate">{value}</td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
           </div>
