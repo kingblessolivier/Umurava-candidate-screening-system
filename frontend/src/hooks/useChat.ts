@@ -78,8 +78,8 @@ export function useChat(onNewReply?: (text: string) => void): UseChatReturn {
         // Update history for context
         historyRef.current = [
           ...historyRef.current,
-          { role: 'user', content: text.trim() },
-          { role: 'assistant', content: reply },
+          { role: 'user' as const, content: text.trim() },
+          { role: 'assistant' as const, content: reply },
         ].slice(-20);
 
         const assistantMsg: Message = {

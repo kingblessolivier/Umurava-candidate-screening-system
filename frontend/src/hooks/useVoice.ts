@@ -2,6 +2,10 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 
+// Web Speech API types are not always in TypeScript's DOM lib
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnySpeechRecognition = any;
+
 interface UseVoiceReturn {
   isListening: boolean;
   isSpeaking: boolean;
@@ -20,7 +24,7 @@ export function useVoice(onFinalTranscript: (text: string) => void): UseVoiceRet
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [voiceEnabled, setVoiceEnabled] = useState(true);
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const recognitionRef = useRef<AnySpeechRecognition>(null);
   const synthRef = useRef<SpeechSynthesis | null>(null);
 
   const isSupported =
@@ -35,18 +39,14 @@ export function useVoice(onFinalTranscript: (text: string) => void): UseVoiceRet
   const startListening = useCallback(() => {
     if (!isSupported || isListening) return;
 
-    // Stop any ongoing speech before listening
     if (synthRef.current?.speaking) {
       synthRef.current.cancel();
       setIsSpeaking(false);
     }
 
-    const SpeechRecognitionAPI =
-      (window as unknown as { SpeechRecognition?: typeof SpeechRecognition; webkitSpeechRecognition?: typeof SpeechRecognition })
-        .SpeechRecognition ||
-      (window as unknown as { SpeechRecognition?: typeof SpeechRecognition; webkitSpeechRecognition?: typeof SpeechRecognition })
-        .webkitSpeechRecognition;
-
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const w = window as any;
+    const SpeechRecognitionAPI = w.SpeechRecognition || w.webkitSpeechRecognition;
     if (!SpeechRecognitionAPI) return;
 
     const recognition = new SpeechRecognitionAPI();
@@ -59,7 +59,8 @@ export function useVoice(onFinalTranscript: (text: string) => void): UseVoiceRet
       setTranscript('');
     };
 
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    recognition.onresult = (event: any) => {
       let interim = '';
       let final = '';
       for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -99,7 +100,6 @@ export function useVoice(onFinalTranscript: (text: string) => void): UseVoiceRet
       if (!isSupported || !voiceEnabled || !synthRef.current) return;
       if (synthRef.current.speaking) synthRef.current.cancel();
 
-      // Strip markdown-like syntax for cleaner TTS
       const clean = text
         .replace(/\*\*(.*?)\*\*/g, '$1')
         .replace(/\*(.*?)\*/g, '$1')

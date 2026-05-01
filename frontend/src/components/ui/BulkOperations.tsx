@@ -123,7 +123,7 @@ export function BulkOperationsBar({
                       ].map(([val,label]) => (
                         <button
                           key={String(val)}
-                          onClick={() => { onChangeStage(String(val)); setShowMenu(false); }}
+                          onClick={() => { onChangeStage(String(val) as import('@/types').ScreeningStatus); setShowMenu(false); }}
                           className="text-sm text-left px-3 py-2 hover:bg-gray-50 rounded"
                         >{label}</button>
                       ))}
