@@ -15,7 +15,7 @@ import {
 import EmailModal from '@/components/email/EmailModal';
 import { AppDispatch, RootState } from '@/store';
 import { deleteJob, enhanceJob } from '@/store/jobsSlice';
-import { fetchCandidates, createCandidate, uploadCSV, updateCandidate, deleteCandidate, bulkImportJSON, UploadOutcome } from '@/store/candidatesSlice';
+import { fetchCandidates, createCandidate, uploadCSV, updateCandidate, deleteCandidate, bulkImportJSON, updateCandidateStage, UploadOutcome } from '@/store/candidatesSlice';
 import { fetchResults } from '@/store/screeningSlice';
 import { useJobs } from '@/hooks/useJobs';
 import { Pagination } from '@/components/ui/Pagination';
@@ -1450,6 +1450,78 @@ function CandidatesTab({ jobId, jobTitle, onViewCandidate, onAddCandidate, onDel
 }
 
 // Screening Tab
+const PIPELINE_STAGES = [
+  { value: 'pending',             label: 'Applied' },
+  { value: 'screening',           label: 'AI Screening' },
+  { value: 'screened',            label: 'Shortlisted' },
+  { value: 'interview_scheduled', label: 'Interview' },
+  { value: 'interviewed',         label: 'Interviewed' },
+  { value: 'offer_sent',          label: 'Offer Sent' },
+  { value: 'accepted',            label: 'Hired' },
+  { value: 'rejected',            label: 'Rejected' },
+  { value: 'declined',            label: 'Declined' },
+] as const;
+
+const STAGE_COLORS: Record<string, { bg: string; text: string; border: string }> = {
+  pending:             { bg: '#f8fafc', text: '#475569', border: '#cbd5e1' },
+  screening:           { bg: '#eff6ff', text: '#1d4ed8', border: '#93c5fd' },
+  screened:            { bg: '#f0fdf4', text: '#15803d', border: '#86efac' },
+  interview_scheduled: { bg: '#fffbeb', text: '#b45309', border: '#fcd34d' },
+  interviewed:         { bg: '#faf5ff', text: '#6d28d9', border: '#c4b5fd' },
+  offer_sent:          { bg: '#eff6ff', text: '#1e40af', border: '#93c5fd' },
+  accepted:            { bg: '#f0fdf4', text: '#14532d', border: '#4ade80' },
+  rejected:            { bg: '#fef2f2', text: '#b91c1c', border: '#fca5a5' },
+  declined:            { bg: '#fff1f2', text: '#be123c', border: '#fda4af' },
+};
+
+function StageDropdown({ candidateId, defaultStage }: { candidateId: string; defaultStage: string }) {
+  const dispatch = useDispatch<AppDispatch>();
+  const candidatesMap = useSelector((s: RootState) =>
+    s.candidates.items.reduce((acc, c) => { acc[c._id] = c; return acc; }, {} as Record<string, any>)
+  );
+  const current = (candidatesMap[candidateId]?.pipelineStatus ?? defaultStage) as string;
+  const colors = STAGE_COLORS[current] ?? STAGE_COLORS.pending;
+  const [loading, setLoading] = useState(false);
+
+  const handleChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newStage = e.target.value as any;
+    setLoading(true);
+    try {
+      await dispatch(updateCandidateStage({ id: candidateId, status: newStage })).unwrap();
+      toast.success('Stage updated');
+    } catch {
+      toast.error('Failed to update stage');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="relative flex items-center">
+      {loading && (
+        <Loader2 className="absolute left-2 w-3 h-3 animate-spin text-gray-400 pointer-events-none z-10" />
+      )}
+      <select
+        value={current}
+        onChange={handleChange}
+        disabled={loading}
+        onClick={e => e.stopPropagation()}
+        className="appearance-none text-[10px] font-semibold pl-2 pr-5 py-1 rounded-lg border cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-300 transition-colors disabled:opacity-60"
+        style={{
+          backgroundColor: colors.bg,
+          color: colors.text,
+          borderColor: colors.border,
+        }}
+      >
+        {PIPELINE_STAGES.map(s => (
+          <option key={s.value} value={s.value}>{s.label}</option>
+        ))}
+      </select>
+      <ChevronDown className="absolute right-1.5 w-2.5 h-2.5 pointer-events-none" style={{ color: colors.text }} />
+    </div>
+  );
+}
+
 function ScreeningTab({ screeningResults, job }: any) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [emailModal, setEmailModal] = useState<{
@@ -1458,9 +1530,13 @@ function ScreeningTab({ screeningResults, job }: any) {
     context: 'shortlist' | 'rejection' | 'general';
   }>({ open: false, recipients: [], context: 'general' });
   const [showRejected, setShowRejected] = useState(true);
-  const [expandedRejected, setExpandedRejected] = useState<Set<string>>(new Set());
+  const [expandedRejected, setExpandedRejected]       = useState<Set<string>>(new Set());
+  const [expandedShortlisted, setExpandedShortlisted] = useState<Set<string>>(new Set());
   const toggleExpand = (id: string) => {
     setExpandedRejected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  };
+  const toggleExpandShortlisted = (id: string) => {
+    setExpandedShortlisted(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   };
 
   const latestResult = screeningResults[0];
@@ -1632,42 +1708,173 @@ function ScreeningTab({ screeningResults, job }: any) {
             <p className="text-xs text-gray-400 text-center py-6">No shortlisted candidates</p>
           ) : shortlisted.map((candidate: any) => {
             const isSelected = selectedIds.has(candidate.candidateId);
+            const isExpanded = expandedShortlisted.has(candidate.candidateId);
             return (
-              <div
-                key={candidate.candidateId}
-                className={`px-3 py-2.5 flex items-center gap-3 hover:bg-gray-50 transition-colors ${isSelected ? 'bg-emerald-50/50' : ''}`}
-              >
-                <input
-                  type="checkbox"
-                  checked={isSelected}
-                  onChange={() => toggleSelect(candidate.candidateId)}
-                  className="w-3 h-3 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer flex-shrink-0"
-                />
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-white font-bold text-[10px] flex-shrink-0">
-                  {candidate.candidateName?.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-xs font-semibold text-gray-900 truncate">{candidate.candidateName}</p>
-                    <span className="text-[10px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full flex-shrink-0">
-                      #{candidate.rank}
-                    </span>
-                  </div>
-                  <p className="text-[10px] text-gray-500 truncate">{candidate.email}</p>
-                </div>
-                <div className="flex items-center gap-3 flex-shrink-0">
-                  <div className="text-right">
-                    <p className="text-sm font-bold text-green-600">{candidate.finalScore}%</p>
-                    <p className="text-[10px] text-gray-400">{candidate.recommendation}</p>
-                  </div>
+              <div key={candidate.candidateId} className={`${isSelected ? 'bg-emerald-50/40' : ''}`}>
+                {/* Main row */}
+                <div className={`px-3 py-2.5 flex items-center gap-2.5 hover:bg-gray-50 transition-colors ${isExpanded ? 'bg-gray-50' : ''}`}>
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => toggleSelect(candidate.candidateId)}
+                    className="w-3 h-3 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer flex-shrink-0"
+                  />
                   <button
-                    onClick={() => emailSingle(candidate, 'shortlist')}
-                    className="p-1.5 rounded-lg hover:bg-emerald-50 text-gray-400 hover:text-emerald-600 transition-all"
-                    title="Send email"
+                    onClick={() => toggleExpandShortlisted(candidate.candidateId)}
+                    className="flex-shrink-0 p-0.5 rounded hover:bg-gray-200 transition-colors"
                   >
-                    <Mail className="w-3.5 h-3.5" />
+                    <ChevronRight className={`w-3 h-3 text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
                   </button>
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-white font-bold text-[10px] flex-shrink-0">
+                    {candidate.candidateName?.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs font-semibold text-gray-900 truncate">{candidate.candidateName}</p>
+                      <span className="text-[10px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full flex-shrink-0">
+                        #{candidate.rank}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-gray-500 truncate">{candidate.email}</p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <div className="text-right">
+                      <p className="text-sm font-bold text-green-600">{candidate.finalScore}%</p>
+                      <p className="text-[10px] text-gray-400">{candidate.recommendation}</p>
+                    </div>
+                    <StageDropdown candidateId={candidate.candidateId} defaultStage="screened" />
+                    <button
+                      onClick={() => toggleExpandShortlisted(candidate.candidateId)}
+                      className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-gray-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg border border-gray-200 hover:border-emerald-200 transition-all"
+                    >
+                      <MessageSquare className="w-3 h-3" />
+                      {isExpanded ? 'Hide' : 'Details'}
+                    </button>
+                    <button
+                      onClick={() => emailSingle(candidate, 'shortlist')}
+                      className="p-1.5 rounded-lg hover:bg-emerald-50 text-gray-400 hover:text-emerald-600 transition-all"
+                      title="Send email"
+                    >
+                      <Mail className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
+
+                {/* Expanded detail panel */}
+                {isExpanded && (
+                  <div className="px-3 pb-3 bg-gray-50/70 border-t border-gray-100">
+                    <div className="pt-3 grid grid-cols-3 gap-2">
+
+                      {/* AI Summary */}
+                      <div className="bg-white rounded-lg border border-emerald-100 p-2.5">
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <div className="flex items-center gap-1.5">
+                            <Zap className="w-3 h-3 text-emerald-500 flex-shrink-0" />
+                            <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wide">AI Summary</span>
+                          </div>
+                          <span className="text-[8px] font-mono font-bold px-1.5 py-0.5 bg-white text-purple-700 border border-purple-200 rounded">
+                            AI-GENERATED
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-gray-600 leading-relaxed">
+                          {candidate.summary || 'No summary available.'}
+                        </p>
+                      </div>
+
+                      {/* Strengths */}
+                      <div className="bg-white rounded-lg border border-green-100 p-2.5">
+                        <div className="flex items-center gap-1.5 mb-2">
+                          <Check className="w-3 h-3 text-green-500 flex-shrink-0" />
+                          <span className="text-[10px] font-bold text-green-700 uppercase tracking-wide">Strengths</span>
+                        </div>
+                        {candidate.strengths?.length > 0 ? (
+                          <ul className="space-y-1">
+                            {candidate.strengths.slice(0, 4).map((s: string, i: number) => (
+                              <li key={i} className="flex gap-1.5 text-[10px] text-gray-600">
+                                <span className="text-green-500 font-bold flex-shrink-0">✓</span>
+                                <span>{s}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="text-[10px] text-gray-400">None identified</p>
+                        )}
+                      </div>
+
+                      {/* Gaps */}
+                      <div className="bg-white rounded-lg border border-amber-100 p-2.5">
+                        <div className="flex items-center gap-1.5 mb-2">
+                          <Target className="w-3 h-3 text-amber-500 flex-shrink-0" />
+                          <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wide">Skill Gaps</span>
+                        </div>
+                        {candidate.gaps?.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {candidate.gaps.slice(0, 5).map((g: string, i: number) => (
+                              <span key={i} className="text-[10px] px-1.5 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-full font-medium">
+                                {g}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-[10px] text-gray-400">No gaps identified</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Score breakdown + interview questions */}
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+
+                      {/* Score breakdown */}
+                      <div className="bg-white rounded-lg border border-gray-100 p-2.5">
+                        <div className="flex items-center gap-1.5 mb-2">
+                          <BarChart3 className="w-3 h-3 text-blue-500 flex-shrink-0" />
+                          <span className="text-[10px] font-bold text-gray-700 uppercase tracking-wide">Score Breakdown</span>
+                          <span className="ml-auto text-[10px] text-gray-400">Confidence: {candidate.confidenceScore ?? '—'}%</span>
+                        </div>
+                        <div className="space-y-1.5">
+                          {[
+                            { label: 'Skills',        val: candidate.breakdown?.skillsScore },
+                            { label: 'Experience',    val: candidate.breakdown?.experienceScore },
+                            { label: 'Education',     val: candidate.breakdown?.educationScore },
+                            { label: 'Projects',      val: candidate.breakdown?.projectsScore },
+                            { label: 'Availability',  val: candidate.breakdown?.availabilityScore },
+                          ].map(({ label, val }) => (
+                            <div key={label} className="flex items-center gap-2">
+                              <span className="text-[10px] text-gray-500 w-16 flex-shrink-0">{label}</span>
+                              <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                <div
+                                  className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-green-500"
+                                  style={{ width: `${Math.min(100, val ?? 0)}%` }}
+                                />
+                              </div>
+                              <span className="text-[10px] font-semibold text-gray-700 w-7 text-right">{val ?? 0}%</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Interview questions */}
+                      <div className="bg-white rounded-lg border border-blue-100 p-2.5">
+                        <div className="flex items-center gap-1.5 mb-2">
+                          <MessageSquare className="w-3 h-3 text-blue-500 flex-shrink-0" />
+                          <span className="text-[10px] font-bold text-blue-700 uppercase tracking-wide">Interview Questions</span>
+                        </div>
+                        {candidate.interviewQuestions?.length > 0 ? (
+                          <ol className="space-y-1.5">
+                            {candidate.interviewQuestions.slice(0, 4).map((q: string, i: number) => (
+                              <li key={i} className="flex gap-1.5 text-[10px] text-gray-600">
+                                <span className="font-bold text-blue-500 flex-shrink-0">{i + 1}.</span>
+                                <span className="leading-relaxed">{q}</span>
+                              </li>
+                            ))}
+                          </ol>
+                        ) : (
+                          <p className="text-[10px] text-gray-400">No questions generated</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -1677,9 +1884,9 @@ function ScreeningTab({ screeningResults, job }: any) {
       {/* Not Selected / Rejected Candidates */}
       {rejected.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <button
+          <div
+            className="w-full px-3 py-2 bg-gradient-to-r from-red-50 to-white border-b border-gray-100 flex items-center justify-between hover:from-red-100 transition-colors cursor-pointer"
             onClick={() => setShowRejected(v => !v)}
-            className="w-full px-3 py-2 bg-gradient-to-r from-red-50 to-white border-b border-gray-100 flex items-center justify-between hover:from-red-100 transition-colors"
           >
             <div className="flex items-center gap-2">
               <input
@@ -1704,7 +1911,7 @@ function ScreeningTab({ screeningResults, job }: any) {
               </button>
               <ChevronRight className={`w-3.5 h-3.5 text-gray-400 transition-transform ${showRejected ? 'rotate-90' : ''}`} />
             </div>
-          </button>
+          </div>
 
           {showRejected && (
             <div className="divide-y divide-gray-100">
@@ -1744,6 +1951,7 @@ function ScreeningTab({ screeningResults, job }: any) {
                           <p className="text-xs font-bold text-gray-500">{candidate.finalScore}%</p>
                           <p className="text-[10px] text-red-400">-{gap} pts</p>
                         </div>
+                        <StageDropdown candidateId={candidate.candidateId} defaultStage="rejected" />
                         <button
                           onClick={() => toggleExpand(candidate.candidateId)}
                           className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg border border-gray-200 hover:border-red-200 transition-all"

@@ -66,6 +66,7 @@ router.post("/candidates/upload/pdf", requireAuth, upload.array("files", 20), ca
 router.get("/candidates/:id", requireAuth, candidates.getCandidate);
 router.get("/candidates/:id/score-history", requireAuth, candidates.getCandidateScoreHistory);
 router.post("/candidates/:id/match-job", requireAuth, candidates.matchCandidateToJob);
+router.patch("/candidates/:id/stage", requireAuth, candidates.updateCandidateStage);
 router.put("/candidates/:id", requireAuth, candidates.updateCandidate);
 router.patch("/candidates/:id", requireAuth, candidates.updateCandidate);
 router.delete("/candidates/:id", requireAuth, candidates.deleteCandidate);

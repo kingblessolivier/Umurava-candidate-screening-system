@@ -1,19 +1,23 @@
 'use client';
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useParams, useRouter } from "next/navigation";
 import { AppDispatch, RootState } from "@/store";
 import { fetchJob, deleteJob, clearSelected } from "@/store/jobsSlice";
-import { fetchCandidates } from "@/store/candidatesSlice";
+import { updateCandidateStage } from "@/store/candidatesSlice";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import toast from "react-hot-toast";
 import {
   ArrowLeft, Briefcase, MapPin, Clock, Award, CheckCircle,
-  AlertCircle, Edit2, Trash2, Zap, Users, BarChart3, Plus,
+  AlertCircle, Edit2, Trash2, Zap, Users, BarChart3, Plus, Workflow,
 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import { PipelineView, type CandidatePipelineData } from "@/components/ui/PipelineView";
+import { CandidateDetailModal } from "@/components/candidates/CandidateDetailModal";
+import { api } from "@/lib/api";
+import type { Candidate, ScreeningStatus } from "@/types";
 
 const LEVEL_STYLES: Record<string, { bg: string; text: string; border: string }> = {
   Junior: { bg: "bg-green-50", text: "text-green-700", border: "border-green-200" },
@@ -23,26 +27,76 @@ const LEVEL_STYLES: Record<string, { bg: string; text: string; border: string }>
   Executive: { bg: "bg-red-50", text: "text-red-700", border: "border-red-200" },
 };
 
-type TabType = "details" | "candidates" | "screening" | "analytics";
+type TabType = "details" | "candidates" | "pipeline" | "screening" | "analytics";
 
 export default function JobDetailPage() {
   const params = useParams();
   const router = useRouter();
   const dispatch = useDispatch<AppDispatch>();
   const { selected: job, loading, error } = useSelector((s: RootState) => s.jobs);
-  const { items: candidates } = useSelector((s: RootState) => s.candidates);
+  const { items: allCandidates } = useSelector((s: RootState) => s.candidates);
 
-  const [activeTab, setActiveTab] = useState<TabType>("details");
+  const [activeTab, setActiveTab]               = useState<TabType>("details");
+  const [pipelineCandidates, setPipelineCandidates] = useState<Candidate[]>([]);
+  const [pipelineLoading, setPipelineLoading]   = useState(false);
+  const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
+  const [modalOpen, setModalOpen]               = useState(false);
 
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
 
   useEffect(() => {
-    if (id) {
-      dispatch(fetchJob(id));
-      dispatch(fetchCandidates());
-    }
+    if (id) dispatch(fetchJob(id));
     return () => { dispatch(clearSelected()); };
   }, [id, dispatch]);
+
+  // Fetch pipeline candidates fresh (all, not paginated) when pipeline tab opens
+  const fetchPipelineCandidates = useCallback(async () => {
+    if (!id) return;
+    setPipelineLoading(true);
+    try {
+      const res = await api.get<{ data: Candidate[]; total: number }>(
+        "/candidates",
+        { params: { jobId: id, limit: 200, page: 1 } }
+      );
+      setPipelineCandidates(res.data.data ?? []);
+    } catch {
+      toast.error("Failed to load pipeline candidates");
+    } finally {
+      setPipelineLoading(false);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    if (activeTab === "pipeline") fetchPipelineCandidates();
+    if (activeTab === "candidates" && id) {
+      // lightweight fetch just for the candidate list tab
+      import("@/store/candidatesSlice").then(({ fetchCandidates }) => {
+        dispatch(fetchCandidates({ jobId: id, limit: 50 }));
+      });
+    }
+  }, [activeTab, id, fetchPipelineCandidates, dispatch]);
+
+  const handleStageChange = async (candidateId: string, status: ScreeningStatus) => {
+    // Optimistic update in local pipeline state
+    setPipelineCandidates(prev =>
+      prev.map(c => c._id === candidateId ? { ...c, pipelineStatus: status } : c)
+    );
+    try {
+      await dispatch(updateCandidateStage({ id: candidateId, status })).unwrap();
+      toast.success("Stage updated");
+    } catch {
+      toast.error("Failed to update stage");
+      // Revert on error
+      fetchPipelineCandidates();
+    }
+  };
+
+  const handleCandidateClick = (candidateId: string) => {
+    const found = pipelineCandidates.find(c => c._id === candidateId);
+    if (found) { setSelectedCandidate(found); setModalOpen(true); }
+  };
+
+  const candidates = allCandidates;
 
   const handleDelete = async () => {
     if (!job || !confirm(`Delete "${job.title}"? This cannot be undone.`)) return;
@@ -84,10 +138,11 @@ export default function JobDetailPage() {
   const levelStyle = LEVEL_STYLES[job.experienceLevel] || { bg: "bg-gray-50", text: "text-gray-700", border: "border-gray-200" };
 
   const tabs = [
-    { id: "details" as TabType, label: "Details", icon: Briefcase },
+    { id: "details"    as TabType, label: "Details",  icon: Briefcase },
     { id: "candidates" as TabType, label: "Candidates", icon: Users, count: candidates.length },
-    { id: "screening" as TabType, label: "Screening", icon: Zap },
-    { id: "analytics" as TabType, label: "Analytics", icon: BarChart3 },
+    { id: "pipeline"   as TabType, label: "Pipeline", icon: Workflow, count: pipelineCandidates.length || undefined },
+    { id: "screening"  as TabType, label: "Screening", icon: Zap },
+    { id: "analytics"  as TabType, label: "Analytics", icon: BarChart3 },
   ];
 
   return (
@@ -356,6 +411,67 @@ export default function JobDetailPage() {
           </div>
         )}
 
+        {/* Pipeline Tab */}
+        {activeTab === "pipeline" && (
+          <div className="space-y-4">
+            {/* Sub-header */}
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-bold text-gray-900">Hiring Pipeline</h2>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Track every candidate from application through to hire for <span className="font-semibold text-gray-700">{job.title}</span>
+                </p>
+              </div>
+              <button
+                onClick={fetchPipelineCandidates}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-xs font-medium text-gray-600 hover:bg-gray-50 transition shadow-sm"
+              >
+                Refresh
+              </button>
+            </div>
+
+            {pipelineLoading ? (
+              <div className="flex items-center justify-center py-20">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="w-8 h-8 rounded-full border-2 border-blue-200 border-t-blue-600 animate-spin" />
+                  <p className="text-xs text-gray-400">Loading pipeline…</p>
+                </div>
+              </div>
+            ) : pipelineCandidates.length === 0 ? (
+              <div className="bg-white border border-gray-200 rounded-xl py-16 flex flex-col items-center gap-3 text-center">
+                <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center">
+                  <Workflow className="w-6 h-6 text-blue-500" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-gray-800">No candidates in pipeline yet</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Add candidates to this position to start tracking their progress
+                  </p>
+                </div>
+                <Link
+                  href={`/candidates?jobId=${job._id}`}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 text-xs font-semibold text-white hover:bg-blue-700 transition shadow-sm"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Add Candidates
+                </Link>
+              </div>
+            ) : (
+              <PipelineView
+                candidates={pipelineCandidates.map((c): CandidatePipelineData => ({
+                  id: c._id,
+                  name: `${c.firstName} ${c.lastName}`,
+                  status: c.pipelineStatus ?? "pending",
+                  headline: c.headline || undefined,
+                  email: c.email,
+                  source: c.source,
+                }))}
+                onCandidateClick={handleCandidateClick}
+                onStatusChange={handleStageChange}
+              />
+            )}
+          </div>
+        )}
+
         {/* Screening Tab */}
         {activeTab === "screening" && (
           <div className="bg-white border border-gray-200 rounded-xl">
@@ -411,6 +527,25 @@ export default function JobDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Candidate detail modal (opened from pipeline cards) */}
+      <CandidateDetailModal
+        candidate={selectedCandidate}
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onUpdate={async (candidateId, updates) => {
+          const res = await dispatch(
+            (await import("@/store/candidatesSlice")).updateCandidate({ id: candidateId, updates })
+          );
+          if (res.meta.requestStatus === "fulfilled") {
+            setSelectedCandidate(res.payload as Candidate);
+            setPipelineCandidates(prev =>
+              prev.map(c => c._id === candidateId ? (res.payload as Candidate) : c)
+            );
+          }
+          return res;
+        }}
+      />
     </motion.div>
   );
 }

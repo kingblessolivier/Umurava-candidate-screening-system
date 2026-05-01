@@ -84,6 +84,11 @@ const CandidateSchema = new Schema<CandidateDocument>(
     },
     source:           { type: String, enum: ["platform", "csv", "pdf", "json"], default: "platform" },
     parsedResumeText: String,
+    pipelineStatus:   {
+      type: String,
+      enum: ["pending", "screening", "screened", "rejected", "interview_scheduled", "interviewed", "offer_sent", "accepted", "declined"],
+      default: "pending",
+    },
   },
   { timestamps: true }
 );

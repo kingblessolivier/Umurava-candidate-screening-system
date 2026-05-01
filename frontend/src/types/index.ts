@@ -46,6 +46,17 @@ export interface Project {
   impact?: string;
 }
 
+export type ScreeningStatus =
+  | "pending"
+  | "screening"
+  | "screened"
+  | "rejected"
+  | "interview_scheduled"
+  | "interviewed"
+  | "offer_sent"
+  | "accepted"
+  | "declined";
+
 export interface Candidate {
   _id: string;
   firstName: string;
@@ -70,6 +81,7 @@ export interface Candidate {
   };
   socialLinks?: { linkedin?: string; github?: string; portfolio?: string };
   source?: "platform" | "csv" | "pdf" | "json";
+  pipelineStatus?: ScreeningStatus;
   createdAt: string;
 }
 

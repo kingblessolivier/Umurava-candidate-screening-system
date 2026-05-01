@@ -103,6 +103,25 @@ export const updateCandidate = async (req: Request, res: Response) => {
   }
 };
 
+export const updateCandidateStage = async (req: Request, res: Response) => {
+  try {
+    const { status } = req.body as { status: string };
+    const VALID_STATUSES = ["pending", "screening", "screened", "rejected", "interview_scheduled", "interviewed", "offer_sent", "accepted", "declined"];
+    if (!status || !VALID_STATUSES.includes(status)) {
+      return res.status(400).json({ success: false, error: `status must be one of: ${VALID_STATUSES.join(", ")}` });
+    }
+    const c = await Candidate.findByIdAndUpdate(
+      req.params.id,
+      { pipelineStatus: status },
+      { new: true, runValidators: true }
+    );
+    if (!c) return res.status(404).json({ success: false, error: "Candidate not found" });
+    res.json({ success: true, data: c });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err instanceof Error ? err.message : "Failed to update stage" });
+  }
+};
+
 export const deleteCandidate = async (req: Request, res: Response) => {
   try {
     const c = await Candidate.findByIdAndDelete(req.params.id);

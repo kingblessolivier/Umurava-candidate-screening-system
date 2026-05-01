@@ -6,7 +6,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import {
   Users, Search, Upload, Trash2, MapPin, Briefcase,
   Mail, LayoutGrid, Eye, Table2, UserPlus, X, Phone, ExternalLink,
-  Filter, ChevronDown, Database,
+  Filter, ChevronDown, Database, Workflow,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useNotifications } from '@/contexts/NotificationsContext';
@@ -20,7 +20,9 @@ import { CandidateUploadModal } from '@/components/candidates/CandidateUploadMod
 import { Skeleton } from '@/components/ui/LoadingState';
 import { ConfirmModal } from '@/components/ui/Modal';
 import { Pagination } from '@/components/ui/Pagination';
-import { Candidate } from '@/types';
+import { PipelineView } from '@/components/ui/PipelineView';
+import { Candidate, ScreeningStatus } from '@/types';
+import { updateCandidateStage } from '@/store/candidatesSlice';
 import { cn } from '@/lib/utils';
 
 const SKILL_COLORS: Record<string, { bg: string; text: string }> = {
@@ -65,7 +67,7 @@ export default function CandidatesPage() {
 
   const { items: jobs } = useSelector((state: RootState) => state.jobs);
   const [deleteLoading, setDeleteLoading]     = useState<string | null>(null);
-  const [viewMode, setViewMode]               = useState<'card' | 'table'>('table');
+  const [viewMode, setViewMode]               = useState<'card' | 'table' | 'pipeline'>('table');
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
   const [modalOpen, setModalOpen]             = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -153,6 +155,15 @@ export default function CandidatesPage() {
       if (r.meta?.requestStatus === 'fulfilled') setSelectedCandidate(r.payload as Candidate);
       return r;
     });
+
+  const handleStageChange = async (id: string, status: ScreeningStatus) => {
+    try {
+      await dispatch(updateCandidateStage({ id, status })).unwrap();
+      toast.success('Stage updated');
+    } catch {
+      toast.error('Failed to update stage');
+    }
+  };
 
   const hasFilters = !!(searchQuery || filterJobId);
   const allSelected = candidates.length > 0 && selectedIds.size === candidates.length;
@@ -267,8 +278,9 @@ export default function CandidatesPage() {
           {/* View toggle */}
           <div className="inline-flex rounded-lg border border-gray-300 overflow-hidden bg-white shadow-sm">
             {([
-              { mode: 'table', Icon: Table2,     title: 'Table view' },
-              { mode: 'card',  Icon: LayoutGrid, title: 'Card view'  },
+              { mode: 'table',    Icon: Table2,    title: 'Table view'    },
+              { mode: 'card',     Icon: LayoutGrid, title: 'Card view'    },
+              { mode: 'pipeline', Icon: Workflow,  title: 'Pipeline view' },
             ] as const).map(({ mode, Icon, title }) => (
               <button
                 key={mode}
@@ -354,6 +366,27 @@ export default function CandidatesPage() {
             >
               <Upload className="w-3.5 h-3.5" /> Import Candidates
             </button>
+          </div>
+
+        ) : viewMode === 'pipeline' ? (
+
+          /* ── Pipeline view ─────────────────────────────────────────────────── */
+          <div className="rounded-xl overflow-hidden p-1">
+            <PipelineView
+              candidates={candidates.map(c => ({
+                id: c._id,
+                name: `${c.firstName} ${c.lastName}`,
+                status: c.pipelineStatus ?? 'pending',
+                headline: c.headline || undefined,
+                email: c.email,
+                source: c.source,
+              }))}
+              onCandidateClick={id => {
+                const c = candidates.find(x => x._id === id);
+                if (c) handleViewDetails(c);
+              }}
+              onStatusChange={handleStageChange}
+            />
           </div>
 
         ) : viewMode === 'table' ? (

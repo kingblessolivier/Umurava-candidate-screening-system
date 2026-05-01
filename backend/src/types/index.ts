@@ -1,3 +1,15 @@
+// ─── Pipeline Status ──────────────────────────────────────────────────────────
+export type PipelineStatus =
+  | "pending"
+  | "screening"
+  | "screened"
+  | "rejected"
+  | "interview_scheduled"
+  | "interviewed"
+  | "offer_sent"
+  | "accepted"
+  | "declined";
+
 // ─── Skill Level Numeric Map ──────────────────────────────────────────────────
 export const SKILL_LEVEL_SCORE: Record<string, number> = {
   Beginner: 25,
@@ -92,6 +104,7 @@ export interface TalentProfile {
   socialLinks?: SocialLinks;
   source?: "platform" | "csv" | "pdf" | "json";
   parsedResumeText?: string;
+  pipelineStatus?: PipelineStatus;
   createdAt?: Date;
 }
 

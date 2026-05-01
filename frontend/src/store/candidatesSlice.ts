@@ -1,6 +1,6 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import { api } from "@/lib/api";
-import { Candidate } from "@/types";
+import { Candidate, ScreeningStatus } from "@/types";
 
 export type ImportResult = { created: number; skipped: number; errors: string[] };
 export type QueuedImportResult = { jobId: string; status: string; message: string };
@@ -81,6 +81,14 @@ export const deleteCandidate = createAsyncThunk("candidates/delete", async (id: 
   return id;
 });
 
+export const updateCandidateStage = createAsyncThunk(
+  "candidates/updateStage",
+  async ({ id, status }: { id: string; status: ScreeningStatus }) => {
+    const { data } = await api.patch<{ data: Candidate }>(`/candidates/${id}/stage`, { status });
+    return data.data;
+  }
+);
+
 const candidatesSlice = createSlice({
   name: "candidates",
   initialState,
@@ -115,7 +123,21 @@ const candidatesSlice = createSlice({
      .addCase(uploadPDFs.fulfilled, (s) => { s.uploading = false; })
      .addCase(uploadPDFs.rejected,  (s, { error }) => { s.uploading = false; s.error = error.message || "Upload failed"; })
      .addCase(createCandidate.fulfilled, (s, { payload }) => { s.items.unshift(payload); s.total++; })
-     .addCase(deleteCandidate.fulfilled, (s, { payload }) => { s.items = s.items.filter(c => c._id !== payload); s.total--; });
+     .addCase(deleteCandidate.fulfilled, (s, { payload }) => { s.items = s.items.filter(c => c._id !== payload); s.total--; })
+     .addCase(updateCandidateStage.pending, (s, { meta }) => {
+       const item = s.items.find(c => c._id === meta.arg.id);
+       if (item) item.pipelineStatus = meta.arg.status;
+     })
+     .addCase(updateCandidateStage.fulfilled, (s, { payload }) => {
+       const index = s.items.findIndex(c => c._id === payload._id);
+       if (index !== -1) s.items[index] = payload;
+     })
+     .addCase(updateCandidateStage.rejected, (s, { meta, error }) => {
+       // roll back the optimistic update
+       const item = s.items.find(c => c._id === meta.arg.id);
+       if (item) item.pipelineStatus = undefined;
+       s.error = error.message || "Failed to update stage";
+     });
   },
 });
 

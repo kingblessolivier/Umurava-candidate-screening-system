@@ -1,15 +1,7 @@
 "use client";
 
-export type ScreeningStatus = 
-  | "pending" 
-  | "screening" 
-  | "screened" 
-  | "rejected" 
-  | "interview_scheduled" 
-  | "interviewed" 
-  | "offer_sent" 
-  | "accepted"
-  | "declined";
+import type { ScreeningStatus } from "@/types";
+export type { ScreeningStatus } from "@/types";
 
 interface StatusBadgeProps {
   status: ScreeningStatus;
