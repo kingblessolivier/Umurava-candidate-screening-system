@@ -157,10 +157,18 @@ const candidatesSlice = createSlice({
        }
      })
      .addCase(updateCandidateStage.rejected, (s, { meta, error }) => {
-       // roll back the optimistic update
        const item = s.items.find(c => c._id === meta.arg.id);
        if (item) item.pipelineStatus = undefined;
        s.error = error.message || "Failed to update stage";
+     })
+     .addCase(updateCandidatesStage.rejected, (s, { meta, error }) => {
+       // roll back all optimistic updates on failure
+       const ids = (meta.arg as { ids: string[] }).ids || [];
+       for (const id of ids) {
+         const item = s.items.find(c => c._id === id);
+         if (item) item.pipelineStatus = undefined;
+       }
+       s.error = error.message || "Failed to update stages";
      });
   },
 });

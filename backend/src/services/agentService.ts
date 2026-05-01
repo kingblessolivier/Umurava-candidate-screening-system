@@ -27,8 +27,7 @@ function getClient() {
 
 const CHAT_MODEL = (
   process.env.CHAT_MODEL ||
-  process.env.GEMINI_MODEL ||
-  "gemini-2.5-flash-lite-preview-06-17"
+  "gemini-2.5-flash"
 ).trim();
 
 // ─── System prompt ────────────────────────────────────────────────────────────

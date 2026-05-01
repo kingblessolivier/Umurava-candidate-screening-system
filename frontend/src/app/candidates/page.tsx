@@ -22,7 +22,7 @@ import { ConfirmModal } from '@/components/ui/Modal';
 import { Pagination } from '@/components/ui/Pagination';
 import { PipelineView } from '@/components/ui/PipelineView';
 import { Candidate, ScreeningStatus } from '@/types';
-import { updateCandidateStage } from '@/store/candidatesSlice';
+import { updateCandidateStage, updateCandidatesStage } from '@/store/candidatesSlice';
 import { cn } from '@/lib/utils';
 
 const SKILL_COLORS: Record<string, { bg: string; text: string }> = {
@@ -162,6 +162,22 @@ export default function CandidatesPage() {
       toast.success('Stage updated');
     } catch {
       toast.error('Failed to update stage');
+    }
+  };
+
+  const handleBulkStageChange = async (status: ScreeningStatus) => {
+    const ids = Array.from(selectedIds);
+    if (!ids.length) return;
+    const t = toast.loading(`Moving ${ids.length} candidate${ids.length > 1 ? 's' : ''}…`);
+    try {
+      await dispatch(updateCandidatesStage({ ids, status })).unwrap();
+      setSelectedIds(new Set());
+      toast.success(`Moved ${ids.length} candidate${ids.length > 1 ? 's' : ''} to ${status.replace(/_/g, ' ')}`);
+    } catch {
+      toast.error('Failed to update stages');
+      refreshCandidates();
+    } finally {
+      toast.dismiss(t);
     }
   };
 
@@ -314,13 +330,38 @@ export default function CandidatesPage() {
             </div>
             <div className="flex items-center gap-1.5">
               {selectedIds.size > 0 && (
-                <button
-                  onClick={() => setBulkDeleteConfirm({ scope: 'selected', count: selectedIds.size })}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-red-200 bg-red-50 text-xs font-medium text-red-700 hover:bg-red-100 transition"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  Delete Selected ({selectedIds.size})
-                </button>
+                <>
+                  {/* ── Move to stage ── */}
+                  <select
+                    defaultValue=""
+                    onChange={e => {
+                      if (e.target.value) {
+                        handleBulkStageChange(e.target.value as ScreeningStatus);
+                        e.target.value = '';
+                      }
+                    }}
+                    className="px-2.5 py-1.5 rounded-lg border border-blue-200 bg-blue-50 text-xs font-medium text-blue-700 hover:bg-blue-100 transition cursor-pointer focus:outline-none"
+                  >
+                    <option value="" disabled>Move to stage…</option>
+                    <option value="pending">Pending</option>
+                    <option value="screening">Screening</option>
+                    <option value="screened">Screened</option>
+                    <option value="interview_scheduled">Interview Scheduled</option>
+                    <option value="interviewed">Interviewed</option>
+                    <option value="offer_sent">Offer Sent</option>
+                    <option value="accepted">Accepted / Hired</option>
+                    <option value="rejected">Rejected</option>
+                  </select>
+
+                  {/* ── Delete selected ── */}
+                  <button
+                    onClick={() => setBulkDeleteConfirm({ scope: 'selected', count: selectedIds.size })}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-red-200 bg-red-50 text-xs font-medium text-red-700 hover:bg-red-100 transition"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Delete ({selectedIds.size})
+                  </button>
+                </>
               )}
               <button
                 onClick={async () => {
@@ -381,6 +422,8 @@ export default function CandidatesPage() {
                 if (c) handleViewDetails(c);
               }}
               onStatusChange={handleStageChange}
+              selectedIds={Array.from(selectedIds)}
+              onToggleSelect={(id, checked) => toggleSelect(id, checked)}
             />
           </div>
 
