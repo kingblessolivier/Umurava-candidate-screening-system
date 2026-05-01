@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  MessageSquare, X, Minimize2, Mic, MicOff, Volume2, VolumeX,
+  X, Minimize2, Mic, MicOff, Volume2, VolumeX,
   Send, Trash2, Bot, User, Loader2, Briefcase, Users, BarChart2,
   CheckCircle, ChevronRight, Sparkles,
 } from 'lucide-react';
@@ -292,10 +292,14 @@ function MessageBubble({ message }: { message: Message }) {
 
 // ─── Main ChatAgent component ─────────────────────────────────────────────────
 export function ChatAgent() {
+  const [mounted, setMounted] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Only render client-side — prevents SSR/framer-motion hydration mismatch
+  useEffect(() => setMounted(true), []);
 
   const handleNewReply = useCallback((text: string) => {
     speak(text);
@@ -364,6 +368,8 @@ export function ChatAgent() {
     },
     [sendMessage]
   );
+
+  if (!mounted) return null;
 
   const unreadCount = messages.filter((m) => m.role === 'assistant' && !m.isLoading).length - 1;
   const showBadge = !isOpen && unreadCount > 0;
