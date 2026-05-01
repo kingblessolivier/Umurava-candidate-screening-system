@@ -15,7 +15,7 @@ import {
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { PipelineView, type CandidatePipelineData } from "@/components/ui/PipelineView";
-import { BulkOperationsBar } from "@/components/ui/bulkoperations";
+import { BulkOperationsBar } from "@/components/ui/BulkOperations";
 import { CandidateDetailModal } from "@/components/candidates/CandidateDetailModal";
 import { api } from "@/lib/api";
 import type { Candidate, ScreeningStatus } from "@/types";

@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { CandidateCheckbox } from "./bulkoperations";
+import { CandidateCheckbox } from "./BulkOperations";
 import type { ScreeningStatus } from "@/types";
 import {
   Users, TrendingUp, CheckCircle2, Target, ChevronRight,
