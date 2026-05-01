@@ -237,21 +237,18 @@ export default function CandidatesPage() {
           </div>
         </div>
 
-        {/* ── Filters bar ─────────────────────────────────────────────────────── */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-          {/* Search */}
           <div className="relative flex-1 max-w-sm">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
             <input
               type="text"
-              placeholder="Search by name, email, or skill…"
+              placeholder="Search candidates…"
               value={searchQuery}
               onChange={e => handleSearch(e.target.value)}
               className="w-full pl-8 pr-3 py-2 rounded-lg border border-gray-300 bg-white text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
             />
           </div>
 
-          {/* Job filter */}
           <div className="relative">
             <select
               value={filterJobId}
@@ -261,10 +258,10 @@ export default function CandidatesPage() {
               <option value="">All Positions</option>
               {jobs.map(j => <option key={j._id} value={j._id}>{j.title}</option>)}
             </select>
-            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
           </div>
 
-          {hasFilters && (
+          {(searchQuery || filterJobId) && (
             <button
               onClick={() => { handleSearch(''); setFilterJobId(''); handlePageChange(1); }}
               className="inline-flex items-center gap-1 px-2.5 py-2 rounded-lg border border-gray-300 bg-white text-xs text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition"
@@ -273,14 +270,11 @@ export default function CandidatesPage() {
             </button>
           )}
 
-          <div className="flex-1" />
-
-          {/* View toggle */}
           <div className="inline-flex rounded-lg border border-gray-300 overflow-hidden bg-white shadow-sm">
             {([
-              { mode: 'table',    Icon: Table2,    title: 'Table view'    },
-              { mode: 'card',     Icon: LayoutGrid, title: 'Card view'    },
-              { mode: 'pipeline', Icon: Workflow,  title: 'Pipeline view' },
+              { mode: 'table', Icon: Table2, title: 'Table view' },
+              { mode: 'card', Icon: LayoutGrid, title: 'Card view' },
+              { mode: 'pipeline', Icon: Workflow, title: 'Pipeline view' },
             ] as const).map(({ mode, Icon, title }) => (
               <button
                 key={mode}
@@ -297,6 +291,7 @@ export default function CandidatesPage() {
           </div>
         </div>
 
+          {/* View toggle */}
         {/* ── Bulk action bar ──────────────────────────────────────────────────── */}
         {candidates.length > 0 && (
           <div className={cn(

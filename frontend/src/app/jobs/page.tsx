@@ -28,6 +28,8 @@ import { Candidate } from '@/types';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useNotifications } from '@/contexts/NotificationsContext';
 
+type PipelineStage = 'pending' | 'screening' | 'screened' | 'rejected' | 'interview_scheduled' | 'interviewed' | 'offer_sent' | 'accepted' | 'declined';
+
 function JobsPageContent() {
   const dispatch = useDispatch<AppDispatch>();
   const router = useRouter();
@@ -737,6 +739,7 @@ function OverviewTab({ job }: any) {
 
 // Candidates Tab - Now with Pipeline View and Bulk Actions
 function CandidatesTab({ jobId, jobTitle, onViewCandidate, onAddCandidate, onDeleteCandidates, onScreenCandidates, onTotalChange, screeningResult, refreshKey = 0 }: any) {
+  const dispatch = useDispatch<AppDispatch>();
   const [selectedCandidates, setSelectedCandidates] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<'list' | 'pipeline'>('list');
   const [sortBy, setSortBy] = useState<'date' | 'name' | 'score'>('date');
@@ -757,6 +760,7 @@ function CandidatesTab({ jobId, jobTitle, onViewCandidate, onAddCandidate, onDel
 
   const [pipelineCandidates, setPipelineCandidates] = useState<any[]>([]);
   const [pipelineLoading, setPipelineLoading] = useState(false);
+  const [draggedCandidateId, setDraggedCandidateId] = useState<string | null>(null);
 
   // Reset state when switching jobs
   useEffect(() => {
@@ -828,8 +832,8 @@ function CandidatesTab({ jobId, jobTitle, onViewCandidate, onAddCandidate, onDel
   }, [screeningResult]);
 
   const getPipelineStage = (candidateId: string) => {
-    const stage = screeningByCandidateId.get(String(candidateId))?.stage;
-    return stage || 'applied';
+    const candidate = [...localCandidates, ...pipelineCandidates].find((item: any) => String(item._id) === String(candidateId));
+    return (candidate?.pipelineStatus || 'pending') as PipelineStage;
   };
 
   const getScoreForCandidate = (candidateId: string) => {
@@ -946,6 +950,43 @@ function CandidatesTab({ jobId, jobTitle, onViewCandidate, onAddCandidate, onDel
     });
   };
 
+  const updatePipelineStageLocally = (candidateId: string, nextStage: PipelineStage) => {
+    setLocalCandidates(prev =>
+      prev.map(candidate =>
+        candidate._id === candidateId ? { ...candidate, pipelineStatus: nextStage } : candidate
+      )
+    );
+    setPipelineCandidates(prev =>
+      prev.map(candidate =>
+        candidate._id === candidateId ? { ...candidate, pipelineStatus: nextStage } : candidate
+      )
+    );
+  };
+
+  const handlePipelineDrop = async (candidateId: string, nextStage: PipelineStage) => {
+    const source = [...localCandidates, ...pipelineCandidates].find(candidate => candidate._id === candidateId);
+    if (!source || source.pipelineStatus === nextStage) {
+      setDraggedCandidateId(null);
+      return;
+    }
+
+    updatePipelineStageLocally(candidateId, nextStage);
+    setDraggedCandidateId(null);
+
+    try {
+      await dispatch(updateCandidateStage({ id: candidateId, status: nextStage })).unwrap();
+      toast.success('Stage updated');
+    } catch {
+      toast.error('Failed to update stage');
+      await api.get('/candidates', { params: { jobId, page: 1, limit: PAGE_SIZE, search } })
+        .then(res => setLocalCandidates(res.data.data || []));
+      if (viewMode === 'pipeline') {
+        await api.get('/candidates', { params: { jobId, page: 1, limit: 1000 } })
+          .then(res => setPipelineCandidates(res.data.data || []));
+      }
+    }
+  };
+
   const confirmBulkDelete = () => {
     onDeleteCandidates?.(Array.from(selectedCandidates));
     setSelectedCandidates(new Set());
@@ -953,11 +994,16 @@ function CandidatesTab({ jobId, jobTitle, onViewCandidate, onAddCandidate, onDel
     toast.success('Candidates deleted successfully');
   };
 
-  const pipelineStages = [
-    { id: 'applied',      label: 'Applied',      color: 'blue',   description: 'Not yet screened' },
-    { id: 'shortlisted',  label: 'Shortlisted',  color: 'green',  description: 'Recommended by AI' },
-    { id: 'consider',     label: 'Consider',     color: 'amber',  description: 'Needs further review' },
-    { id: 'rejected',     label: 'Not Selected', color: 'red',    description: 'Did not meet criteria' },
+  const pipelineStages: Array<{ id: PipelineStage; label: string; color: string; description: string }> = [
+    { id: 'pending',             label: 'Applied',          color: 'blue',   description: 'New applications' },
+    { id: 'screening',           label: 'AI Screening',     color: 'cyan',   description: 'Being evaluated' },
+    { id: 'screened',            label: 'Shortlisted',      color: 'green',  description: 'Passed screening' },
+    { id: 'interview_scheduled', label: 'Interview',        color: 'amber',  description: 'Interview scheduled' },
+    { id: 'interviewed',         label: 'Interviewed',      color: 'violet', description: 'Interview complete' },
+    { id: 'offer_sent',          label: 'Offer Sent',       color: 'indigo', description: 'Offer extended' },
+    { id: 'accepted',            label: 'Hired',            color: 'emerald',description: 'Candidate accepted' },
+    { id: 'rejected',            label: 'Rejected',         color: 'red',    description: 'No longer in pipeline' },
+    { id: 'declined',            label: 'Declined',         color: 'rose',   description: 'Offer declined' },
   ];
 
   if (!isLoading && total === 0 && !search) {
@@ -1147,16 +1193,26 @@ function CandidatesTab({ jobId, jobTitle, onViewCandidate, onAddCandidate, onDel
                   const score = getScoreForCandidate(candidate._id);
                   const stage = getPipelineStage(candidate._id);
                   const stageStyles: Record<string, string> = {
-                    applied: 'bg-blue-50 text-blue-700 border-blue-200',
-                    shortlisted: 'bg-green-50 text-green-700 border-green-200',
-                    consider: 'bg-amber-50 text-amber-700 border-amber-200',
+                    pending: 'bg-blue-50 text-blue-700 border-blue-200',
+                    screening: 'bg-cyan-50 text-cyan-700 border-cyan-200',
+                    screened: 'bg-green-50 text-green-700 border-green-200',
+                    interview_scheduled: 'bg-amber-50 text-amber-700 border-amber-200',
+                    interviewed: 'bg-violet-50 text-violet-700 border-violet-200',
+                    offer_sent: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+                    accepted: 'bg-emerald-50 text-emerald-700 border-emerald-200',
                     rejected: 'bg-red-50 text-red-700 border-red-200',
+                    declined: 'bg-rose-50 text-rose-700 border-rose-200',
                   };
                   const stageLabel: Record<string, string> = {
-                    applied: 'Applied',
-                    shortlisted: 'Shortlisted',
-                    consider: 'Consider',
-                    rejected: 'Not Selected',
+                    pending: 'Applied',
+                    screening: 'AI Screening',
+                    screened: 'Shortlisted',
+                    interview_scheduled: 'Interview',
+                    interviewed: 'Interviewed',
+                    offer_sent: 'Offer Sent',
+                    accepted: 'Hired',
+                    rejected: 'Rejected',
+                    declined: 'Declined',
                   };
                   const isSelected = selectedCandidates.has(candidate._id);
                   return (
@@ -1293,19 +1349,36 @@ function CandidatesTab({ jobId, jobTitle, onViewCandidate, onAddCandidate, onDel
             ))}
           </div>
         ) : (
-        <div className="grid grid-cols-4 gap-3">
+        <div className="overflow-x-auto pb-2">
+          <div className="flex gap-3" style={{ minWidth: 'max-content' }}>
           {pipelineStages.map(stage => {
             const stageCards = sortedPipelineCandidates.filter((c: any) => getPipelineStage(c._id) === stage.id);
             const colColors: Record<string, { header: string; badge: string; text: string; dot: string }> = {
-              applied:     { header: 'from-blue-50',  badge: 'bg-blue-100 text-blue-700',   text: 'text-blue-700',   dot: 'bg-blue-500'   },
-              shortlisted: { header: 'from-green-50', badge: 'bg-green-100 text-green-700', text: 'text-green-700', dot: 'bg-green-500' },
-              consider:    { header: 'from-amber-50', badge: 'bg-amber-100 text-amber-700', text: 'text-amber-700', dot: 'bg-amber-500' },
-              rejected:    { header: 'from-red-50',   badge: 'bg-red-100 text-red-600',     text: 'text-red-600',   dot: 'bg-red-400'   },
+              pending:             { header: 'from-blue-50',   badge: 'bg-blue-100 text-blue-700',     text: 'text-blue-700',     dot: 'bg-blue-500' },
+              screening:           { header: 'from-cyan-50',   badge: 'bg-cyan-100 text-cyan-700',     text: 'text-cyan-700',     dot: 'bg-cyan-500' },
+              screened:            { header: 'from-green-50',  badge: 'bg-green-100 text-green-700',   text: 'text-green-700',    dot: 'bg-green-500' },
+              interview_scheduled: { header: 'from-amber-50',  badge: 'bg-amber-100 text-amber-700',   text: 'text-amber-700',    dot: 'bg-amber-500' },
+              interviewed:         { header: 'from-violet-50', badge: 'bg-violet-100 text-violet-700', text: 'text-violet-700',   dot: 'bg-violet-500' },
+              offer_sent:          { header: 'from-indigo-50', badge: 'bg-indigo-100 text-indigo-700', text: 'text-indigo-700',   dot: 'bg-indigo-500' },
+              accepted:            { header: 'from-emerald-50',badge: 'bg-emerald-100 text-emerald-700',text: 'text-emerald-700',  dot: 'bg-emerald-500' },
+              rejected:            { header: 'from-red-50',    badge: 'bg-red-100 text-red-600',       text: 'text-red-600',      dot: 'bg-red-400' },
+              declined:            { header: 'from-rose-50',   badge: 'bg-rose-100 text-rose-700',     text: 'text-rose-700',     dot: 'bg-rose-500' },
             };
             const col = colColors[stage.id];
 
             return (
-              <div key={stage.id} className="flex flex-col bg-gray-50 rounded-2xl border border-gray-200 overflow-hidden">
+              <div
+                key={stage.id}
+                className="flex-shrink-0 w-[248px] flex flex-col bg-gray-50 rounded-2xl border border-gray-200 overflow-hidden"
+                onDragOver={e => e.preventDefault()}
+                onDrop={e => {
+                  e.preventDefault();
+                  const candidateId = e.dataTransfer.getData('text/plain') || draggedCandidateId;
+                  if (candidateId) {
+                    void handlePipelineDrop(candidateId, stage.id);
+                  }
+                }}
+              >
                 {/* Column Header */}
                 <div className={`px-3 py-2.5 border-b border-gray-200 bg-gradient-to-r ${col.header} to-white flex-shrink-0`}>
                   <div className="flex items-center justify-between mb-0.5">
@@ -1328,7 +1401,7 @@ function CandidatesTab({ jobId, jobTitle, onViewCandidate, onAddCandidate, onDel
                         <Users className="w-4 h-4 text-gray-300" />
                       </div>
                       <p className="text-[10px] text-gray-400">
-                        {stage.id === 'applied' && !screeningResult ? 'Run screening to distribute candidates' : 'No candidates here'}
+                                {stage.id === 'pending' && !screeningResult ? 'Run screening to distribute candidates' : 'No candidates here'}
                       </p>
                     </div>
                   ) : (
@@ -1344,7 +1417,14 @@ function CandidatesTab({ jobId, jobTitle, onViewCandidate, onAddCandidate, onDel
                       return (
                         <div
                           key={candidate._id}
-                          className="bg-white rounded-xl p-3 border border-gray-200 shadow-sm hover:shadow-md hover:border-blue-200 transition-all group"
+                          draggable
+                          onDragStart={e => {
+                            e.dataTransfer.effectAllowed = 'move';
+                            e.dataTransfer.setData('text/plain', candidate._id);
+                            setDraggedCandidateId(candidate._id);
+                          }}
+                          onDragEnd={() => setDraggedCandidateId(null)}
+                          className={`bg-white rounded-xl p-3 border shadow-sm hover:shadow-md hover:border-blue-200 transition-all group cursor-grab active:cursor-grabbing ${draggedCandidateId === candidate._id ? 'opacity-60 scale-[0.98]' : 'border-gray-200'}`}
                         >
                           {/* Card Header */}
                           <div className="flex items-start gap-2 mb-2">
@@ -1422,6 +1502,7 @@ function CandidatesTab({ jobId, jobTitle, onViewCandidate, onAddCandidate, onDel
               </div>
             );
           })}
+          </div>
         </div>
         )
       )}
@@ -1479,18 +1560,26 @@ function StageDropdown({ candidateId, defaultStage }: { candidateId: string; def
   const candidatesMap = useSelector((s: RootState) =>
     s.candidates.items.reduce((acc, c) => { acc[c._id] = c; return acc; }, {} as Record<string, any>)
   );
-  const current = (candidatesMap[candidateId]?.pipelineStatus ?? defaultStage) as string;
+  const storeStage = candidatesMap[candidateId]?.pipelineStatus as string | undefined;
+  const [stage, setStage] = useState((storeStage ?? defaultStage) as string);
+  const current = (storeStage ?? stage ?? defaultStage) as string;
   const colors = STAGE_COLORS[current] ?? STAGE_COLORS.pending;
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    setStage((storeStage ?? defaultStage) as string);
+  }, [candidateId, defaultStage, storeStage]);
+
   const handleChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newStage = e.target.value as any;
+    setStage(newStage);
     setLoading(true);
     try {
       await dispatch(updateCandidateStage({ id: candidateId, status: newStage })).unwrap();
       toast.success('Stage updated');
     } catch {
       toast.error('Failed to update stage');
+      setStage(current);
     } finally {
       setLoading(false);
     }
