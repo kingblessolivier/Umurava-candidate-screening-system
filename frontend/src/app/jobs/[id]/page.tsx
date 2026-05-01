@@ -97,17 +97,15 @@ export default function JobDetailPage() {
     setSelectedIds(prev => checked ? Array.from(new Set([...prev, id])) : prev.filter(s => s !== id));
   };
 
-  const handleBulkStageChange = async (status: ScreeningStatus | string) => {
+  const handleBulkStageChange = async (status: ScreeningStatus) => {
     const ids = selectedIds.slice();
     if (ids.length === 0) return;
-    // Optimistic update already handled by slice thunk
     try {
       await dispatch((await import("@/store/candidatesSlice")).updateCandidatesStage({ ids, status })).unwrap();
       toast.success(`Moved ${ids.length} candidate(s) to ${status}`);
-      // Update local pipelineCandidates too
-      setPipelineCandidates(prev => prev.map(c => ids.includes(c._id) ? { ...c, pipelineStatus: status as ScreeningStatus } : c));
+      setPipelineCandidates(prev => prev.map(c => ids.includes(c._id) ? { ...c, pipelineStatus: status } : c));
       setSelectedIds([]);
-    } catch (err) {
+    } catch {
       toast.error("Failed to move candidates");
       fetchPipelineCandidates();
     }

@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { ChevronDown, Trash2, Download, Mail, Plus } from "lucide-react";
+import type { ScreeningStatus } from "@/types";
 
 interface BulkOperationsProps {
   selectedCount: number;
@@ -8,7 +9,7 @@ interface BulkOperationsProps {
   onExport?: () => void;
   onSendEmail?: () => void;
   onAddToJob?: () => void;
-  onChangeStage?: (status: string) => void;
+  onChangeStage?: (status: ScreeningStatus) => void;
   disabled?: boolean;
 }
 
