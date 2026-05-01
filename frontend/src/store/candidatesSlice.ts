@@ -89,6 +89,14 @@ export const updateCandidateStage = createAsyncThunk(
   }
 );
 
+export const updateCandidatesStage = createAsyncThunk(
+  "candidates/updateStages",
+  async ({ ids, status }: { ids: string[]; status: ScreeningStatus }) => {
+    const { data } = await api.patch<{ modifiedCount: number; matchedCount: number }>(`/candidates/bulk-stage`, { ids, status });
+    return { ids, status, result: data };
+  }
+);
+
 const candidatesSlice = createSlice({
   name: "candidates",
   initialState,
@@ -128,9 +136,25 @@ const candidatesSlice = createSlice({
        const item = s.items.find(c => c._id === meta.arg.id);
        if (item) item.pipelineStatus = meta.arg.status;
      })
+     .addCase(updateCandidatesStage.pending, (s, { meta }) => {
+       // optimistic update for multiple
+       const ids = (meta.arg as { ids: string[] }).ids || [];
+       for (const id of ids) {
+         const item = s.items.find(c => c._id === id);
+         if (item) item.pipelineStatus = (meta.arg as { status: ScreeningStatus }).status;
+       }
+     })
      .addCase(updateCandidateStage.fulfilled, (s, { payload }) => {
        const index = s.items.findIndex(c => c._id === payload._id);
        if (index !== -1) s.items[index] = payload;
+     })
+     .addCase(updateCandidatesStage.fulfilled, (s, { payload }) => {
+       // already optimistically applied; ensure items reflect new status
+       const { ids, status } = payload;
+       for (const id of ids) {
+         const idx = s.items.findIndex(c => c._id === id);
+         if (idx !== -1) s.items[idx].pipelineStatus = status as any;
+       }
      })
      .addCase(updateCandidateStage.rejected, (s, { meta, error }) => {
        // roll back the optimistic update

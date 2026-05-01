@@ -8,6 +8,7 @@ interface BulkOperationsProps {
   onExport?: () => void;
   onSendEmail?: () => void;
   onAddToJob?: () => void;
+  onChangeStage?: (status: string) => void;
   disabled?: boolean;
 }
 
@@ -17,6 +18,7 @@ export function BulkOperationsBar({
   onExport,
   onSendEmail,
   onAddToJob,
+  onChangeStage,
   disabled = false,
 }: BulkOperationsProps) {
   const [showMenu, setShowMenu] = useState(false);
@@ -104,6 +106,29 @@ export function BulkOperationsBar({
                   border: "1px solid var(--border)",
                 }}
               >
+                {onChangeStage && (
+                  <div className="px-2 py-2 border-b" style={{ borderColor: "var(--border)" }}>
+                    <div className="text-xs text-gray-500 px-2 pb-1">Move to</div>
+                    <div className="grid grid-cols-1 gap-1">
+                      {[
+                        ["pending","Applied"],
+                        ["screening","AI Screening"],
+                        ["screened","Shortlisted"],
+                        ["interview_scheduled","Interview"],
+                        ["interviewed","Interviewed"],
+                        ["offer_sent","Offer Sent"],
+                        ["accepted","Hired"],
+                        ["rejected","Rejected"],
+                      ].map(([val,label]) => (
+                        <button
+                          key={String(val)}
+                          onClick={() => { onChangeStage(String(val)); setShowMenu(false); }}
+                          className="text-sm text-left px-3 py-2 hover:bg-gray-50 rounded"
+                        >{label}</button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {onAddToJob && (
                   <button
                     onClick={() => {

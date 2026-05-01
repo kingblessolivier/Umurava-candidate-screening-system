@@ -7,6 +7,7 @@ import { TopNav } from './TopNav';
 import { BreadcrumbBar } from './BreadcrumbBar';
 import { cn } from '@/lib/utils';
 import { NotificationsProvider } from '@/contexts/NotificationsContext';
+import { ChatAgent } from '@/components/chat/ChatAgent';
 
 const NO_LAYOUT = ['/login', '/signup'];
 
@@ -78,6 +79,7 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
         <BreadcrumbBar />
         <div className="py-4 px-4 sm:px-6 flex-1">{children}</div>
       </main>
+      <ChatAgent />
     </NotificationsProvider>
   );
 }

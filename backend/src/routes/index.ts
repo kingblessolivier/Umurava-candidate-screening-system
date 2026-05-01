@@ -11,6 +11,7 @@ import * as screening     from "../controllers/screeningController";
 import * as analytics     from "../controllers/analyticsController";
 import * as notifications from "../controllers/notificationController";
 import * as email         from "../controllers/emailController";
+import * as chat          from "../controllers/chatController";
 
 const router = Router();
 
@@ -67,6 +68,7 @@ router.get("/candidates/:id", requireAuth, candidates.getCandidate);
 router.get("/candidates/:id/score-history", requireAuth, candidates.getCandidateScoreHistory);
 router.post("/candidates/:id/match-job", requireAuth, candidates.matchCandidateToJob);
 router.patch("/candidates/:id/stage", requireAuth, candidates.updateCandidateStage);
+router.patch("/candidates/bulk-stage", requireAuth, candidates.updateCandidatesStage);
 router.put("/candidates/:id", requireAuth, candidates.updateCandidate);
 router.patch("/candidates/:id", requireAuth, candidates.updateCandidate);
 router.delete("/candidates/:id", requireAuth, candidates.deleteCandidate);
@@ -91,6 +93,11 @@ router.get("/analytics/job/:jobId", requireAuth, analytics.getJobAnalytics);
 // Email Routes
 // ============================================
 router.post("/email/send", requireAuth, email.sendEmailHandler);
+
+// ============================================
+// AI Agent Chat
+// ============================================
+router.post("/chat", requireAuth, chat.chatHandler);
 
 // ============================================
 // Notification / Background Job Routes

@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { CandidateCheckbox } from "./bulkoperations";
 import type { ScreeningStatus } from "@/types";
 import {
   Users, TrendingUp, CheckCircle2, Target, ChevronRight,
@@ -138,6 +139,8 @@ interface PipelineViewProps {
   candidates: CandidatePipelineData[];
   onCandidateClick?: (id: string) => void;
   onStatusChange?: (id: string, status: ScreeningStatus) => void;
+  selectedIds?: string[];
+  onToggleSelect?: (id: string, checked: boolean) => void;
 }
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -188,11 +191,15 @@ function CandidateCard({
   stage,
   onCandidateClick,
   onStatusChange,
+  selectedIds,
+  onToggleSelect,
 }: {
   candidate: CandidatePipelineData;
   stage: StageConfig;
   onCandidateClick?: (id: string) => void;
   onStatusChange?: (id: string, status: ScreeningStatus) => void;
+  selectedIds?: string[];
+  onToggleSelect?: (id: string, checked: boolean) => void;
 }) {
   const next = getNextStage(stage.id);
   const nextStage = next ? STAGES.find(s => s.id === next) : null;
@@ -205,8 +212,16 @@ function CandidateCard({
       exit={{ opacity: 0, scale: 0.95 }}
       transition={{ duration: 0.18 }}
       onClick={() => onCandidateClick?.(candidate.id)}
-      className="group bg-white border border-gray-200 rounded-xl p-3 cursor-pointer hover:shadow-md hover:border-gray-300 hover:-translate-y-0.5 transition-all duration-150"
+      className="relative group bg-white border border-gray-200 rounded-xl p-3 cursor-pointer hover:shadow-md hover:border-gray-300 hover:-translate-y-0.5 transition-all duration-150"
     >
+      {onToggleSelect && (
+        <div className="absolute -translate-y-2 -translate-x-0.5" onClick={e => e.stopPropagation()}>
+          <CandidateCheckbox
+            checked={!!selectedIds?.includes(candidate.id)}
+            onChange={(v) => onToggleSelect?.(candidate.id, v)}
+          />
+        </div>
+      )}
       {/* Avatar + name + score */}
       <div className="flex items-start gap-2.5">
         <CandidateAvatar name={candidate.name} />
@@ -257,6 +272,8 @@ export function PipelineView({
   candidates,
   onCandidateClick,
   onStatusChange,
+  selectedIds,
+  onToggleSelect,
 }: PipelineViewProps) {
   const stageMap = useMemo(() => {
     const map = new Map<ScreeningStatus, CandidatePipelineData[]>();
@@ -397,6 +414,8 @@ export function PipelineView({
                           stage={stage}
                           onCandidateClick={onCandidateClick}
                           onStatusChange={onStatusChange}
+                          selectedIds={selectedIds}
+                          onToggleSelect={onToggleSelect}
                         />
                       ))
                     )}

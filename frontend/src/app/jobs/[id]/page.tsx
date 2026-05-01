@@ -15,6 +15,7 @@ import {
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { PipelineView, type CandidatePipelineData } from "@/components/ui/PipelineView";
+import { BulkOperationsBar } from "@/components/ui/bulkoperations";
 import { CandidateDetailModal } from "@/components/candidates/CandidateDetailModal";
 import { api } from "@/lib/api";
 import type { Candidate, ScreeningStatus } from "@/types";
@@ -41,6 +42,7 @@ export default function JobDetailPage() {
   const [pipelineLoading, setPipelineLoading]   = useState(false);
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
   const [modalOpen, setModalOpen]               = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
 
@@ -87,6 +89,26 @@ export default function JobDetailPage() {
     } catch {
       toast.error("Failed to update stage");
       // Revert on error
+      fetchPipelineCandidates();
+    }
+  };
+
+  const handleToggleSelect = (id: string, checked: boolean) => {
+    setSelectedIds(prev => checked ? Array.from(new Set([...prev, id])) : prev.filter(s => s !== id));
+  };
+
+  const handleBulkStageChange = async (status: ScreeningStatus | string) => {
+    const ids = selectedIds.slice();
+    if (ids.length === 0) return;
+    // Optimistic update already handled by slice thunk
+    try {
+      await dispatch((await import("@/store/candidatesSlice")).updateCandidatesStage({ ids, status })).unwrap();
+      toast.success(`Moved ${ids.length} candidate(s) to ${status}`);
+      // Update local pipelineCandidates too
+      setPipelineCandidates(prev => prev.map(c => ids.includes(c._id) ? { ...c, pipelineStatus: status as ScreeningStatus } : c));
+      setSelectedIds([]);
+    } catch (err) {
+      toast.error("Failed to move candidates");
       fetchPipelineCandidates();
     }
   };
@@ -467,6 +489,8 @@ export default function JobDetailPage() {
                 }))}
                 onCandidateClick={handleCandidateClick}
                 onStatusChange={handleStageChange}
+                selectedIds={selectedIds}
+                onToggleSelect={handleToggleSelect}
               />
             )}
           </div>
@@ -545,6 +569,10 @@ export default function JobDetailPage() {
           }
           return res;
         }}
+      />
+      <BulkOperationsBar
+        selectedCount={selectedIds.length}
+        onChangeStage={(s) => handleBulkStageChange(s)}
       />
     </motion.div>
   );

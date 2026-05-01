@@ -122,6 +122,28 @@ export const updateCandidateStage = async (req: Request, res: Response) => {
   }
 };
 
+export const updateCandidatesStage = async (req: Request, res: Response) => {
+  try {
+    const { ids, status } = req.body as { ids?: string[]; status?: string };
+    const VALID_STATUSES = ["pending", "screening", "screened", "rejected", "interview_scheduled", "interviewed", "offer_sent", "accepted", "declined"];
+    if (!status || !VALID_STATUSES.includes(status)) {
+      return res.status(400).json({ success: false, error: `status must be one of: ${VALID_STATUSES.join(", ")}` });
+    }
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ success: false, error: "ids must be a non-empty array of candidate ids" });
+    }
+
+    const result = await Candidate.updateMany(
+      { _id: { $in: ids } },
+      { $set: { pipelineStatus: status } }
+    );
+
+    res.json({ success: true, modifiedCount: result.modifiedCount, matchedCount: result.matchedCount });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err instanceof Error ? err.message : "Failed to update stages" });
+  }
+};
+
 export const deleteCandidate = async (req: Request, res: Response) => {
   try {
     const c = await Candidate.findByIdAndDelete(req.params.id);
