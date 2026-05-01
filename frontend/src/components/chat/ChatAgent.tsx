@@ -21,6 +21,7 @@ const QUICK_ACTIONS = [
 
 // ─── Inline data card renderers ───────────────────────────────────────────────
 function JobCard({ item }: { item: ChatDataItem }) {
+  const isActive = Boolean(item.isActive);
   return (
     <div className="flex items-start gap-2 p-2 rounded-lg bg-white/60 border border-slate-200 text-xs">
       <div className="w-7 h-7 rounded-md bg-blue-100 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -31,7 +32,7 @@ function JobCard({ item }: { item: ChatDataItem }) {
         <p className="text-slate-500 truncate">
           {[item.department, item.location, item.type].filter(Boolean).join(' · ')}
         </p>
-        {item.experienceLevel && (
+        {Boolean(item.experienceLevel) && (
           <span className="inline-block mt-0.5 px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px] font-medium">
             {String(item.experienceLevel)}
           </span>
@@ -40,10 +41,10 @@ function JobCard({ item }: { item: ChatDataItem }) {
       <span
         className={cn(
           'ml-auto flex-shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-medium',
-          item.isActive ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'
+          isActive ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'
         )}
       >
-        {item.isActive ? 'Open' : 'Closed'}
+        {isActive ? 'Open' : 'Closed'}
       </span>
     </div>
   );
@@ -69,7 +70,7 @@ function CandidateCard({ item }: { item: ChatDataItem }) {
       </div>
       <div className="min-w-0 flex-1">
         <p className="font-semibold text-slate-800 truncate">{name || 'Unknown'}</p>
-        {item.email && <p className="text-slate-500 truncate">{String(item.email)}</p>}
+        {Boolean(item.email) && <p className="text-slate-500 truncate">{String(item.email)}</p>}
         {stage && (
           <span className="inline-block mt-0.5 px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 text-[10px] font-medium capitalize">
             {stage.replace(/_/g, ' ')}
